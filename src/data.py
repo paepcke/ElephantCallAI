@@ -6,26 +6,32 @@ import aifc
 from scipy import signal
 from torch.utils import data
 from scipy.misc import imresize
+import pandas as pd
+import os
 
-class Dataset(data.Dataset):
+class WhaleDataset(data.Dataset):
   'Characterizes a dataset for PyTorch'
-  def __init__(self, file_names, labels, resize_flag=False, new_height=224, new_width=224):
-        'Initialization'
-        self.labels = labels
-        self.file_names = file_names
+  def __init__(self, train_csv, train_dir, resize_shape=None):
+        # Initialization
 
-        self.resize_im = resize_flag
-        self.width = new_width
-        self.height = new_height
+        csv = pd.read_csv(train_csv)
+
+        self.file_names = csv.iloc[:, 0]
+        self.labels = csv.iloc[:, 1]
+
+        self.train_dir = train_dir
+
+        self.resize_shape = resize_shape
 
   def __len__(self):
-        'Denotes the total number of samples'
-        return len(self.list_IDs)
+        # Denotes the total number of samples
+        return len(self.labels)
 
   def __getitem__(self, index):
-        'Generates one sample of data'
+        # 'Generates one sample of data'
+
         # Select sample
-        ID = self.list_IDs[index]
+        filename = os.path.join(self.train_dir, self.file_names[index])
 
         # Load data and get label
         # Here we want to actually load the audio
@@ -38,21 +44,24 @@ class Dataset(data.Dataset):
         audio = np.frombuffer(strsig, np.short).byteswap()
 
         # See documentation on what each of these actually means
-        freqs, times, Sx = signal.spectrogram(y, fs=sample_rate, window='hanning',
+        freqs, times, Sx = signal.spectrogram(audio, fs=2000, window='hanning',
                                       nperseg=256, noverlap=236,
                                       detrend=False, scaling='spectrum')
 
-        print (Sx.shape)
         # Right-whale calls only occur under 250Hz
-        Pxx = Pxx[freqs<250.] 
+        Sx = Sx[freqs<250.] 
 
-        if self.resize_im:
-            Sx = imresize(np.log10(Sx),(self.new_width,self.new_height), interp= 'lanczos').astype('float32')
+        if self.resize_shape:
+            Sx = imresize(np.log10(Sx),(self.resize_shape[0],self.resize_shape[1]), interp= 'lanczos').astype('float32')
         else:
             # Want to take the log to decrease extremity of values
             Sx = np.log10(Sx)
 
-        X = Sx # Here could convert to ints if we want
-        y = self.labels[ID]
+        X = Sx / 255.# Here could convert to ints if we want
+        X = np.repeat(X[np.newaxis, :, :], 3, axis=0)
+        y = self.labels[index]
 
         return X, y
+
+
+
