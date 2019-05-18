@@ -15,7 +15,7 @@ fft_data = torch.rfft(data, 1)
 
 print (fft_data.shape)
 
-filename = "./whale-detection-challenge/data/train/train73.aiff"
+filename = "./whale-detection-challenge/data/train/train893.aiff"
 s = aifc.open(filename)
 
 nframes = s.getnframes()
@@ -25,14 +25,14 @@ y = np.frombuffer(strsig, np.short).byteswap()
 print (y.shape)
 
 L = y.shape[0] / sample_rate
-Pxx, freqs, bins, im = plt.specgram(y , NFFT=256, Fs=4000, noverlap=236, cmap=plt.cm.gist_heat)
+Pxx, freqs, bins, im = plt.specgram(y , NFFT=256, Fs=4000, noverlap=240, cmap=plt.cm.gray_r)
 f, ax = plt.subplots(figsize=(4.8, 2.4))
 Pxx = np.abs(Pxx)
 print (Pxx)
-Pxx = Pxx[[freqs<250.]]
-Pxx = 20 * np.log10(Pxx / np.max(Pxx))
-#ax.imshow(Pxx, origin='lower', cmap='viridis',
-#          extent=(0, L, 0, sample_rate / 2 / 1000))
+Pxx = Pxx[[freqs<400.]]
+#Pxx = 20 * np.log10(Pxx / np.max(Pxx))
+ax.imshow(Pxx, origin='lower', cmap='viridis',
+          extent=(0, L, 0, sample_rate / 2 / 1000))
 ax.axis('tight')
 ax.set_ylabel('Frequency [kHz]')
 ax.set_xlabel('Time [s]')
@@ -51,13 +51,13 @@ print(data.shape)
 from scipy import signal
 
 freqs, times, Sx = signal.spectrogram(y, fs=sample_rate, window='hanning',
-                                      nperseg=256, noverlap=236,
+                                      nperseg=256, noverlap=230,
                                       detrend=False, scaling='spectrum')
 
 f, ax = plt.subplots(figsize=(4.8, 2.4))
 print (Sx.shape)
 print (freqs.shape)
-ax.pcolormesh(times, freqs / 1000, 10 * np.log10(Sx), cmap='viridis')
+ax.pcolormesh(times, freqs / 1000, 10 * np.log10(Sx), cmap='inferno_r')
 ax.set_ylabel('Frequency [kHz]')
 ax.set_xlabel('Time [s]');
 plt.show()
