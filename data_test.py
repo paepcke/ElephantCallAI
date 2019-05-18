@@ -8,7 +8,7 @@ import aifc
 
 #print(torch.backends.mkl.is_available())
 
-data, sample_rate = torchaudio.load("./whale-detection-challenge/data/train/train9.aiff")
+data, sample_rate = torchaudio.load("./data/whale_calls/data/train/train9.aiff")
 print (sample_rate)
 #data, sample_rate, enc = aiffread("./whale-detection-challenge/data/train/train1.aiff")
 fft_data = torch.rfft(data, 1)
@@ -16,6 +16,7 @@ fft_data = torch.rfft(data, 1)
 print (fft_data.shape)
 
 filename = "./whale-detection-challenge/data/train/train893.aiff"
+
 s = aifc.open(filename)
 
 nframes = s.getnframes()
@@ -49,7 +50,7 @@ plt.show()
 print(data.shape)
 
 from scipy import signal
-
+print("Sample rate", sample_rate)
 freqs, times, Sx = signal.spectrogram(y, fs=sample_rate, window='hanning',
                                       nperseg=256, noverlap=230,
                                       detrend=False, scaling='spectrum')
@@ -61,3 +62,6 @@ ax.pcolormesh(times, freqs / 1000, 10 * np.log10(Sx), cmap='inferno_r')
 ax.set_ylabel('Frequency [kHz]')
 ax.set_xlabel('Time [s]');
 plt.show()
+
+
+Sx = imresize(np.log10(Sx),(224,224), interp= 'lanczos').astype('float32')
