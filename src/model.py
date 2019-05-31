@@ -1,139 +1,182 @@
-import time
-import numpy as np
-import pandas as pd
-import datetime as dt
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
-from os import listdir, makedirs, getcwd, remove
-from os.path import isfile, join, abspath, exists, isdir, expanduser
-from PIL import Image
-import torch
-from torch.optim import lr_scheduler
-from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
-import torchvision
-from torchvision import datasets, models
-from data import WhaleDataset
 
-np.random.seed(0)
+RANDOM_SEED = 42
 
-cache_dir = expanduser(join('~', '.torch'))
-if not exists(cache_dir):
-    makedirs(cache_dir)
-models_dir = join(cache_dir, 'models')
-if not exists(models_dir):
-    makedirs(models_dir)
+BATCH_SIZE = 1
+VALIDATION_SPLIT = .2
+
+NUM_EPOCHS = 2
+
+np.random.seed(RANDOM_SEED)
+
+class LSTM(nn.Module):
+	def __init__(self, input_size, hidden_size, output_size):
+		super(RNN, self).__init__()
+		self.hidden_dim = hidden_size
+
+		self.hidden = self.init_hidden()
+
+		self.lstm = nn.LSTM(input_size, hidden_size)
+		self.hiddenToClass = nn.Linear(hidden_size, output_size)
+		self.softmax = nn.Softmax()
+
+	def init_hidden(self):
+		# Before we've done anything, we dont have any hidden state.
+		# Refer to the Pytorch documentation to see exactly
+		# why they have this dimensionality.
+		# The axes semantics are (num_layers, minibatch_size, hidden_dim)
+		return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
+				torch.ones(1, BATCH_SIZE, self.hidden_dim))
 
 
-INPUT_SIZE = 224
-NUM_CLASSES = 2
+	def forward(self, input):
+		lstm_out, self.hidden = self.lstm(input, self.hidden)
+		classVal = self.hiddenToClass(lstm_out)
+		pred = self.softmax(classVal)
+		return pred
+
+class CONV1D_LSTM(nn.Module):
+	def __init__(self, input_size, hidden_size, output_size):
+		super(RNN, self).__init__()
+
+		num_filters = 25
+		kernel_size = 5
+
+		self.hidden_dim = hidden_size
+
+		self.hidden = self.init_hidden()
+
+		self.convLayer = nn.Conv1d(input_size, num_filters, kernel_size, padding=2)
+		self.lstm = nn.LSTM(num_filters, hidden_size)
+		self.hiddenToClass = nn.Linear(hidden_size, output_size)
+		self.softmax = nn.Softmax()
+
+	# TODO: We should figure out how to init hidden
+	def init_hidden(self):
+		# Before we've done anything, we dont have any hidden state.
+		# Refer to the Pytorch documentation to see exactly
+		# why they have this dimensionality.
+		# The axes semantics are (num_layers, minibatch_size, hidden_dim)
+		return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
+				torch.ones(1, BATCH_SIZE, self.hidden_dim))
+
+	def forward(self, input):
+		convFeatures = self.convLayer(input)
+		# TODO: Flatten here or Maxpool
+		lstm_out, self.hidden = self.lstm(convFeatures, self.hidden)
+		classVal = self.hiddenToClass(lstm_out)
+		pred = self.softmax(classVal)
+		return pred
 
 
-def train_model(dataloders, model, criterion, optimizer, scheduler, num_epochs=25):
-    since = time.time()
-    use_gpu = torch.cuda.is_available()
-    best_model_wts = model.state_dict()
-    best_acc = 0.0
-    dataset_sizes = {'train': len(dataloders['train'].dataset), 
-                     'valid': len(dataloders['valid'].dataset)}
+def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
+	since = time.time()
+	use_gpu = torch.cuda.is_available()
 
-    for epoch in range(num_epochs):
-        for phase in ['train', 'valid']:
-            if phase == 'train':
-                scheduler.step()
-                model.train(True)
-            else:
-                model.train(False)
+	dataset_sizes = {'train': len(dataloders['train'].dataset), 
+					 'valid': len(dataloders['valid'].dataset)}
 
-            running_loss = 0.0
-            running_corrects = 0
+	best_valid_acc = 0.0
+	best_model_wts = None
 
-            for inputs, labels in dataloders[phase]:
-                if use_gpu:
-                    inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
-                else:
-                    inputs, labels = Variable(inputs), Variable(labels)
+	for epoch in range(num_epochs):
+		for phase in ['train', 'valid']:
+			if phase == 'train':
+				model.train(True)
+			else:
+				model.train(False)
 
-                optimizer.zero_grad()
+			running_loss = 0.0
+			running_corrects = 0
 
-                outputs = model(inputs)
-                _, preds = torch.max(outputs.data, 1)
-                loss = criterion(outputs, labels)
+			for inputs, labels in dataloders[phase]:
+				if use_gpu:
+					inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
+				else:
+					inputs, labels = Variable(inputs), Variable(labels)
 
-                if phase == 'train':
-                    loss.backward()
-                    optimizer.step()
+				optimizer.zero_grad()
 
-                running_loss += loss.item()
-                running_corrects += torch.sum(preds == labels.data)
-                print('Got one')
-            
-            if phase == 'train':
-                train_epoch_loss = running_loss / dataset_sizes[phase]
-                train_epoch_acc = running_corrects / dataset_sizes[phase]
-            else:
-                valid_epoch_loss = running_loss / dataset_sizes[phase]
-                valid_epoch_acc = running_corrects / dataset_sizes[phase]
-                
-            if phase == 'valid' and valid_epoch_acc > best_acc:
-                best_acc = valid_epoch_acc
-                best_model_wts = model.state_dict()
+				# Forward pass
+				outputs = model(inputs)
 
-        print('Epoch [{}/{}] train loss: {:.4f} acc: {:.4f} ' 
-              'valid loss: {:.4f} acc: {:.4f}'.format(
-                epoch, num_epochs - 1,
-                train_epoch_loss, train_epoch_acc, 
-                valid_epoch_loss, valid_epoch_acc))
-            
-    print('Best val Acc: {:4f}'.format(best_acc))
+				# TODO: Perhaps need to check the outputs value here
 
-    model.load_state_dict(best_model_wts)
-    return model
+				loss = criterion(outputs, labels)
+
+				# Backward pass
+				if phase == 'train':
+					loss.backward()
+					optimizer.step()
+
+				running_loss += loss.item()
+				running_corrects += torch.sum(preds == labels.data) #TODO: This may need to be double checked
+			
+			if phase == 'train':
+				train_epoch_loss = running_loss / dataset_sizes[phase]
+				train_epoch_acc = running_corrects / dataset_sizes[phase]
+			else:
+				valid_epoch_loss = running_loss / dataset_sizes[phase]
+				valid_epoch_acc = running_corrects / dataset_sizes[phase]
+				
+			if phase == 'valid' and valid_epoch_acc > best_valid_acc:
+				best_valid_acc = valid_epoch_acc
+				best_model_wts = model.state_dict()
+
+		print('Epoch [{}/{}] train loss: {:.4f} acc: {:.4f} ' 
+			  'valid loss: {:.4f} acc: {:.4f} time: {:.4f}'.format(
+				epoch, num_epochs - 1,
+				train_epoch_loss, train_epoch_acc, 
+				valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
+			
+	print('Best val Acc: {:4f}'.format(best_acc))
+
+	model.load_state_dict(best_model_wts)
+	return model
 
 
 ### Get DataLoaders running
-from torch.utils.data.sampler import SubsetRandomSampler
+# from torch.utils.data.sampler import SubsetRandomSampler
 
-dataset = WhaleDataset("./data/whale_calls/data/train.csv", "./data/whale_calls/data/train/", (224, 224))
-batch_size = 16
-validation_split = .2
-shuffle_dataset = True
-random_seed= 42
+# dataset = WhaleDataset("./data/whale_calls/data/train.csv", "./data/whale_calls/data/train/", (224, 224))
+# batch_size = 16
+# validation_split = .2
+# shuffle_dataset = True
+# random_seed= 42
 
-# Creating data indices for training and validation splits:
+## Build Dataset
+dataset = ElephantDataset()
+
 dataset_size = len(dataset)
 indices = list(range(dataset_size))
-split = int(np.floor(validation_split * dataset_size))
-if shuffle_dataset :
-    np.random.seed(random_seed)
-    np.random.shuffle(indices)
+split = int(np.floor(VALIDATION_SPLIT * dataset_size))
+np.random.shuffle(indices)
+
 train_indices, val_indices = indices[split:], indices[:split]
 
-# Creating PT data samplers and loaders:
 train_sampler = SubsetRandomSampler(train_indices)
 valid_sampler = SubsetRandomSampler(val_indices)
 
-train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
-validation_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=valid_sampler)
-
-resnet = models.resnet18(pretrained=True)
-# freeze all model parameters
-for param in resnet.parameters():
-    param.requires_grad = False
-
-# new final layer with 16 classes
-num_ftrs = resnet.fc.in_features
-resnet.fc = torch.nn.Linear(num_ftrs, NUM_CLASSES)
-use_gpu = torch.cuda.is_available()
-if use_gpu:
-    resnet = resnet.cuda()
-
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(resnet.fc.parameters(), lr=0.001, momentum=0.9)
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+train_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=train_sampler)
+validation_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=valid_sampler)
 
 dloaders = {'train':train_loader, 'valid':validation_loader}
 
+## Build Model
+model = LSTM(input_size, hidden_size, NUM_CLASSES)
+
+use_gpu = torch.cuda.is_available()
+if use_gpu:
+	model = model.cuda()
+
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
 start_time = time.time()
-model = train_model(dloaders, resnet, criterion, optimizer, exp_lr_scheduler, num_epochs=2)
+model = train_model(dloaders, model, criterion, optimizer, num_epochs=NUM_EPOCHS)
+
 print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
+
+# TODO: Save model to something
+
+
+
