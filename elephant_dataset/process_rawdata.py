@@ -4,14 +4,19 @@ import numpy as np
 import soundfile as sf
 import csv
 import os
+import librosa
 
 # Inputs
 dataDir = './Data/' # Dir containing all raw data in seperate files like 'ceb1_XXXXXXX'
 outputDir = './Processed_data/' # Dir that will contain all of the output data
+outputDirMel = './Processed_data_MFCC/'
 numFFT        = 512 # Number of points to do FFT over
+hop_length    = 128 * 3 # Number of points between successive FFT 
 timeStart     = 0.0 # Start time of file to being data generation
 timeStop      = 0.0 # End time to look at, enter '0' to look at entire file
-FREQ_MAX = 150.
+N_MELS        = 77  # Dimension of the features in the mel spectogram. Want to equal normal spect
+FREQ_MAX      = 150.
+USE_MEL       = True
 
 
 ## Function that given .flac file, lable file and starting hour will generate spec and label data
@@ -29,14 +34,21 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     #print (samplerate)
     timePerFrame = 1. / samplerate
     #print (timePerFrame)
+    if (not USE_MEL):
+        [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
+        # The data above FREQ_MAX Hertz is irrelephant so get rid of it.
+        # This does not seem quite right so we will re-do this
+        spectrum = spectrum[(freqs < FREQ_MAX)]
+        freqs = freqs[(freqs < FREQ_MAX)]
+    else:
+        # This is hacky but we want to get the times centered for each
+        # spectogram frame
+        spectrum, freqs, t = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
+        mel_spect = librosa.feature.melspectrogram(S=spectrum, n_mels=N_MELS)
 
-    [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
-
-    #print (spectrum.shape)
-    # The data above 100 Hertz is irrelephant so get rid of it.
-    # This does not seem quite right so we will re-do this
-    spectrum = spectrum[(freqs < FREQ_MAX)]
-    freqs = freqs[(freqs < FREQ_MAX)]
+        # Converst to db scale
+        mel_db = (librosa.power_to_db(mel_spect, ref=np.max)) #+ 40)/40
+        spectrum = mel_db
     
     # Determing time spacing of columns in Data Matrix
     # amount of time per colum
@@ -45,7 +57,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     #print (timeSpacing)
 
     # Initialize LabelVector
-    labelMatrix = np.zeros(shape=(len(t)),dtype=int);
+    labelMatrix = np.zeros(shape=(spectrum.shape[1]),dtype=int);
     
     # Iterate through labels, and changes labelMatrix, should an elephant call be present
     for row in labelFile:
@@ -62,8 +74,8 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
 
     # Save output files, spectrum (contains all frequency data) and labelMatrix
     # For now save as .csv so we can inspect to make sure it is right! Later consider using .npy
-    np.savetxt(outputDir+'/'+outputDataName+'.csv', spectrum, delimiter=",")
-    np.savetxt(outputDir+'/'+outputLabelName+'.csv', labelMatrix, delimiter=",")
+    np.savetxt(outputDir + outputDataName+'.csv', spectrum, delimiter=",")
+    np.savetxt(outputDir + outputLabelName+'.csv', labelMatrix, delimiter=",")
 
 
 # Iterate through all data directories
@@ -72,6 +84,8 @@ allDirs = [];
 for (dirpath, dirnames, filenames) in os.walk(dataDir):
     allDirs.extend(dirnames);
     break
+
+out_path = outputDirMel if USE_MEL else outputDir
 # Iterate through all files with in data directories
 for dirName in allDirs:
     #Iterate through each dir and get files within
@@ -89,7 +103,7 @@ for dirName in allDirs:
             if eachFile.split('.')[1] == 'flac':
                 tempAudioFile = eachFile;
                 tempStartHour = int(eachFile.split('_')[2][0:2]);
-                processData(dataDir,tempCurrentDir,outputDir,tempAudioFile,tempLabelFile,'Data_'+tempID+'_Hour'+str(tempStartHour),'Label_'+tempID+'_Hour'+str(tempStartHour),tempStartHour)
+                processData(dataDir,tempCurrentDir,out_path,tempAudioFile,tempLabelFile,'Data_'+tempID+'_Hour'+str(tempStartHour),'Label_'+tempID+'_Hour'+str(tempStartHour),tempStartHour)
 
 
 

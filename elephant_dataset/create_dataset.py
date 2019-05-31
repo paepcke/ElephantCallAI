@@ -9,15 +9,19 @@ Try for now to make all of the calls the same length
 
 import os,math
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 
 data_directory = './Processed_data/'
-
 output_directory = './Features_Labels'
-
+test_directory = './Test'
+train_directory = './Train'
 
 feature_set = []
 label_set = []
+
+seed = 8
+TEST_SIZE = 0.2
 
 # Determines the size of the chunks that we are creating around the elephant
 # Call. This refers to number of columns in the spectogram. Based on the 
@@ -26,19 +30,26 @@ label_set = []
 # so the call is not always centered! 
 FRAME_LENGTH = 64
 
+# Define whether we label the call itself
+# or label when the call ends. If True labels
+# when the call ends
+USE_POST_CALL_LABEL = True
 # Number of time steps to add the 1
-ACTIVATE_TIME = 5
+ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
+
 
 def makeChunk(start_index,feat_mat,label_mat):
     # 1. Determine length of call in number of indices
     length_of_call = 0
-    # Now we also want to zero out this! because we are gonna
-    # label just the end of the call
+
     for j in range(start_index,label_mat.shape[0]):
         if label_mat[j] != 1:
             break
         length_of_call += 1
-        label_mat[j] = 0
+        # If we are adding the labels at the end
+        # zero out the actual call labels
+        if (ACTIVATE_TIME != 0):
+            label_mat[j] = 0
 
     if (start_index + length_of_call + ACTIVATE_TIME >= label_mat.shape[0]):
         return -1, None, None
@@ -72,16 +83,6 @@ def makeChunk(start_index,feat_mat,label_mat):
         chunk_end_index = label_mat.shape[0] - 1
         chunk_start_index -= transfer_front
 
-    '''
-    # 2. Now go back floor(.5) before call, and ceiling(.5) after call as chunk
-    # and create corresponding label
-    # 2a set start and end indices, considering might be at beginining/end of
-    # file
-    chunk_start_index = start_index - math.floor(length_of_call/2)
-    chunk_start_index = max(chunk_start_index,0)
-    chunk_end_index = start_index + length_of_call + math.floor(length_of_call/2)
-    chunk_end_index = min(chunk_end_index,label_mat.shape[0])
-    '''
     return_features = []
     return_labels = []
     # + 1 here?
@@ -89,9 +90,8 @@ def makeChunk(start_index,feat_mat,label_mat):
         return_features.append(feat_mat[j,:])
         return_labels.append(label_mat[j])
 
-    #print (np.array(return_features).shape)
-
-    return start_index + length_of_call + ACTIVATE_TIME + 1,np.array(return_features),np.array(return_labels)
+    # Note make sure that we skip over the call and the activate labels
+    return start_index + length_of_call + ACTIVATE_TIME + 1, np.array(return_features),np.array(return_labels)
 
 
 
@@ -113,27 +113,51 @@ def makeDataSet(featFile,labFile):
             if (skip == -1):
                 break
             feature_set.append(feature_chunk)
-            print(feature_chunk.shape)
             label_set.append(label_chunk)
             skip_to_index = True
     return feature_set, label_set
 
 
 
-# 1. Iterate through all files in output
-for i,fileName in enumerate(os.listdir(data_directory)):
-    print(fileName,i)
-    if fileName[0:4] == 'Data':
-        label_file = 'Label'+fileName[4:]
-        feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
+def main():
+    # 1. Iterate through all files in output
+    for i,fileName in enumerate(os.listdir(data_directory)):
+        print(fileName,i)
+        if fileName[0:4] == 'Data':
+            label_file = 'Label'+fileName[4:]
+            feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
 
-#print (len(feature_set))
-feature_set = np.stack(feature_set)
-#print (feature_set.shape)
-label_set = np.stack(label_set)
-print(feature_set.shape,label_set.shape)
-np.save(output_directory + '/features.npy',feature_set)
-np.save(output_directory + '/labels.npy',label_set)
+    feature_set = np.stack(feature_set)
+    label_set = np.stack(label_set)
+    
+    print(feature_set.shape,label_set.shape)
+
+    X_train, X_test, y_train, y_test = train_test_split(feature_set, label_set, test_size=TEST_SIZE,random_state=seed)
+
+    print (X_train.shape)
+    print (X_test.shape)
+
+    label_type = '/Activate_Label'
+    if (not USE_POST_CALL_LABEL):
+        label_type = "/Call_Label"
+
+    np.save(train_directory + label_type + '/features.npy', X_train)
+    np.save(train_directory + label_type + '/labels.npy', y_train)
+    np.save(test_directory + label_type + '/features.npy', X_test)
+    np.save(test_directory + label_type + '/labels.npy', y_test)
+
+    # Save the individual training files for visualization etc.
+    for i in range(X_train.shape[0]):
+        np.save(train_directory + label_type + '/features_{}'.format(i+1), X_train[i])
+        np.save(train_directory + label_type + '/labels_{}'.format(i+1), y_train[i])
+
+    for i in range(X_test.shape[0]):
+        np.save(test_directory + label_type + '/features_{}'.format(i+1), X_test[i])
+        np.save(test_directory + label_type + '/labels_{}'.format(i+1), y_test[i])
+
+
+if __name__ == '__main__':
+    main()
 
 
 

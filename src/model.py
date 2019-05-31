@@ -1,3 +1,15 @@
+from torch.utils.data.sampler import SubsetRandomSampler
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import optim
+from torch.autograd import Variable
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import precision_recall_curve
+from data import get_test_loader, get_train_valid_loader
+import time
 
 RANDOM_SEED = 42
 
@@ -9,129 +21,165 @@ NUM_EPOCHS = 2
 np.random.seed(RANDOM_SEED)
 
 class LSTM(nn.Module):
-	def __init__(self, input_size, hidden_size, output_size):
-		super(RNN, self).__init__()
-		self.hidden_dim = hidden_size
+    def __init__(self, input_size, hidden_size, output_size, batch_size):
+        super(LSTM, self).__init__()
+        self.hidden_dim = hidden_size
+        self.batch_size = batch_size
 
-		self.hidden = self.init_hidden()
+        self.hidden = self.init_hidden()
+        self.input_size = input_size
 
-		self.lstm = nn.LSTM(input_size, hidden_size)
-		self.hiddenToClass = nn.Linear(hidden_size, output_size)
-		self.softmax = nn.Softmax()
+        self.lstm = nn.LSTM(input_size, hidden_size)
+        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+        #self.softmax = nn.Softmax()
+        self.sigmoid = nn.Sigmoid()
 
-	def init_hidden(self):
-		# Before we've done anything, we dont have any hidden state.
-		# Refer to the Pytorch documentation to see exactly
-		# why they have this dimensionality.
-		# The axes semantics are (num_layers, minibatch_size, hidden_dim)
-		return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
-				torch.ones(1, BATCH_SIZE, self.hidden_dim))
+    def init_hidden(self):
+        # Before we've done anything, we dont have any hidden state.
+        # Refer to the Pytorch documentation to see exactly
+        # why they have this dimensionality.
+        # The axes semantics are (num_layers, minibatch_size, hidden_dim)
+        return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
+                torch.ones(1, BATCH_SIZE, self.hidden_dim))
 
 
-	def forward(self, input):
-		lstm_out, self.hidden = self.lstm(input, self.hidden)
-		classVal = self.hiddenToClass(lstm_out)
-		pred = self.softmax(classVal)
-		return pred
+    def forward(self, inputs):
+        # Think we need this here
+        self.hidden = self.init_hidden()
+
+        # Re-Shape the input to be - (seq_len, batch, input_size)
+        inputs = inputs.view(-1, self.batch_size, self.input_size)
+        lstm_out, self.hidden = self.lstm(inputs, self.hidden)
+        logits = self.hiddenToClass(lstm_out)
+        #pred = self.softmax(classVal)
+        #pred = self.sigmoid(classVal)
+        return logits
 
 class CONV1D_LSTM(nn.Module):
-	def __init__(self, input_size, hidden_size, output_size):
-		super(RNN, self).__init__()
+    def __init__(self, input_size, hidden_size, output_size, batch_size, num_filters=25, kernel_size=5):
+        super(CONV1D_LSTM, self).__init__()
 
-		num_filters = 25
-		kernel_size = 5
+        self.num_filters = num_filters
+        self.kernel_size = kernel_size
 
-		self.hidden_dim = hidden_size
+        self.hidden_dim = hidden_size
+        self.batch_size = batch_size
+        self.input_size = input_size
 
-		self.hidden = self.init_hidden()
+        self.hidden = self.init_hidden()
 
-		self.convLayer = nn.Conv1d(input_size, num_filters, kernel_size, padding=2)
-		self.lstm = nn.LSTM(num_filters, hidden_size)
-		self.hiddenToClass = nn.Linear(hidden_size, output_size)
-		self.softmax = nn.Softmax()
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
+        self.lstm = nn.LSTM(num_filters, hidden_size)
+        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+        #self.softmax = nn.Softmax()
+        self.sigmoid = nn.Sigmoid()
 
-	# TODO: We should figure out how to init hidden
-	def init_hidden(self):
-		# Before we've done anything, we dont have any hidden state.
-		# Refer to the Pytorch documentation to see exactly
-		# why they have this dimensionality.
-		# The axes semantics are (num_layers, minibatch_size, hidden_dim)
-		return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
-				torch.ones(1, BATCH_SIZE, self.hidden_dim))
+    # TODO: We should figure out how to init hidden
+    def init_hidden(self):
+        # Before we've done anything, we dont have any hidden state.
+        # Refer to the Pytorch documentation to see exactly
+        # why they have this dimensionality.
+        # The axes semantics are (num_layers, minibatch_size, hidden_dim)
+        return (torch.ones(1, BATCH_SIZE, self.hidden_dim),
+                torch.ones(1, BATCH_SIZE, self.hidden_dim))
 
-	def forward(self, input):
-		convFeatures = self.convLayer(input)
-		# TODO: Flatten here or Maxpool
-		lstm_out, self.hidden = self.lstm(convFeatures, self.hidden)
-		classVal = self.hiddenToClass(lstm_out)
-		pred = self.softmax(classVal)
-		return pred
+    def forward(self, inputs):
+        # Think we need this here
+        self.hidden = self.init_hidden()
+
+        # Reshape the input before passing to the 1d
+        inputs = inputs.view(-1, 1, self.input_size)
+        #print (inputs.shape)
+        convFeatures = self.convLayer(inputs)
+        #print (convFeatures.shape)
+        # TODO: Flatten here or Maxpool
+        # Try MaxPool for examples
+        pooledFeatures = self.maxpool(convFeatures)
+        #print (pooledFeatures.shape)
+
+        # Re-Shape to be - (seq_len, batch, num_filters)
+        pooledFeatures = pooledFeatures.view(-1, self.batch_size, self.num_filters)
+        #print (pooledFeatures.shape)
+        lstm_out, self.hidden = self.lstm(pooledFeatures, self.hidden)
+        logits = self.hiddenToClass(lstm_out)
+        #pred = self.softmax(classVal)
+        #pred = self.sigmoid(classVal)
+        return logits
 
 
 def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
-	since = time.time()
-	use_gpu = torch.cuda.is_available()
+    since = time.time()
+    use_gpu = torch.cuda.is_available()
 
-	dataset_sizes = {'train': len(dataloders['train'].dataset), 
-					 'valid': len(dataloders['valid'].dataset)}
+    dataset_sizes = {'train': len(dataloders['train'].dataset), 
+                     'valid': len(dataloders['valid'].dataset)}
 
-	best_valid_acc = 0.0
-	best_model_wts = None
+    best_valid_acc = 0.0
+    best_model_wts = None
 
-	for epoch in range(num_epochs):
-		for phase in ['train', 'valid']:
-			if phase == 'train':
-				model.train(True)
-			else:
-				model.train(False)
+    for epoch in range(num_epochs):
+        for phase in ['train', 'valid']:
+            if phase == 'train':
+                model.train(True)
+            else:
+                model.train(False)
 
-			running_loss = 0.0
-			running_corrects = 0
+            running_loss = 0.0
+            running_corrects = 0
 
-			for inputs, labels in dataloders[phase]:
-				if use_gpu:
-					inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
-				else:
-					inputs, labels = Variable(inputs), Variable(labels)
+            for inputs, labels in dataloders[phase]:
+                # Cast the variables to the correct type
+                inputs = inputs.float()
+                labels = labels.float()
+                if use_gpu:
+                    inputs, labels = Variable(inputs.cuda().float()), Variable(labels.cuda().float())
+                else:
+                    inputs, labels = Variable(inputs.float()), Variable(labels.float())
 
-				optimizer.zero_grad()
+                optimizer.zero_grad()
 
-				# Forward pass
-				outputs = model(inputs)
+                # Forward pass
+                # Definitely need to re-init hidden. Maybe do this in the forward pass
+                outputs = model(inputs) # Shape - (seq_len, 1, 1)
 
-				# TODO: Perhaps need to check the outputs value here
+                outputs = outputs.squeeze()
+                labels = labels.squeeze()
+                # TODO: Perhaps need to check the outputs value here
 
-				loss = criterion(outputs, labels)
+                loss = criterion(outputs, labels)
 
-				# Backward pass
-				if phase == 'train':
-					loss.backward()
-					optimizer.step()
+                # Backward pass
+                if phase == 'train':
+                    loss.backward()
+                    optimizer.step()
 
-				running_loss += loss.item()
-				running_corrects += torch.sum(preds == labels.data) #TODO: This may need to be double checked
-			
-			if phase == 'train':
-				train_epoch_loss = running_loss / dataset_sizes[phase]
-				train_epoch_acc = running_corrects / dataset_sizes[phase]
-			else:
-				valid_epoch_loss = running_loss / dataset_sizes[phase]
-				valid_epoch_acc = running_corrects / dataset_sizes[phase]
-				
-			if phase == 'valid' and valid_epoch_acc > best_valid_acc:
-				best_valid_acc = valid_epoch_acc
-				best_model_wts = model.state_dict()
+                running_loss += loss.item()
+                # Check this!!
+                #running_corrects += torch.sum(preds == labels.data) #TODO: This may need to be double checked
+            
+            if phase == 'train':
+                train_epoch_loss = running_loss / dataset_sizes[phase]
+                train_epoch_acc = running_corrects / dataset_sizes[phase]
+            else:
+                valid_epoch_loss = running_loss / dataset_sizes[phase]
+                valid_epoch_acc = running_corrects / dataset_sizes[phase]
+                
+            if phase == 'valid' and valid_epoch_acc > best_valid_acc:
+                best_valid_acc = valid_epoch_acc
+                best_model_wts = model.state_dict()
 
-		print('Epoch [{}/{}] train loss: {:.4f} acc: {:.4f} ' 
-			  'valid loss: {:.4f} acc: {:.4f} time: {:.4f}'.format(
-				epoch, num_epochs - 1,
-				train_epoch_loss, train_epoch_acc, 
-				valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
-			
-	print('Best val Acc: {:4f}'.format(best_acc))
+        print('Epoch [{}/{}] train loss: {:.4f} acc: {:.4f} ' 
+              'valid loss: {:.4f} acc: {:.4f} time: {:.4f}'.format(
+                epoch, num_epochs - 1,
+                train_epoch_loss, train_epoch_acc, 
+                valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
+            
+    print('Best val Acc: {:4f}'.format(best_acc))
 
-	model.load_state_dict(best_model_wts)
-	return model
+    model.load_state_dict(best_model_wts)
+    return model
 
 
 ### Get DataLoaders running
@@ -144,6 +192,7 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
 # random_seed= 42
 
 ## Build Dataset
+'''
 dataset = ElephantDataset()
 
 dataset_size = len(dataset)
@@ -158,17 +207,25 @@ valid_sampler = SubsetRandomSampler(val_indices)
 
 train_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=train_sampler)
 validation_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, sampler=valid_sampler)
+'''
+train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Activate_Label/",
+                           BATCH_SIZE,
+                           RANDOM_SEED)
 
 dloaders = {'train':train_loader, 'valid':validation_loader}
 
 ## Build Model
-model = LSTM(input_size, hidden_size, NUM_CLASSES)
+input_size = 77 # Num of frequency bands in the spectogram
+hidden_size = 128
+#model = LSTM(input_size, hidden_size, 1, BATCH_SIZE)
+model = CONV1D_LSTM(input_size, hidden_size, 1, BATCH_SIZE)
 
 use_gpu = torch.cuda.is_available()
 if use_gpu:
-	model = model.cuda()
+    model = model.cuda()
 
-criterion = torch.nn.CrossEntropyLoss()
+criterion = torch.nn.BCEWithLogitsLoss()
+# Ramp this up for sure
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 start_time = time.time()
