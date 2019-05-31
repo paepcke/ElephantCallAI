@@ -1,6 +1,10 @@
 .DS_Store
 data/*
 whale-detection-challenge/*
+Elephant_Archive/*
+Data/*
+Processed_data/*
+Features_Labels/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
