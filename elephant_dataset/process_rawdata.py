@@ -30,18 +30,6 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     timePerFrame = 1. / samplerate
     #print (timePerFrame)
 
-    # Let's not do this for now
-    '''
-    if timeStop == 0.0:
-        numFrames = f.nframes;
-    else:
-        startFrame = timeStart / timePerFrame
-        endFrame   = timeStop  / timePerFrame
-        numFrames  = endFrame  - startFrame
-        temp = f.read_frames(startFrame)
-    '''
-    # Can later just read part of the audio file
-
     [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
 
     #print (spectrum.shape)

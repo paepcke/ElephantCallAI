@@ -128,9 +128,9 @@ for i,fileName in enumerate(os.listdir(data_directory)):
         feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
 
 #print (len(feature_set))
-feature_set = np.dstack(feature_set)
+feature_set = np.stack(feature_set)
 #print (feature_set.shape)
-label_set = np.dstack(label_set)
+label_set = np.stack(label_set)
 print(feature_set.shape,label_set.shape)
 np.save(output_directory + '/features.npy',feature_set)
 np.save(output_directory + '/labels.npy',label_set)

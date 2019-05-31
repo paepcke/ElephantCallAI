@@ -10,16 +10,19 @@ import pandas as pd
 import os
 
 class ElephantDataset(data.Dataset):
-	def __init__(self):
+	def __init__(self, features, labels):
 		# TODO: Do some things depending on how data looks
+		self.features = features # Shape - (num_train, time, freqs)
+		self.labels = labels # Shape - (num_train, time)
 
 	def __len__(self):
-		return len(self.labels)
+		return self.features.shape[0]
 
 	"""
 	Return a single element at provided index
 	"""
 	def __getitem__(self, index):
+		return self.features[index], self.labels[index]
 
 class WhaleDataset(data.Dataset):
   # 'Characterizes a dataset for PyTorch'
