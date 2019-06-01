@@ -16,7 +16,7 @@ RANDOM_SEED = 42
 BATCH_SIZE = 1
 VALIDATION_SPLIT = .2
 
-NUM_EPOCHS = 2
+NUM_EPOCHS = 10
 
 np.random.seed(RANDOM_SEED)
 
@@ -109,6 +109,18 @@ class CONV1D_LSTM(nn.Module):
         return logits
 
 
+def num_correct(logits, labels, threshold=0.5):
+    sig = nn.Sigmoid()
+    with torch.no_grad():
+        pred = sig(logits)
+        binary_preds = pred > threshold
+        print (binary_preds)
+        # Cast to proper type!
+        binary_preds = binary_preds.float()
+        num_correct = (binary_preds == labels).sum()
+
+    return num_correct
+
 def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
     since = time.time()
     use_gpu = torch.cuda.is_available()
@@ -128,27 +140,28 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
 
             running_loss = 0.0
             running_corrects = 0
+            running_samples = 0
 
             for inputs, labels in dataloders[phase]:
                 # Cast the variables to the correct type
                 inputs = inputs.float()
                 labels = labels.float()
                 if use_gpu:
-                    inputs, labels = Variable(inputs.cuda().float()), Variable(labels.cuda().float())
+                    inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
                 else:
-                    inputs, labels = Variable(inputs.float()), Variable(labels.float())
+                    inputs, labels = Variable(inputs), Variable(labels)
 
                 optimizer.zero_grad()
 
                 # Forward pass
                 # Definitely need to re-init hidden. Maybe do this in the forward pass
-                outputs = model(inputs) # Shape - (seq_len, 1, 1)
+                logits = model(inputs) # Shape - (seq_len, 1, 1)
 
-                outputs = outputs.squeeze()
+                logits = logits.squeeze()
                 labels = labels.squeeze()
                 # TODO: Perhaps need to check the outputs value here
 
-                loss = criterion(outputs, labels)
+                loss = criterion(logits, labels)
 
                 # Backward pass
                 if phase == 'train':
@@ -157,14 +170,19 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs=25):
 
                 running_loss += loss.item()
                 # Check this!!
+                # Maybe we have to do like with no grad or something??
+                running_corrects += num_correct(logits, labels)
+                running_samples += logits.shape[0]
                 #running_corrects += torch.sum(preds == labels.data) #TODO: This may need to be double checked
             
             if phase == 'train':
                 train_epoch_loss = running_loss / dataset_sizes[phase]
-                train_epoch_acc = running_corrects / dataset_sizes[phase]
+                #train_epoch_acc = running_corrects / dataset_sizes[phase]
+                train_epoch_acc = float(running_corrects) / running_samples
             else:
                 valid_epoch_loss = running_loss / dataset_sizes[phase]
-                valid_epoch_acc = running_corrects / dataset_sizes[phase]
+                #valid_epoch_acc = running_corrects / dataset_sizes[phase]
+                valid_epoch_acc = float(running_corrects) / running_samples
                 
             if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                 best_valid_acc = valid_epoch_acc

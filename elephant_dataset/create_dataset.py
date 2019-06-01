@@ -33,7 +33,7 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = True
+USE_POST_CALL_LABEL = False
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
@@ -64,7 +64,9 @@ def makeChunk(start_index,feat_mat,label_mat):
     # We want the whole call to be in there plus the labeling of the "activate"
     padding_frame = FRAME_LENGTH - length_of_call - ACTIVATE_TIME
     # if padding_frame is neg skip call
-    assert(padding_frame >= 0)
+    # for now!
+    if padding_frame < 0:
+        return -1, None, None
     # Randomly split the pad to before and after
     split = np.random.randint(0, padding_frame + 1)
 
