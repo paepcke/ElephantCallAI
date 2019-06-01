@@ -54,20 +54,19 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(LSTM, self).__init__()
+        self.input_dim = input_size
         self.hidden_dim = hidden_size
 
-        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device),
-                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device)]
-        self.input_size = input_size
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
 
-        self.lstm = nn.LSTM(input_size, hidden_size)
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(hidden_size, output_size)
 
     def forward(self, inputs):
-        # Re-Shape the input to be - ( seq_len, batch, input_size)
-        inputs_reshaped = inputs.view(inputs.shape[1], -1, self.input_size)
-        lstm_out, _ = self.lstm(inputs_reshaped, self.init_state)
-        lstm_out = lstm_out.view(-1, inputs.shape[1], self.hidden_dim)
+        # input shape - (batch, seq_len, input_size)
+        lstm_out, _ = self.lstm(inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
         return logits
 
@@ -225,7 +224,7 @@ model.to(device)
 ## Print model summary
 print(model)
 print("Torchsummary output:")
-print(summary(model, input_size=next(iter(dloaders['train']))[0].shape))
+# print(summary(model, input_size=next(iter(dloaders['train']))[0].shape))
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
