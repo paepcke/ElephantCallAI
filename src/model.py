@@ -43,12 +43,13 @@ from tensorboardX import SummaryWriter
 RANDOM_SEED = 42
 
 LEARNING_RATE = 1e-3
-BATCH_SIZE = 1
-VALIDATION_SPLIT = .2
+BATCH_SIZE = 16
 NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
 
 np.random.seed(RANDOM_SEED)
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, batch_size):
@@ -64,9 +65,10 @@ class LSTM(nn.Module):
         self.hiddenToClass = nn.Linear(hidden_size, output_size)
 
     def forward(self, inputs):
-        # Re-Shape the input to be - (seq_len, batch, input_size)
+        # Re-Shape the input to be - ( seq_len, batch, input_size)
         inputs = inputs.view(-1, self.batch_size, self.input_size)
         lstm_out, _ = self.lstm(inputs, self.init_state)
+        lstm_out = lstm_out.view(self.batch_size, -1, self.hidden_dim)
         logits = self.hiddenToClass(lstm_out)
         return logits
 
@@ -122,7 +124,6 @@ def num_correct(logits, labels, threshold=0.5):
 
 def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_path):
     since = time.time()
-    use_gpu = torch.cuda.is_available()
     writer = SummaryWriter()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -148,7 +149,7 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     inputs = inputs.float()
                     labels = labels.float()
                     if use_gpu:
-                        inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
+                        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
                     else:
                         inputs, labels = Variable(inputs), Variable(labels)
 
@@ -222,14 +223,12 @@ hidden_size = 128
 model = LSTM(input_size, hidden_size, 1, BATCH_SIZE)
 # model = CONV1D_LSTM(input_size, hidden_size, 1, BATCH_SIZE)
 
+model.to(device)
+
 ## Print model summary
 print(model)
 print("Torchsummary output:")
 print(summary(model, input_size=next(iter(dloaders['train']))[0].shape))
-
-use_gpu = torch.cuda.is_available()
-if use_gpu:
-    model = model.cuda()
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
