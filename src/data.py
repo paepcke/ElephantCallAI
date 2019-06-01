@@ -108,6 +108,9 @@ class ElephantDataset(data.Dataset):
         # Potentially include other transforms
         self.transforms = transform
 
+        # Normalize Features
+        self.features = (self.features - np.mean(self.features)) / np.std(self.features)
+
     def __len__(self):
         return self.features.shape[0]
 

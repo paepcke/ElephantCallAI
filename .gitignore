@@ -1,3 +1,5 @@
+src/runs/*
+weights/*
 .DS_Store
 data/*
 whale-detection-challenge/*
