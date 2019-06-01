@@ -149,7 +149,7 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     inputs = inputs.float()
                     labels = labels.float()
 
-                    Variable(inputs.to(device)), Variable(labels.to(device))
+                    inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
 
                     optimizer.zero_grad()
 
