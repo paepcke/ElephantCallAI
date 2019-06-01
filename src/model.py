@@ -57,8 +57,8 @@ class LSTM(nn.Module):
         self.hidden_dim = hidden_size
         self.batch_size = batch_size
 
-        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True),
-                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True)]
+        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device),
+                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device)]
         self.input_size = input_size
 
         self.lstm = nn.LSTM(input_size, hidden_size)
@@ -83,8 +83,8 @@ class CONV1D_LSTM(nn.Module):
         self.batch_size = batch_size
         self.input_size = input_size
 
-        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True),
-                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True)]
+        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device),
+                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device)]
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
@@ -148,10 +148,8 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     # Cast the variables to the correct type
                     inputs = inputs.float()
                     labels = labels.float()
-                    if use_gpu:
-                        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-                    else:
-                        inputs, labels = Variable(inputs), Variable(labels)
+
+                    Variable(inputs.to(device)), Variable(labels.to(device))
 
                     optimizer.zero_grad()
 
