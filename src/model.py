@@ -52,10 +52,9 @@ np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, batch_size):
+    def __init__(self, input_size, hidden_size, output_size):
         super(LSTM, self).__init__()
         self.hidden_dim = hidden_size
-        self.batch_size = batch_size
 
         self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device),
                            nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device)]
@@ -66,9 +65,9 @@ class LSTM(nn.Module):
 
     def forward(self, inputs):
         # Re-Shape the input to be - ( seq_len, batch, input_size)
-        inputs = inputs.view(-1, self.batch_size, self.input_size)
-        lstm_out, _ = self.lstm(inputs, self.init_state)
-        lstm_out = lstm_out.view(self.batch_size, -1, self.hidden_dim)
+        inputs_reshaped = inputs.view(inputs.shape[1], -1, self.input_size)
+        lstm_out, _ = self.lstm(inputs_reshaped, self.init_state)
+        lstm_out = lstm_out.view(-1, inputs.shape[1], self.hidden_dim)
         logits = self.hiddenToClass(lstm_out)
         return logits
 
@@ -218,7 +217,7 @@ dloaders = {'train':train_loader, 'valid':validation_loader}
 input_size = 77 # Num of frequency bands in the spectogram
 hidden_size = 128
 
-model = LSTM(input_size, hidden_size, 1, BATCH_SIZE)
+model = LSTM(input_size, hidden_size, 1)
 # model = CONV1D_LSTM(input_size, hidden_size, 1, BATCH_SIZE)
 
 model.to(device)
