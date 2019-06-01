@@ -53,10 +53,6 @@ def makeChunk(start_index,feat_mat,label_mat):
 
     if (start_index + length_of_call + ACTIVATE_TIME >= label_mat.shape[0]):
         return -1, None, None
-    # Label the end of the call with 
-    # ACTIVATE_TIME number of frames
-    for i in range(ACTIVATE_TIME):
-        label_mat[j + i] = 1
 
     # Figure out how much to go before and after. We do not want to got .5 
     # because then the chunks are of different sizes
@@ -64,9 +60,18 @@ def makeChunk(start_index,feat_mat,label_mat):
     # We want the whole call to be in there plus the labeling of the "activate"
     padding_frame = FRAME_LENGTH - length_of_call - ACTIVATE_TIME
     # if padding_frame is neg skip call
-    # for now!
+    # but still want to go to the next!!
     if padding_frame < 0:
-        return -1, None, None
+        print ("skipping")
+        return start_index + length_of_call + 1, None, None
+
+
+    # Label the end of the call with 
+    # ACTIVATE_TIME number of frames
+    for i in range(ACTIVATE_TIME):
+        label_mat[j + i] = 1
+
+    
     # Randomly split the pad to before and after
     split = np.random.randint(0, padding_frame + 1)
 
@@ -112,11 +117,11 @@ def makeDataSet(featFile,labFile):
         if label_file[i] == 1:
             skip,feature_chunk, label_chunk = makeChunk(i,feature_file,label_file)
             # Skip this call because we are at the end of the file
-            if (skip == -1):
-                break
-            feature_set.append(feature_chunk)
-            label_set.append(label_chunk)
+            if (feature_chunk is not None):  
+                feature_set.append(feature_chunk)
+                label_set.append(label_chunk)
             skip_to_index = True
+
     return feature_set, label_set
 
 
