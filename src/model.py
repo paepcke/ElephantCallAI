@@ -43,7 +43,8 @@ from tensorboardX import SummaryWriter
 RANDOM_SEED = 42
 
 LEARNING_RATE = 1e-3
-LEARNING_RATE_DECAY = 0.6
+LEARNING_RATE_DECAY_STEP = 4
+LEARNING_RATE_DECAY = 0.8
 WEIGHT_DECAY = 1e-5
 
 BATCH_SIZE = 32
@@ -267,7 +268,7 @@ print(model)
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=LEARNING_RATE_DECAY)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, LEARNING_RATE_DECAY_STEP, gamma=LEARNING_RATE_DECAY)
 
 start_time = time.time()
 model = train_model(dloaders, model, criterion, optimizer, scheduler, NUM_EPOCHS, MODEL_SAVE_PATH)
