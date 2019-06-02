@@ -43,12 +43,15 @@ from tensorboardX import SummaryWriter
 RANDOM_SEED = 42
 
 LEARNING_RATE = 1e-3
-LEARNING_RATE_DECAY = 0.5
-WEIGHT_DECAY = 1e-2
+LEARNING_RATE_DECAY_STEP = 4
+LEARNING_RATE_DECAY = 0.8
+WEIGHT_DECAY = 1e-5
 
-BATCH_SIZE = 512
+BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
+
+
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -75,6 +78,37 @@ class LSTM(nn.Module):
                                          self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
         return logits
+
+class CONV1D_NO_POOL_LSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5):
+        super(CONV1D_NO_POOL_LSTM, self).__init__()
+
+        self.num_filters = num_filters
+        self.kernel_size = kernel_size
+
+        self.hidden_dim = hidden_size
+        self.input_size = input_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.lstm = nn.LSTM(1925, hidden_size, batch_first=True)
+        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        convFeatures = convFeatures.view(inputs.shape[0], inputs.shape[1], -1)
+        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
 
 class CONV1D_LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5):
@@ -225,7 +259,8 @@ input_size = 77 # Num of frequency bands in the spectogram
 hidden_size = 128
 
 # model = LSTM(input_size, hidden_size, 1)
-model = CONV1D_LSTM(input_size, hidden_size, 1)
+model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
+# model = CONV1D_LSTM(input_size, hidden_size, 1)
 
 model.to(device)
 
@@ -233,7 +268,7 @@ print(model)
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=LEARNING_RATE_DECAY)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, LEARNING_RATE_DECAY_STEP, gamma=LEARNING_RATE_DECAY)
 
 start_time = time.time()
 model = train_model(dloaders, model, criterion, optimizer, scheduler, NUM_EPOCHS, MODEL_SAVE_PATH)
