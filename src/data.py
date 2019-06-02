@@ -127,6 +127,11 @@ class ElephantDataset(data.Dataset):
             # each feature is the different frequency band
             for i in range(self.features.shape[0]):
                 self.features[i, :, :] = scaler.fit_transform(self.features[i,:,:].astype(np.float32))
+            #num_ex = self.features.shape[0]
+            #seq_len = self.features.shape[1]
+            #self.features = self.features.reshape(num_ex * seq_len, -1)
+            #self.features = scaler.fit_transform(self.features)
+            #self.features = self.features.reshape(num_ex, seq_len, -1)
 
     def __len__(self):
         return self.features.shape[0]

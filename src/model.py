@@ -80,7 +80,7 @@ class LSTM(nn.Module):
         return logits
 
 class CONV1D_NO_POOL_LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
         super(CONV1D_NO_POOL_LSTM, self).__init__()
 
         self.num_filters = num_filters
@@ -89,12 +89,12 @@ class CONV1D_NO_POOL_LSTM(nn.Module):
         self.hidden_dim = hidden_size
         self.input_size = input_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
-        self.lstm = nn.LSTM(1925, hidden_size, batch_first=True)
+        self.lstm = nn.LSTM(1925, hidden_size, num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(hidden_size, output_size)
 
     def forward(self, inputs):
@@ -111,7 +111,7 @@ class CONV1D_NO_POOL_LSTM(nn.Module):
 
 
 class CONV1D_LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
         super(CONV1D_LSTM, self).__init__()
 
         self.num_filters = num_filters
@@ -120,13 +120,13 @@ class CONV1D_LSTM(nn.Module):
         self.hidden_dim = hidden_size
         self.input_size = input_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(num_filters, hidden_size, batch_first=True)
+        self.lstm = nn.LSTM(num_filters, hidden_size, num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(hidden_size, output_size)
 
     def forward(self, inputs):
@@ -142,6 +142,74 @@ class CONV1D_LSTM(nn.Module):
 
         lstm_out, _ = self.lstm(pooledFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                                  self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
+class CONV1D_BiLSTM_Maxpool(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
+        super(CONV1D_BiLSTM_Maxpool, self).__init__()
+
+        self.num_filters = num_filters # we should probably expand this!!
+        self.kernel_size = kernel_size
+
+        self.hidden_dim = hidden_size
+        self.input_size = input_size
+
+        self.hidden_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
+        self.lstm = nn.LSTM(num_filters, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        self.hiddenToClass = nn.Linear(hidden_size*2, output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        pooledFeatures = self.maxpool(convFeatures)
+
+        # Re-Shape to be - (batch, seq_len, num_filters)
+        pooledFeatures = pooledFeatures.view(-1, inputs.shape[1], self.num_filters)
+
+        lstm_out, _ = self.lstm(pooledFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
+class CONV1D_BiLSTM_NO_POOL(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
+        super(CONV1D_BiLSTM_NO_POOL, self).__init__()
+
+        self.num_filters = num_filters # we should probably expand this!!
+        self.kernel_size = kernel_size
+
+        self.hidden_dim = hidden_size
+        self.input_size = input_size
+
+        self.hidden_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
+        self.lstm = nn.LSTM(1925, hidden_size, num_layers, batch_first=True, bidirectional=True)
+        self.hiddenToClass = nn.Linear(hidden_size*2, output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        convFeatures = convFeatures.view(inputs.shape[0], inputs.shape[1], -1)
+        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+
         logits = self.hiddenToClass(lstm_out)
         return logits
 
@@ -259,7 +327,8 @@ input_size = 77 # Num of frequency bands in the spectogram
 hidden_size = 128
 
 # model = LSTM(input_size, hidden_size, 1)
-model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
+#model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
+model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
 # model = CONV1D_LSTM(input_size, hidden_size, 1)
 
 model.to(device)
