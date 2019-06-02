@@ -48,12 +48,16 @@ NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
 
 np.random.seed(RANDOM_SEED)
-
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+writer = SummaryWriter()
+writer.add_scalar('learning_rate', LEARNING_RATE)
+writer.add_scalar('batch_size', BATCH_SIZE)
 
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(LSTM, self).__init__()
+
         self.input_dim = input_size
         self.hidden_dim = hidden_size
 
@@ -71,40 +75,37 @@ class LSTM(nn.Module):
         return logits
 
 class CONV1D_LSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, batch_size, num_filters=25, kernel_size=5):
+    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5):
         super(CONV1D_LSTM, self).__init__()
 
         self.num_filters = num_filters
         self.kernel_size = kernel_size
 
         self.hidden_dim = hidden_size
-        self.batch_size = batch_size
         self.input_size = input_size
 
-        self.init_state = [nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device),
-                           nn.Parameter(torch.rand(1, BATCH_SIZE, self.hidden_dim), requires_grad=True).to(device)]
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(num_filters, hidden_size)
+        self.lstm = nn.LSTM(num_filters, hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(hidden_size, output_size)
 
     def forward(self, inputs):
-        # Reshape the input before passing to the 1d
-        inputs = inputs.view(-1, 1, self.input_size)
-        #print (inputs.shape)
-        convFeatures = self.convLayer(inputs)
-        #print (convFeatures.shape)
-        # TODO: Flatten here or Maxpool
-        # Try MaxPool for examples
-        pooledFeatures = self.maxpool(convFeatures)
-        #print (pooledFeatures.shape)
+        # input shape - (batch, seq_len, input_size)
 
-        # Re-Shape to be - (seq_len, batch, num_filters)
-        pooledFeatures = pooledFeatures.view(-1, self.batch_size, self.num_filters)
-        #print (pooledFeatures.shape)
-        lstm_out, _ = self.lstm(pooledFeatures, self.init_state)
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        pooledFeatures = self.maxpool(convFeatures)
+
+        # Re-Shape to be - (batch, seq_len, num_filters)
+        pooledFeatures = pooledFeatures.view(-1, inputs.shape[1], self.num_filters)
+
+        lstm_out, _ = self.lstm(pooledFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
         return logits
 
@@ -122,7 +123,6 @@ def num_correct(logits, labels, threshold=0.5):
 
 def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_path):
     since = time.time()
-    writer = SummaryWriter()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
                      'valid': len(dataloders['valid'].dataset)}
@@ -152,7 +152,11 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     optimizer.zero_grad()
 
                     # Forward pass
-                    logits = model(inputs) # Shape - (seq_len, 1, 1)
+                    logits = model(inputs) # Shape - (batch_size, seq_len, 1)
+
+                    # Flatten it for criterion and num_correct
+                    logits = logits.view(-1, 1)
+                    labels = labels.view(-1, 1)
 
                     logits = logits.squeeze()
                     labels = labels.squeeze()
@@ -169,10 +173,10 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     running_samples += logits.shape[0]
                 
                 if phase == 'train':
-                    train_epoch_loss = running_loss / dataset_sizes[phase]
+                    train_epoch_loss = running_loss / running_samples
                     train_epoch_acc = float(running_corrects) / running_samples
                 else:
-                    valid_epoch_loss = running_loss / dataset_sizes[phase]
+                    valid_epoch_loss = running_loss / running_samples
                     valid_epoch_acc = float(running_corrects) / running_samples
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
@@ -196,8 +200,6 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
             print('Saved model from valid accuracy: ', best_valid_acc)
         else:
             print('For some reason I don\'t have a model to save')
-
-        writer.close()
     
     
     print('Best val Acc: {:4f}'.format(best_valid_acc))
@@ -216,15 +218,12 @@ dloaders = {'train':train_loader, 'valid':validation_loader}
 input_size = 77 # Num of frequency bands in the spectogram
 hidden_size = 128
 
-model = LSTM(input_size, hidden_size, 1)
-# model = CONV1D_LSTM(input_size, hidden_size, 1, BATCH_SIZE)
+# model = LSTM(input_size, hidden_size, 1)
+model = CONV1D_LSTM(input_size, hidden_size, 1)
 
 model.to(device)
 
-## Print model summary
 print(model)
-print("Torchsummary output:")
-# print(summary(model, input_size=next(iter(dloaders['train']))[0].shape))
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -234,5 +233,4 @@ model = train_model(dloaders, model, criterion, optimizer, NUM_EPOCHS, MODEL_SAV
 
 print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
 
-
-
+writer.close()
