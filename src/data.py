@@ -99,7 +99,7 @@ def get_test_loader(data_dir,
 
 
 class ElephantDataset(data.Dataset):
-    def __init__(self, feature_path, label_path, transform=None):
+    def __init__(self, feature_path, label_path, transform=None, preprocess="Norm"):
         # TODO: Do some things depending on how data looks
         self.features = np.load(feature_path) # Shape - (num_train, time, freqs)
         self.labels = np.load(label_path) # Shape - (num_train, time)
@@ -108,7 +108,24 @@ class ElephantDataset(data.Dataset):
         self.transforms = transform
 
         # Normalize Features
-        self.features = (self.features - np.mean(self.features)) / np.std(self.features)
+        if preprocess == "Norm":
+            standard_norm = preprocessing.StandardScaler()
+            # Re-shape the features:
+            # (num_ex, seq_len, features) ---> (num_ex * seq_len, features)
+            num_ex = self.features.shape[0]
+            seq_len = self.features.shape[1]
+            self.features = self.features.reshape(num_ex * seq_len, features)
+            self.features = standard_norm.fit_transform(self.features)
+            self.features = self.features.reshape(num_ex, seq_len, features)
+            #self.features = (self.features - np.mean(self.features)) / np.std(self.features)
+        elif preprocess == "Scale":
+            scaler = MinMaxScaler()
+            # Scale features for each training example
+            # to be within a certain range. Preserves the
+            # relative distribution of each feature. Here
+            # each feature is the different frequency band
+            for i in range(self.features.shape[0]):
+                self.features[i, :, :] = scaler.fit_transform(self.features[i,:,:].astype(np.float32))
 
     def __len__(self):
         return self.features.shape[0]

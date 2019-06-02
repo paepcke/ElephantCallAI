@@ -212,7 +212,7 @@ def extend_activate_label(labFile):
             # creating chunks
             start = labFile[i, 1]
             for j in range(ACTIVATE_TIME):
-                if (j >= labFile.shape[0]):
+                if (i + j >= labFile.shape[0]):
                     break
                 labFile[i + j, 0] = 1
                 labFile[i + j, 1] = start
@@ -247,7 +247,7 @@ def main():
     # 1. Iterate through all files in output
     data_directory = MFCC_Data if USE_MFCC_FEATURES else Spect_Data
     data_directory += activate_directory if USE_POST_CALL_LABEL else full_call_directory
-    
+
     for i,fileName in enumerate(os.listdir(data_directory)):
         print(fileName,i)
         if fileName[0:4] == 'Data':
