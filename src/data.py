@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import torchaudio
 import torch
 import aifc
 from scipy import signal
@@ -42,10 +41,10 @@ def get_train_valid_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    train_dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy')
-    valid_dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy')
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy')
     
-    num_train = len(train_dataset)
+    num_train = len(dataset)
+    print('Num train', num_train)
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
 
@@ -58,11 +57,11 @@ def get_train_valid_loader(data_dir,
     valid_sampler = SubsetRandomSampler(valid_idx)
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, sampler=train_sampler,
+        dataset, batch_size=batch_size, sampler=train_sampler,
         num_workers=num_workers, pin_memory=pin_memory,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_dataset, batch_size=batch_size, sampler=valid_sampler,
+        dataset, batch_size=batch_size, sampler=valid_sampler,
         num_workers=num_workers, pin_memory=pin_memory,
     )
 
@@ -107,6 +106,9 @@ class ElephantDataset(data.Dataset):
 
         # Potentially include other transforms
         self.transforms = transform
+
+        # Normalize Features
+        self.features = (self.features - np.mean(self.features)) / np.std(self.features)
 
     def __len__(self):
         return self.features.shape[0]
