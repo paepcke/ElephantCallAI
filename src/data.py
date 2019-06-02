@@ -115,9 +115,9 @@ class ElephantDataset(data.Dataset):
             # (num_ex, seq_len, features) ---> (num_ex * seq_len, features)
             num_ex = self.features.shape[0]
             seq_len = self.features.shape[1]
-            self.features = self.features.reshape(num_ex * seq_len, features)
+            self.features = self.features.reshape(num_ex * seq_len, -1)
             self.features = standard_norm.fit_transform(self.features)
-            self.features = self.features.reshape(num_ex, seq_len, features)
+            self.features = self.features.reshape(num_ex, seq_len, -1)
             #self.features = (self.features - np.mean(self.features)) / np.std(self.features)
         elif preprocess == "Scale":
             scaler = MinMaxScaler()
