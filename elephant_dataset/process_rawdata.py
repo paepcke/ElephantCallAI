@@ -10,6 +10,7 @@ import librosa
 dataDir = './Data/' # Dir containing all raw data in seperate files like 'ceb1_XXXXXXX'
 outputDir = './Processed_data/' # Dir that will contain all of the output data
 outputDirMel = './Processed_data_MFCC/'
+outputDirActivate = './Processed_data_activate/'
 numFFT        = 512 # Number of points to do FFT over
 hop_length    = 128 * 3 # Number of points between successive FFT 
 timeStart     = 0.0 # Start time of file to being data generation
@@ -17,6 +18,7 @@ timeStop      = 0.0 # End time to look at, enter '0' to look at entire file
 N_MELS        = 77  # Dimension of the features in the mel spectogram. Want to equal normal spect
 FREQ_MAX      = 150.
 USE_MEL       = False
+ACTIVATE_LABELS = True
 
 
 ## Function that given .flac file, lable file and starting hour will generate spec and label data
@@ -36,6 +38,11 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     #print (timePerFrame)
     if (not USE_MEL):
         [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
+        #print (spectrum.shape)
+        #print (spectrum)
+        #print (spectrum[freqs < FREQ_MAX, :].shape)
+        #print (10*np.log10(spectrum[freqs<FREQ_MAX,:]))
+        #quit()
         # The data above FREQ_MAX Hertz is irrelephant so get rid of it.
         # This does not seem quite right so we will re-do this
         spectrum = spectrum[(freqs < FREQ_MAX)]
@@ -57,7 +64,11 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     #print (timeSpacing)
 
     # Initialize LabelVector
-    labelMatrix = np.zeros(shape=(spectrum.shape[1]),dtype=int);
+    if ACTIVATE_LABELS:
+        # Add the extra dimension to help determine where the call starts
+        labelMatrix = np.zeros((spectrum.shape[1], 2), dtype=int)
+    else:
+        labelMatrix = np.zeros(shape=(spectrum.shape[1]),dtype=int);
     
     # Iterate through labels, and changes labelMatrix, should an elephant call be present
     for row in labelFile:
@@ -68,8 +79,28 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
             relStartTime = float(row['begin_time']) - float(row['begin_hour'])*3600
             relEndTime = float(row['end_time']) - float(row    ['begin_hour'])*3600
 
-            # Mark the location where the call is
-            labelMatrix[(t > relStartTime) & (relEndTime > t)] = 1
+
+            # Mark the end of the call with a single 1 
+            # (Note when creating the dataset we can extrend how many 1s!
+            # Additionally, in at labelMat[end, 1] mark how far back the call starts
+            if ACTIVATE_LABELS: 
+                # Find the column where the call ends
+                # Each time column is spaced apart by .384s
+                # = hop_size / sr
+                #mask = (t >= relEndTime) & (t < relEndTime + 0.384)
+                inCall = False
+                start = -1
+                for i in range(len(t)):
+                    if not inCall and t[i] >= relStartTime:
+                        inCall = True
+                        start = i
+                    elif inCall and t[i] > relEndTime:
+                        labelMatrix[i, 0] = 1
+                        # Keep track of the start of the call!
+                        labelMatrix[i, 1] = start
+                        break
+            else: # Mark the location where the call is 
+                labelMatrix[(t >= relStartTime) & (relEndTime > t)] = 1
 
 
     # Save output files, spectrum (contains all frequency data) and labelMatrix
@@ -86,6 +117,7 @@ for (dirpath, dirnames, filenames) in os.walk(dataDir):
     break
 
 out_path = outputDirMel if USE_MEL else outputDir
+out_path = outputDirActivate if ACTIVATE_LABELS else outputDir
 # Iterate through all files with in data directories
 for dirName in allDirs:
     #Iterate through each dir and get files within

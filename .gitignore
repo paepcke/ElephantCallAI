@@ -8,6 +8,7 @@ elephant_dataset/Features_Labels/*
 elephant_dataset/Test/*
 elephant_dataset/Train/*
 elephant_dataset/Processed_data_MFCC/*
+elephant_dataset/Processed_data_activate/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

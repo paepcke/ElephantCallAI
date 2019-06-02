@@ -10,9 +10,18 @@ Try for now to make all of the calls the same length
 import os,math
 import numpy as np
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+import matplotlib.cm
+import matplotlib
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import matplotlib.ticker as plticker
+import matplotlib.patches as patches
+from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 
-data_directory = './Processed_data/'
+full_call_directory = './Processed_data/'
+activate_directory = './Processed_data_activate/'
 output_directory = './Features_Labels'
 test_directory = './Test'
 train_directory = './Train'
@@ -33,9 +42,11 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = False
+USE_POST_CALL_LABEL = True
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
+
+VERBOSE = False
 
 
 def makeChunk(start_index,feat_mat,label_mat):
@@ -46,30 +57,17 @@ def makeChunk(start_index,feat_mat,label_mat):
         if label_mat[j] != 1:
             break
         length_of_call += 1
-        # If we are adding the labels at the end
-        # zero out the actual call labels
-        if (ACTIVATE_TIME != 0):
-            label_mat[j] = 0
-
-    if (start_index + length_of_call + ACTIVATE_TIME >= label_mat.shape[0]):
-        return -1, None, None
 
     # Figure out how much to go before and after. We do not want to got .5 
     # because then the chunks are of different sizes
     # Randomly place the call in the window for now? Should use data_augmentation later
     # We want the whole call to be in there plus the labeling of the "activate"
-    padding_frame = FRAME_LENGTH - length_of_call - ACTIVATE_TIME
+    padding_frame = FRAME_LENGTH - length_of_call #- ACTIVATE_TIME
     # if padding_frame is neg skip call
     # but still want to go to the next!!
     if padding_frame < 0:
         print ("skipping")
         return start_index + length_of_call + 1, None, None
-
-
-    # Label the end of the call with 
-    # ACTIVATE_TIME number of frames
-    for i in range(ACTIVATE_TIME):
-        label_mat[j + i] = 1
 
     
     # Randomly split the pad to before and after
@@ -90,16 +88,14 @@ def makeChunk(start_index,feat_mat,label_mat):
         chunk_end_index = label_mat.shape[0] - 1
         chunk_start_index -= transfer_front
 
-    return_features = []
-    return_labels = []
-    # + 1 here?
-    for j in range(chunk_start_index,chunk_end_index):
-        return_features.append(feat_mat[j,:])
-        return_labels.append(label_mat[j])
+    return_features = feat_mat[chunk_start_index: chunk_end_index, :]
+    return_labels = label_mat[chunk_start_index: chunk_end_index]
+
+    if VERBOSE:
+        display_call(return_features, return_labels)
 
     # Note make sure that we skip over the call and the activate labels
-    return start_index + length_of_call + ACTIVATE_TIME + 1, np.array(return_features),np.array(return_labels)
-
+    return start_index + length_of_call + 1, return_features, return_labels
 
 
 def makeDataSet(featFile,labFile):
@@ -124,15 +120,135 @@ def makeDataSet(featFile,labFile):
 
     return feature_set, label_set
 
+# Assumes that we are making chunks going backwards
+def makeChunkActivate(activate_index,feat_mat,label_mat):
+    # 1. Determine length of call in number of indices
+    start_index = label_mat[activate_index, 1]
+
+    # Determine where the call actually ends
+    # To ultimately get the length of the call
+    i = activate_index
+    while i >= 0 and label_mat[i, 1] == start_index:
+        i -= 1
+
+    call_end = i
+    length_of_call = call_end - start_index
+
+    # Skip a call at the very end if the activate labels can't fit
+    if (start_index + length_of_call + ACTIVATE_TIME >= label_mat.shape[0]):
+        return start_index - 1, None, None
+
+    # Figure out how much to go before and after. We do not want to got .5 
+    # because then the chunks are of different sizes
+    # Randomly place the call in the window for now? Should use data_augmentation later
+    # We want the whole call to be in there plus the labeling of the "activate"
+    padding_frame = FRAME_LENGTH - length_of_call - ACTIVATE_TIME
+    # if padding_frame is neg skip call
+    # but still want to go to the next!!
+    if padding_frame < 0:
+        print ("skipping")
+        return start_index - 1, None, None
+    
+    # Randomly split the pad to before and after
+    split = np.random.randint(0, padding_frame + 1)
+
+    # Do some stuff to avoid the front and end!
+    chunk_start_index = start_index - split
+    chunk_end_index  = start_index + length_of_call + ACTIVATE_TIME + (padding_frame - split)
+    # Edge case if window is near the beginning or end of the file
+    # the window of 64 frames is larger than the sound file!
+    if (chunk_start_index < 0):
+        # Make the window start at 0
+        chunk_start_index = 0
+        chunk_end_index = FRAME_LENGTH - 1
+    if (chunk_end_index >= label_mat.shape[0]):
+        chunk_end_index = label_mat.shape[0]
+        chunk_start_index = label_mat.shape[0] - FRAME_LENGTH
+
+    chunk_start_index = int(chunk_start_index); chunk_end_index = int(chunk_end_index)
+    
+    return_features = feat_mat[chunk_start_index: chunk_end_index, :]
+    return_labels = label_mat[chunk_start_index: chunk_end_index, 0]
+
+    if VERBOSE:
+        display_call(return_features, return_labels)
+
+    # Note make sure that we skip over the call and the activate labels
+    return start_index - 1, return_features, return_labels
+
+
+def display_call(features, labels):
+    """
+        Assumes features is of shape (time, freq)
+    """
+    fig, (ax1, ax2) = plt.subplots(2,1)
+    new_features = np.flipud(10*np.log10(features).T)
+    min_dbfs = new_features.flatten().mean()
+    max_dbfs = new_features.flatten().mean()
+    min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+    max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+    ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+    print (labels)
+    ax2.plot(np.arange(labels.shape[0]), labels)
+    plt.show()
+    
+
+def extend_activate_label(labFile):
+    """
+        Make the activate label for each call have 
+    """
+
+    for i in reversed(range(labFile.shape[0])):
+        # Extend the file label!
+        if (labFile[i, 0] == 1):
+            # Copy the start index 
+            # So we know where the call 
+            # started that is ending for
+            # creating chunks
+            start = labFile[i, 1]
+            for j in range(ACTIVATE_TIME):
+                if (j >= labFile.shape[0]):
+                    break
+                labFile[i + j, 0] = 1
+                labFile[i + j, 1] = start
+
+def makeDataSetActivate(featFile,labFile):
+    # 1. Open both feature file and label file as np arrays
+    feature_file = np.genfromtxt(featFile,delimiter=',').transpose()
+    label_file = np.genfromtxt(labFile,delimiter=',')
+
+    # Extend our labels to have the right number of activate labels
+    extend_activate_label(label_file)
+    # 2. Now iterate through label file, when find a call, pass to make chunk,
+    # which will return new starting index, the feature chunk and label chunk
+    skip_to_index = False
+    for i in reversed(range(label_file.shape[0])):
+        if skip_to_index:
+            skip_to_index = False if i == skip else True
+            continue
+        if label_file[i, 0] == 1:
+            skip,feature_chunk, label_chunk = makeChunkActivate(i,feature_file,label_file)
+            # Skip this call because we are at the end of the file
+            if (feature_chunk is not None):  
+                feature_set.append(feature_chunk)
+                label_set.append(label_chunk)
+            skip_to_index = True
+
+    return feature_set, label_set
+
 
 
 def main():
     # 1. Iterate through all files in output
+    data_directory = activate_directory if ACTIVATE_TIME > 0 else full_call_directory
     for i,fileName in enumerate(os.listdir(data_directory)):
         print(fileName,i)
         if fileName[0:4] == 'Data':
             label_file = 'Label'+fileName[4:]
-            feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
+            if (ACTIVATE_TIME == 0):
+                feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
+            else:
+                feature_set, label_set = makeDataSetActivate(data_directory + fileName, data_directory + label_file)
 
     feature_set = np.stack(feature_set)
     label_set = np.stack(label_set)
