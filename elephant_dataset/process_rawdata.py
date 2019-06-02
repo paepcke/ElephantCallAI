@@ -8,9 +8,12 @@ import librosa
 
 # Inputs
 dataDir = './Data/' # Dir containing all raw data in seperate files like 'ceb1_XXXXXXX'
-outputDir = './Processed_data/' # Dir that will contain all of the output data
-outputDirMel = './Processed_data_MFCC/'
-outputDirActivate = './Processed_data_activate/'
+outputSpect = './Processed_data/' # Dir that will contain all of the output data
+outputMel = './Processed_data_MFcc/'
+activateLabel = 'activate/'
+callLabel = 'call/'
+#outputDirMel = './Processed_data_MFCC/'
+#outputDirActivate = './Processed_data_activate/'
 numFFT        = 512 # Number of points to do FFT over
 hop_length    = 128 * 3 # Number of points between successive FFT 
 timeStart     = 0.0 # Start time of file to being data generation
@@ -116,8 +119,8 @@ for (dirpath, dirnames, filenames) in os.walk(dataDir):
     allDirs.extend(dirnames);
     break
 
-out_path = outputDirMel if USE_MEL else outputDir
-out_path = outputDirActivate if ACTIVATE_LABELS else outputDir
+out_path = outputMel if USE_MEL else outputSpect
+out_path += activateLabel if ACTIVATE_LABELS else callLabel
 # Iterate through all files with in data directories
 for dirName in allDirs:
     #Iterate through each dir and get files within

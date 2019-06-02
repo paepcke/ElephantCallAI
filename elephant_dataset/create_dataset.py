@@ -20,8 +20,11 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 
-full_call_directory = './Processed_data/'
-activate_directory = './Processed_data_activate/'
+MFCC_Data = './Processed_data_MFCC/'
+Spect_Data = './Processed_data/'
+full_call_directory = 'call/'
+activate_directory = 'activate/'
+
 output_directory = './Features_Labels'
 test_directory = './Test'
 train_directory = './Train'
@@ -45,6 +48,8 @@ FRAME_LENGTH = 64
 USE_POST_CALL_LABEL = True
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
+
+USE_MFCC_FEATURES = False
 
 VERBOSE = False
 
@@ -240,7 +245,9 @@ def makeDataSetActivate(featFile,labFile):
 
 def main():
     # 1. Iterate through all files in output
-    data_directory = activate_directory if ACTIVATE_TIME > 0 else full_call_directory
+    data_directory = MFCC_Data if USE_MFCC_FEATURES else Spect_Data
+    data_directory += activate_directory if USE_POST_CALL_LABEL else full_call_directory
+    
     for i,fileName in enumerate(os.listdir(data_directory)):
         print(fileName,i)
         if fileName[0:4] == 'Data':
