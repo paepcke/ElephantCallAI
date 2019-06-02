@@ -110,7 +110,7 @@ class ElephantDataset(data.Dataset):
 
         # Normalize Features
         if preprocess == "Norm":
-            standard_norm = preprocessing.StandardScaler()
+            standard_norm = StandardScaler()
             # Re-shape the features:
             # (num_ex, seq_len, features) ---> (num_ex * seq_len, features)
             num_ex = self.features.shape[0]
