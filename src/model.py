@@ -43,8 +43,10 @@ from tensorboardX import SummaryWriter
 RANDOM_SEED = 42
 
 LEARNING_RATE = 1e-3
+LEARNING_RATE_DECAY = 0.5
 WEIGHT_DECAY = 1e-2
-BATCH_SIZE = 16
+
+BATCH_SIZE = 512
 NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
 
@@ -52,7 +54,6 @@ np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 writer = SummaryWriter()
-writer.add_scalar('learning_rate', LEARNING_RATE)
 writer.add_scalar('batch_size', BATCH_SIZE)
 
 class LSTM(nn.Module):
@@ -122,7 +123,7 @@ def num_correct(logits, labels, threshold=0.5):
 
     return num_correct
 
-def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_path):
+def train_model(dataloders, model, criterion, optimizer, scheduler, num_epochs, model_save_path):
     since = time.time()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -184,8 +185,8 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
                     best_valid_acc = valid_epoch_acc
                     best_model_wts = model.state_dict()
 
-            print('Epoch [{}/{}] train loss: {:.4f} acc: {:.4f} ' 
-                  'valid loss: {:.4f} acc: {:.4f} time: {:.4f}'.format(
+            print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
+                  'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
                     epoch, num_epochs - 1,
                     train_epoch_loss, train_epoch_acc, 
                     valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
@@ -195,6 +196,10 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
             writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
             writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
             writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+            writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
+
+            scheduler.step()
+
     finally:
         if best_model_wts:
             torch.save(best_model_wts, model_save_path)
@@ -228,9 +233,10 @@ print(model)
 
 criterion = torch.nn.BCEWithLogitsLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=LEARNING_RATE_DECAY)
 
 start_time = time.time()
-model = train_model(dloaders, model, criterion, optimizer, NUM_EPOCHS, MODEL_SAVE_PATH)
+model = train_model(dloaders, model, criterion, optimizer, scheduler, NUM_EPOCHS, MODEL_SAVE_PATH)
 
 print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
 
