@@ -9,6 +9,7 @@ from scipy.misc import imresize
 import pandas as pd
 import os
 from torch.utils.data.sampler import SubsetRandomSampler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 def get_train_valid_loader(data_dir,
                            batch_size,
