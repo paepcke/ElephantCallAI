@@ -48,7 +48,7 @@ NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
 
 np.random.seed(RANDOM_SEED)
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 writer = SummaryWriter()
 writer.add_scalar('learning_rate', LEARNING_RATE)
@@ -208,9 +208,10 @@ def train_model(dataloders, model, criterion, optimizer, num_epochs, model_save_
     return model
 
 
-train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Activate_Label/",
+train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Call_Label/",
                                                          BATCH_SIZE,
-                                                         RANDOM_SEED)
+                                                         RANDOM_SEED,
+                                                         pin_memory=True)
 
 dloaders = {'train':train_loader, 'valid':validation_loader}
 
