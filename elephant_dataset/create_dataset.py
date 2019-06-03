@@ -49,7 +49,7 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = False
+USE_POST_CALL_LABEL = True
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
@@ -61,7 +61,6 @@ VERBOSE = False
 def makeChunk(start_index,feat_mat,label_mat):
     # 1. Determine length of call in number of indices
     length_of_call = 0
-
     for j in range(start_index,label_mat.shape[0]):
         if label_mat[j] != 1:
             break
@@ -87,15 +86,18 @@ def makeChunk(start_index,feat_mat,label_mat):
     chunk_end_index  = start_index + length_of_call + ACTIVATE_TIME + padding_frame - split
     # Do some quick voodo - assume cant have issue where 
     # the window of 64 frames is lareger than the sound file!
+    chunk_start_index = -1
     if (chunk_start_index < 0):
         # Amount to transfer to end
-        transfer_end = 0 - chunk_start_index
         chunk_start_index = 0
-        chunk_end_index += transfer_end
+        chunk_end_index = FRAME_LENGTH
     if (chunk_end_index >= label_mat.shape[0]):
-        transfer_front = chunk_end_index - label_mat.shape[0] + 1
-        chunk_end_index = label_mat.shape[0] - 1
-        chunk_start_index -= transfer_front
+        chunk_end_index = label_mat.shape[0]
+        chunk_start_index = label_mat.shape[0] - FRAME_LENGTH
+
+    if (chunk_end_index - chunk_start_index != 64):
+        print ("fuck")
+        quit()
 
     return_features = feat_mat[chunk_start_index: chunk_end_index, :]
     return_labels = label_mat[chunk_start_index: chunk_end_index]
@@ -171,12 +173,16 @@ def makeChunkActivate(activate_index,feat_mat,label_mat):
     if (chunk_start_index < 0):
         # Make the window start at 0
         chunk_start_index = 0
-        chunk_end_index = FRAME_LENGTH - 1
+        chunk_end_index = FRAME_LENGTH
     if (chunk_end_index >= label_mat.shape[0]):
         chunk_end_index = label_mat.shape[0]
         chunk_start_index = label_mat.shape[0] - FRAME_LENGTH
 
     chunk_start_index = int(chunk_start_index); chunk_end_index = int(chunk_end_index)
+
+    if (chunk_end_index - chunk_start_index != 64):
+        print ("fuck")
+        quit()
     
     return_features = feat_mat[chunk_start_index: chunk_end_index, :]
     return_labels = label_mat[chunk_start_index: chunk_end_index, 0]
@@ -287,6 +293,7 @@ def main():
         index += 1      
 
     print (train_data_files)
+    
     X_train = np.stack(train_feature_set)
     y_train = np.stack(train_label_set)
 

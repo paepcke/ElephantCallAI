@@ -21,7 +21,7 @@ timeStop      = 0.0 # End time to look at, enter '0' to look at entire file
 N_MELS        = 77  # Dimension of the features in the mel spectogram. Want to equal normal spect
 FREQ_MAX      = 150.
 USE_MEL       = False
-ACTIVATE_LABELS = False
+ACTIVATE_LABELS = True
 
 
 ## Function that given .flac file, lable file and starting hour will generate spec and label data
@@ -39,7 +39,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     #print (samplerate)
     timePerFrame = 1. / samplerate
     #print (timePerFrame)
-    if (not USE_MEL):
+    if not USE_MEL:
         [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
         #print (spectrum.shape)
         #print (spectrum)
@@ -58,6 +58,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
 
         # Converst to db scale
         mel_db = (librosa.power_to_db(mel_spect, ref=np.max)) #+ 40)/40
+
         spectrum = mel_db
     
     # Determing time spacing of columns in Data Matrix
@@ -104,7 +105,6 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
                         break
             else: # Mark the location where the call is 
                 labelMatrix[(t >= relStartTime) & (relEndTime > t)] = 1
-
 
     # Save output files, spectrum (contains all frequency data) and labelMatrix
     # For now save as .csv so we can inspect to make sure it is right! Later consider using .npy
