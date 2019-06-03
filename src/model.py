@@ -563,6 +563,7 @@ def main():
     train_loader = get_loader("../elephant_dataset/Train/" + DATASET + '_Label/', BATCH_SIZE, NORM)
     validation_loader = get_loader("../elephant_dataset/Test/" + DATASET + '_Label/', BATCH_SIZE, NORM)
 
+
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
@@ -586,7 +587,7 @@ def main():
 
                 fig, (ax1, ax2, ax3) = plt.subplots(3,1)
                 # new_features = np.flipud(10*np.log10(features).T)
-                new_features = features.T
+                new_features = np.flipud(features.T)
                 min_dbfs = new_features.flatten().mean()
                 max_dbfs = new_features.flatten().mean()
                 min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
@@ -603,7 +604,7 @@ def main():
         input_size = 77 # Num of frequency bands in the spectogram
         output_size = 1
 
-        model = Model8(input_size, output_size)
+        model = Model4(input_size, output_size)
 
         model.to(device)
 

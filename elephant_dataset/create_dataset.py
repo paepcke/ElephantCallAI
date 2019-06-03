@@ -57,7 +57,7 @@ ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = False
+VERBOSE = True
 
 
 def makeChunk(start_index,feat_mat,label_mat):
@@ -97,7 +97,7 @@ def makeChunk(start_index,feat_mat,label_mat):
         chunk_end_index = label_mat.shape[0]
         chunk_start_index = label_mat.shape[0] - FRAME_LENGTH
 
-    if (chunk_end_index - chunk_start_index != 64):
+    if (chunk_end_index - chunk_start_index != FRAME_LENGTH):
         print ("fuck")
         quit()
     return_features = feat_mat[chunk_start_index: chunk_end_index, :]
@@ -210,6 +210,7 @@ def display_call(features, labels):
     ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
     print (labels)
     ax2.plot(np.arange(labels.shape[0]), labels)
+
     plt.show()
     
 
