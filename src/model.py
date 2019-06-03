@@ -60,7 +60,7 @@ MODEL_SAVE_PATH = '../weights/'
 LOGS_SAVE_PATH = './runs/'
 
 DATASET = 'Call'
-#DATASET = 'activate'
+#DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
 np.random.seed(RANDOM_SEED)
