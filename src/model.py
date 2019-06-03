@@ -119,13 +119,15 @@ class Model1(nn.Module):
         self.kernel_size = 5
         self.num_layers = 1
         self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+        self.lstm_input = self.conv_out * self.num_filters
 
         self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
         self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
-        self.lstm = nn.LSTM(1925, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
@@ -256,6 +258,8 @@ class Model4(nn.Module):
         self.kernel_size = 5
         self.num_layers = 1
         self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+        self.lstm_input = self.conv_out * self.num_filters
 
         self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
         self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
@@ -263,7 +267,7 @@ class Model4(nn.Module):
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(1925, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
     def forward(self, inputs):
