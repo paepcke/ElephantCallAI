@@ -51,13 +51,13 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = True
+USE_POST_CALL_LABEL = False
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = True
+VERBOSE = False
 
 
 def makeChunk(start_index,feat_mat,label_mat):
@@ -89,7 +89,6 @@ def makeChunk(start_index,feat_mat,label_mat):
     chunk_end_index  = start_index + length_of_call + ACTIVATE_TIME + padding_frame - split
     # Do some quick voodo - assume cant have issue where 
     # the window of 64 frames is lareger than the sound file!
-    chunk_start_index = -1
     if (chunk_start_index < 0):
         # Amount to transfer to end
         chunk_start_index = 0
