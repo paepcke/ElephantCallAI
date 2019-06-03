@@ -455,6 +455,56 @@ class Model8(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
+"""
+Model 4 but with a batchnorm first
+"""
+class Model9(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model9, self).__init__()
+        
+        self.MODEL_ID = 9
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.padding = 2
+        self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 2*self.padding + 1 # Ouput of the feature vectors after the 1D conv
+        self.lstm_input = self.conv_out * self.num_filters
+
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
+        self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
+        self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size))
+
+        reshaped_inputs = batch_norm_inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        convFeatures = convFeatures.view(inputs.shape[0], inputs.shape[1], -1)
+        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
 
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
@@ -581,6 +631,8 @@ def main():
             # Forward pass
             outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
 
+            print('Accuracy on the test set for this batch is {:4f}'.format(num_correct(outputs.view(-1, 1), labels.view(-1, 1)) / outputs.shape[0]))
+
             for i in range(len(inputs)):
                 features = inputs[i].detach().numpy()
                 output = torch.sigmoid(outputs[i]).detach().numpy()
@@ -614,7 +666,7 @@ def main():
         writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
         writer.add_scalar('weight_decay', model.HYPERPARAMETERS['l2_reg'])
-        
+
         criterion = torch.nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=model.HYPERPARAMETERS['lr'], weight_decay=model.HYPERPARAMETERS['l2_reg'])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, model.HYPERPARAMETERS['lr_decay_step'], gamma=model.HYPERPARAMETERS['lr_decay'])
