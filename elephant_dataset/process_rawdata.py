@@ -17,13 +17,13 @@ callLabel = 'call/'
 #outputDirMel = './Processed_data_MFCC/'
 #outputDirActivate = './Processed_data_activate/'
 numFFT        = 512 # Number of points to do FFT over
-hop_length    = 128 * 3 # Number of points between successive FFT 
+hop_length    = 128*3 # Number of points between successive FFT 
 timeStart     = 0.0 # Start time of file to being data generation
 timeStop      = 0.0 # End time to look at, enter '0' to look at entire file
 N_MELS        = 77  # Dimension of the features in the mel spectogram. Want to equal normal spect
 FREQ_MAX      = 150.
 USE_MEL       = False
-ACTIVATE_LABELS = True
+ACTIVATE_LABELS = False
 
 
 ## Function that given .flac file, lable file and starting hour will generate spec and label data
@@ -42,7 +42,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     timePerFrame = 1. / samplerate
     #print (timePerFrame)
     if not USE_MEL:
-        [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate)
+        [spectrum, freqs, t] = ml.specgram(raw_audio, NFFT=numFFT, Fs=samplerate, noverlap=(numFFT - hop_length))
         #print (spectrum.shape)
         #print (spectrum)
         #print (spectrum[freqs < FREQ_MAX, :].shape)

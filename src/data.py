@@ -14,6 +14,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 def get_loader(data_dir,
                batch_size,
                norm="Scale",
+               scale=False,
                augment=False,
                shuffle=True,
                num_workers=4,
@@ -41,7 +42,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess=norm, scale=False)
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess=norm, scale=scale)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -49,7 +50,17 @@ def get_loader(data_dir,
 
     return data_loader
 
-
+"""
+    Notes
+    - Preprocess = Norm, Scale = False ===> seems bad
+    - Preprocess = Norm, Scale = True ===> Works well on small dataset!
+    - Preprocess = Scale, Scale = False ===> Has quite a bit of trouble over fitting small dataset compared to other but eventually can
+    - Preprocess = Scale, Scale = True ===> Has quite a bit of trouble over fitting small dataset compared to other and bad val acc!
+    - Preprocess = ChunkNorm, Scale = False ===> Very slow and bad
+    - Preprocess = ChunkNorm, Scale = True ===> Similar to Norm with scale
+    - Preprocess = None, Scale = True ====> No worky
+    - Preprocess = Scale range (-1, 1), Scale = True ===> Overfit but huge variance issue
+"""
 class ElephantDataset(data.Dataset):
     def __init__(self, feature_path, label_path, transform=None, preprocess="Norm", scale=False):
         # TODO: Do some things depending on how data looks
@@ -60,7 +71,7 @@ class ElephantDataset(data.Dataset):
         self.transforms = transform
 
         if scale:
-            self.features = 10 * np.log(self.features)
+            self.features = 10 * np.log10(self.features)
 
         # Normalize Features
         if preprocess == "Norm":
