@@ -60,12 +60,8 @@ MODEL_SAVE_PATH = '../weights/'
 LOGS_SAVE_PATH = './runs/'
 
 DATASET = 'Call'
-<<<<<<< Updated upstream
-# DATASET = 'activate'
-=======
 #DATASET = 'activate'
 #DATASET = 'MFCC_Call'
->>>>>>> Stashed changes
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
