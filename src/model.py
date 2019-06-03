@@ -59,7 +59,7 @@ NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/'
 LOGS_SAVE_PATH = './runs/'
 
-DATASET = 'call'
+DATASET = 'Call'
 # DATASET = 'activate'
 
 np.random.seed(RANDOM_SEED)
