@@ -5,7 +5,6 @@ import soundfile as sf
 import csv
 import os
 import librosa
-import multiprocessing
 
 # Inputs
 dataDir = './Data/' # Dir containing all raw data in seperate files like 'ceb1_XXXXXXX'
@@ -112,9 +111,6 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
     np.savetxt(outputDir + outputDataName+'.csv', spectrum, delimiter=",")
     np.savetxt(outputDir + outputLabelName+'.csv', labelMatrix, delimiter=",")
 
-pool = multiprocessing.Pool()
-print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-
 # Iterate through all data directories
 allDirs = [];
 # Get the directories that contain the data files
@@ -137,12 +133,9 @@ for dirName in allDirs:
                 tempLabelFile = eachFile;
                 tempID = eachFile.split('_')[1]
 
-        #TODO: Multi thread this
         # For each .flac file call processData()
         for eachFile in filenames:
             if eachFile.split('.')[1] == 'flac':
-                tempAudioFile = eachFile
-                tempStartHour = int(eachFile.split('_')[2][0:2])
-
-                pool.starmap(processData, [(dataDir,tempCurrentDir,out_path,tempAudioFile,tempLabelFile,'Data_'+tempID+'_Hour'+str(tempStartHour),'Label_'+tempID+'_Hour'+str(tempStartHour),tempStartHour)])
-pool.close()
+                tempAudioFile = eachFile;
+                tempStartHour = int(eachFile.split('_')[2][0:2]);
+                processData(dataDir,tempCurrentDir,out_path,tempAudioFile,tempLabelFile,'Data_'+tempID+'_Hour'+str(tempStartHour),'Label_'+tempID+'_Hour'+str(tempStartHour),tempStartHour)

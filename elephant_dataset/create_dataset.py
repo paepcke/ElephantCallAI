@@ -21,7 +21,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import random
 from random import shuffle 
 import math
-import multiprocessing
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -62,6 +61,7 @@ VERBOSE = False
 def makeChunk(start_index,feat_mat,label_mat):
     # 1. Determine length of call in number of indices
     length_of_call = 0
+
     for j in range(start_index,label_mat.shape[0]):
         if label_mat[j] != 1:
             break
@@ -99,7 +99,6 @@ def makeChunk(start_index,feat_mat,label_mat):
     if (chunk_end_index - chunk_start_index != 64):
         print ("fuck")
         quit()
-
     return_features = feat_mat[chunk_start_index: chunk_end_index, :]
     return_labels = label_mat[chunk_start_index: chunk_end_index]
 
@@ -184,7 +183,7 @@ def makeChunkActivate(activate_index,feat_mat,label_mat):
     if (chunk_end_index - chunk_start_index != 64):
         print ("fuck")
         quit()
-    
+
     return_features = feat_mat[chunk_start_index: chunk_end_index, :]
     return_labels = label_mat[chunk_start_index: chunk_end_index, 0]
 
@@ -274,9 +273,6 @@ def main():
     split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
     train_data_files = datafiles[:split_index]
     test_data_files = datafiles[split_index:]
-
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     
     train_feature_set = []
     train_label_set = []
@@ -288,21 +284,17 @@ def main():
         print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
-            feature_set, label_set = pool.starmap(makeDataSet, [(data_directory+file,data_directory+label_file)])[0]
+            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
         else:
-            feature_set, label_set = pool.starmp(makeDataSetActivate, [(data_directory + file, data_directory + label_file)])[0]
+            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
         
         train_feature_set.extend(feature_set)
         train_label_set.extend(label_set) 
         index += 1      
 
     print (train_data_files)
-    
     X_train = np.stack(train_feature_set)
     y_train = np.stack(train_label_set)
-
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
 
     print ("Making Test Set")
     print ("Size: ", len(test_data_files))
@@ -315,9 +307,9 @@ def main():
         print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
-            feature_set, label_set = pool.starmap(makeDataSet, [(data_directory+file,data_directory+label_file)])[0]
+            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
         else:
-            feature_set, label_set = pool.starmap(makeDataSetActivate, [(data_directory + file, data_directory + label_file)])[0]
+            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
         
         test_feature_set.extend(feature_set)
         test_label_set.extend(label_set)   
@@ -325,10 +317,7 @@ def main():
 
     X_test = np.stack(test_feature_set)
     y_test = np.stack(test_label_set)
-
-    pool.close()
     
-
     print (X_train.shape, X_test.shape)
     print (y_train.shape, y_test.shape)
 
