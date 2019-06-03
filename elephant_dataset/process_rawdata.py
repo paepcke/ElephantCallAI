@@ -21,7 +21,7 @@ timeStop      = 0.0 # End time to look at, enter '0' to look at entire file
 N_MELS        = 77  # Dimension of the features in the mel spectogram. Want to equal normal spect
 FREQ_MAX      = 150.
 USE_MEL       = False
-ACTIVATE_LABELS = True
+ACTIVATE_LABELS = False
 
 
 ## Function that given .flac file, lable file and starting hour will generate spec and label data

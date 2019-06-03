@@ -18,6 +18,9 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.ticker as plticker
 import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
+import random
+from random import shuffle 
+import math
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -29,10 +32,11 @@ output_directory = './Features_Labels'
 test_directory = './Test'
 train_directory = './Train'
 
-feature_set = []
-label_set = []
+#feature_set = []
+#label_set = []
 
 seed = 8
+random.seed(seed)
 TEST_SIZE = 0.2
 
 # Determines the size of the chunks that we are creating around the elephant
@@ -45,7 +49,7 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = True
+USE_POST_CALL_LABEL = False
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
@@ -108,6 +112,8 @@ def makeDataSet(featFile,labFile):
     feature_file = np.genfromtxt(featFile,delimiter=',').transpose()
     label_file = np.genfromtxt(labFile,delimiter=',')
 
+    feature_set = []
+    label_set = []
     # 2. Now iterate through label file, when find a call, pass to make chunk,
     # which will return new starting index, the feature chunk and label chunk
     skip_to_index = False
@@ -222,6 +228,8 @@ def makeDataSetActivate(featFile,labFile):
     feature_file = np.genfromtxt(featFile,delimiter=',').transpose()
     label_file = np.genfromtxt(labFile,delimiter=',')
 
+    feature_set = []
+    label_set = []
     # Extend our labels to have the right number of activate labels
     extend_activate_label(label_file)
     # 2. Now iterate through label file, when find a call, pass to make chunk,
@@ -248,24 +256,59 @@ def main():
     data_directory = MFCC_Data if USE_MFCC_FEATURES else Spect_Data
     data_directory += activate_directory if USE_POST_CALL_LABEL else full_call_directory
 
+    datafiles = []
     for i,fileName in enumerate(os.listdir(data_directory)):
-        print(fileName,i)
         if fileName[0:4] == 'Data':
-            label_file = 'Label'+fileName[4:]
-            if (ACTIVATE_TIME == 0):
-                feature_set, label_set = makeDataSet(data_directory+fileName,data_directory+label_file)
-            else:
-                feature_set, label_set = makeDataSetActivate(data_directory + fileName, data_directory + label_file)
+            datafiles.append(fileName)
 
-    feature_set = np.stack(feature_set)
-    label_set = np.stack(label_set)
+    # Shuffle the files before train test split
+    shuffle(datafiles)
     
-    print(feature_set.shape,label_set.shape)
+    split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
+    train_data_files = datafiles[:split_index]
+    test_data_files = datafiles[split_index:]
+    
+    train_feature_set = []
+    train_label_set = []
+    print ("Making Train Set")
+    # Make the training dataset
+    for file in train_data_files:
+        print(file)
+        label_file = 'Label'+file[4:]
+        if (ACTIVATE_TIME == 0):
+            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
+        else:
+            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
+        
+        train_feature_set.extend(feature_set)
+        train_label_set.extend(label_set)       
 
-    X_train, X_test, y_train, y_test = train_test_split(feature_set, label_set, test_size=TEST_SIZE,random_state=seed)
+    print (train_data_files)
+    X_train = np.stack(train_feature_set)
+    y_train = np.stack(train_label_set)
 
-    print (X_train.shape)
-    print (X_test.shape)
+    print ("Making Test Set")
+    # Make the test dataset
+    test_feature_set = []
+    test_label_set = []
+    # Make the training dataset
+    for file in test_data_files:
+        print(file)
+        label_file = 'Label'+file[4:]
+        if (ACTIVATE_TIME == 0):
+            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
+        else:
+            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
+        
+        test_feature_set.extend(feature_set)
+        test_label_set.extend(label_set)       
+
+    X_test = np.stack(test_feature_set)
+    y_test = np.stack(test_label_set)
+    
+
+    print (X_train.shape, X_test.shape)
+    print (y_train.shape, y_test.shape)
 
     label_type = '/Activate_Label'
     if (not USE_POST_CALL_LABEL):
