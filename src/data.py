@@ -40,7 +40,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="ChunkNorm")
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="Scale", scale=False)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -50,13 +50,16 @@ def get_loader(data_dir,
 
 
 class ElephantDataset(data.Dataset):
-    def __init__(self, feature_path, label_path, transform=None, preprocess="Norm"):
+    def __init__(self, feature_path, label_path, transform=None, preprocess="Norm", scale=False):
         # TODO: Do some things depending on how data looks
         self.features = np.load(feature_path) # Shape - (num_train, time, freqs)
         self.labels = np.load(label_path) # Shape - (num_train, time)
 
         # Potentially include other transforms
         self.transforms = transform
+
+        if scale:
+            self.features = 10 * np.log(self.features)
 
         # Normalize Features
         if preprocess == "Norm":
