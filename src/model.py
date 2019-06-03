@@ -611,7 +611,8 @@ def main():
 
         writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
-
+        writer.add_scalar('weight_decay', model.HYPERPARAMETERS['l2_reg'])
+        
         criterion = torch.nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=model.HYPERPARAMETERS['lr'], weight_decay=model.HYPERPARAMETERS['l2_reg'])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, model.HYPERPARAMETERS['lr_decay_step'], gamma=model.HYPERPARAMETERS['lr_decay'])
