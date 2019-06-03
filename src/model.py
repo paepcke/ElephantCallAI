@@ -66,9 +66,13 @@ DATASET_FOLDER = 'Call_Label/'
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-class LSTM(nn.Module):
+"""
+Basically what Brendan was doing
+"""
+class Model0(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
-        super(LSTM, self).__init__()
+        super(Model0, self).__init__()
+        self.MODEL_ID = 0
 
         self.input_dim = input_size
         self.hidden_dim = hidden_size
@@ -86,9 +90,13 @@ class LSTM(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
-class CONV1D_NO_POOL_LSTM(nn.Module):
+"""
+Now with a conv1d flavor
+"""
+class Model1(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
-        super(CONV1D_NO_POOL_LSTM, self).__init__()
+        super(Model1, self).__init__()
+        self.MODEL_ID = 1
 
         self.num_filters = num_filters
         self.kernel_size = kernel_size
@@ -116,10 +124,13 @@ class CONV1D_NO_POOL_LSTM(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
-
-class CONV1D_LSTM(nn.Module):
+"""
+With maxpool as well
+"""
+class Model2(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
-        super(CONV1D_LSTM, self).__init__()
+        super(Model2, self).__init__()
+        self.MODEL_ID = 2
 
         self.num_filters = num_filters
         self.kernel_size = kernel_size
@@ -152,9 +163,13 @@ class CONV1D_LSTM(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
-class CONV1D_BiLSTM_Maxpool(nn.Module):
+"""
+CONV1D_BiLSTM_Maxpool
+"""
+class Model3(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
         super(CONV1D_BiLSTM_Maxpool, self).__init__()
+        self.MODEL_ID = 3
 
         self.num_filters = num_filters # we should probably expand this!!
         self.kernel_size = kernel_size
@@ -187,9 +202,13 @@ class CONV1D_BiLSTM_Maxpool(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
-class CONV1D_BiLSTM_NO_POOL(nn.Module):
+"""
+CONV1D_BiLSTM_NO_POOL
+"""
+class Model4(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
-        super(CONV1D_BiLSTM_NO_POOL, self).__init__()
+        super(Model4, self).__init__()
+        self.MODEL_ID = 4
 
         self.num_filters = num_filters # we should probably expand this!!
         self.kernel_size = kernel_size
@@ -333,10 +352,10 @@ def main():
     input_size = 77 # Num of frequency bands in the spectogram
     hidden_size = 128
 
-    # model = LSTM(input_size, hidden_size, 1)
-    model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
-    # model = CONV1D_LSTM(input_size, hidden_size, 1)
-    # model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
+    model = Model0(input_size, hidden_size, 1)
+    # model = Model1(input_size, hidden_size, 1)
+    # model = Model2(input_size, hidden_size, 1)
+    # model = Model3(input_size, hidden_size, 1, num_layers=2)
 
     model.to(device)
 
@@ -375,7 +394,7 @@ def main():
 
     else:
         ## Training
-        writer = SummaryWriter()
+        writer = SummaryWriter('runs/model' + str(model.MODEL_ID) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
 
         criterion = torch.nn.BCEWithLogitsLoss()
