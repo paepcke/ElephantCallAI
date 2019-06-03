@@ -335,6 +335,7 @@ def main():
     # model = LSTM(input_size, hidden_size, 1)
     model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
     # model = CONV1D_LSTM(input_size, hidden_size, 1)
+    # model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
 
     model.to(device)
 
@@ -370,11 +371,6 @@ def main():
                 ax2.plot(np.arange(output.shape[0]), output)
                 ax3.plot(np.arange(label.shape[0]), label)
                 plt.show()
-
-# model = LSTM(input_size, hidden_size, 1)
-model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
-# model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
-# model = CONV1D_LSTM(input_size, hidden_size, 1)
 
     else:
         ## Training
