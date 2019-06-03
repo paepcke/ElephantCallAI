@@ -40,6 +40,7 @@ from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
 import sys
+import copy
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -52,16 +53,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 RANDOM_SEED = 42
 
-LEARNING_RATE = 1e-3
-LEARNING_RATE_DECAY_STEP = 4
-LEARNING_RATE_DECAY = 0.8
-WEIGHT_DECAY = 1e-5
-
 BATCH_SIZE = 32
 NUM_EPOCHS = 1000
-MODEL_SAVE_PATH = '../weights/model.pt'
+
+MODEL_SAVE_PATH = '../weights/'
 
 DATASET_FOLDER = 'Call_Label/'
+# DATASET_FOLDER = 'Activate_Label/'
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -70,18 +68,26 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 Basically what Brendan was doing
 """
 class Model0(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, output_size):
         super(Model0, self).__init__()
+
         self.MODEL_ID = 0
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
 
         self.input_dim = input_size
-        self.hidden_dim = hidden_size
+        self.hidden_size = 128
+        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
 
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+        self.lstm = nn.LSTM(input_size, self.hidden_size, batch_first=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -94,23 +100,31 @@ class Model0(nn.Module):
 Now with a conv1d flavor
 """
 class Model1(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
+    def __init__(self, input_size, output_size):
         super(Model1, self).__init__()
+        
         self.MODEL_ID = 1
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
 
-        self.num_filters = num_filters
-        self.kernel_size = kernel_size
-
-        self.hidden_dim = hidden_size
         self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
-        self.lstm = nn.LSTM(1925, hidden_size, num_layers, batch_first=True) # added 2 layer lstm capabilities
-        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
+        self.lstm = nn.LSTM(1925, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -128,24 +142,32 @@ class Model1(nn.Module):
 With maxpool as well
 """
 class Model2(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
+    def __init__(self, input_size, output_size):
         super(Model2, self).__init__()
+        
         self.MODEL_ID = 2
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
 
-        self.num_filters = num_filters
-        self.kernel_size = kernel_size
-
-        self.hidden_dim = hidden_size
         self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(num_filters, hidden_size, num_layers, batch_first=True) # added 2 layer lstm capabilities
-        self.hiddenToClass = nn.Linear(hidden_size, output_size)
+        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -167,24 +189,32 @@ class Model2(nn.Module):
 CONV1D_BiLSTM_Maxpool
 """
 class Model3(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
-        super(CONV1D_BiLSTM_Maxpool, self).__init__()
+    def __init__(self, input_size, output_size):
+        super(Model3, self).__init__()
+        
         self.MODEL_ID = 3
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
 
-        self.num_filters = num_filters # we should probably expand this!!
-        self.kernel_size = kernel_size
-
-        self.hidden_dim = hidden_size
         self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device) # allow for bi-direct
-        self.cell_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(num_filters, hidden_size, num_layers, batch_first=True, bidirectional=True)
-        self.hiddenToClass = nn.Linear(hidden_size*2, output_size)
+        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -206,24 +236,32 @@ class Model3(nn.Module):
 CONV1D_BiLSTM_NO_POOL
 """
 class Model4(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_filters=25, kernel_size=5, num_layers=1):
+    def __init__(self, input_size, output_size):
         super(Model4, self).__init__()
+        
         self.MODEL_ID = 4
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
 
-        self.num_filters = num_filters # we should probably expand this!!
-        self.kernel_size = kernel_size
-
-        self.hidden_dim = hidden_size
         self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device) # allow for bi-direct
-        self.cell_state = nn.Parameter(torch.rand(2*num_layers, 1, self.hidden_dim), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, num_filters, kernel_size, padding=2) # keep same dimension
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(1925, hidden_size, num_layers, batch_first=True, bidirectional=True)
-        self.hiddenToClass = nn.Linear(hidden_size*2, output_size)
+        self.lstm = nn.LSTM(1925, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -258,7 +296,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                      'valid': len(dataloders['valid'].dataset)}
 
     best_valid_acc = 0.0
-    best_model_wts = None
+    best_model = None
 
     try:
         for epoch in range(num_epochs):
@@ -311,7 +349,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
-                    best_model_wts = model.state_dict()
+                    best_model = copy.deepcopy(model)
 
             print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
                   'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
@@ -329,8 +367,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             scheduler.step()
 
     finally:
-        if best_model_wts:
-            torch.save(best_model_wts, model_save_path)
+        if best_model:
+            torch.save(best_model, model_save_path + 'model_' + str(best_model.MODEL_ID) + ".pt")
             print('Saved model from valid accuracy: ', best_valid_acc)
         else:
             print('For some reason I don\'t have a model to save')
@@ -338,8 +376,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     
     print('Best val Acc: {:4f}'.format(best_valid_acc))
 
-    model.load_state_dict(best_model_wts)
-    return model
+    return best_model
 
 def main():
     ## Build Dataset
@@ -348,23 +385,10 @@ def main():
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
-    ## Build Model
-    input_size = 77 # Num of frequency bands in the spectogram
-    hidden_size = 128
-
-    model = Model0(input_size, hidden_size, 1)
-    # model = Model1(input_size, hidden_size, 1)
-    # model = Model2(input_size, hidden_size, 1)
-    # model = Model3(input_size, hidden_size, 1, num_layers=2)
-
-    model.to(device)
-
-    print(model)
-
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
-
-        model.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=device))
+        model = torch.load(MODEL_SAVE_PATH + 'model_' + sys.argv[2] + ".pt", map_location=device)
+        print(model)
 
         for inputs, labels in dloaders['valid']:
             inputs = inputs.float()
@@ -394,12 +418,27 @@ def main():
 
     else:
         ## Training
+
+        ## Build Model
+        input_size = 77 # Num of frequency bands in the spectogram
+        output_size = 1
+
+        # model = Model0(input_size, output_size)
+        # model = Model1(input_size, output_size)
+        # model = Model2(input_size, output_size)
+        # model = Model3(input_size, output_size)
+        model = Model4(input_size, output_size)
+
+        model.to(device)
+
+        print(model)
+
         writer = SummaryWriter('runs/model' + str(model.MODEL_ID) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
 
         criterion = torch.nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, LEARNING_RATE_DECAY_STEP, gamma=LEARNING_RATE_DECAY)
+        optimizer = torch.optim.Adam(model.parameters(), lr=model.HYPERPARAMETERS['lr'], weight_decay=model.HYPERPARAMETERS['l2_reg'])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, model.HYPERPARAMETERS['lr_decay_step'], gamma=model.HYPERPARAMETERS['lr_decay'])
 
         start_time = time.time()
         model = train_model(dloaders, model, criterion, optimizer, scheduler, writer, NUM_EPOCHS, MODEL_SAVE_PATH)
