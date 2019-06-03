@@ -367,7 +367,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                      'valid': len(dataloders['valid'].dataset)}
 
     best_valid_acc = 0.0
-    best_model = None
+    best_model_wts = None
 
     try:
         for epoch in range(num_epochs):
@@ -420,7 +420,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
-                    best_model = copy.deepcopy(model)
+                    best_model_wts = model.state_dict()
 
             print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
                   'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
@@ -438,9 +438,10 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             scheduler.step()
 
     finally:
-        if best_model:
-            save_path = model_save_path + DATASET + '_model_' + str(best_model.MODEL_ID) + ".pt"
-            torch.save(best_model, save_path)
+        if best_model_wts:
+            model.load_state_dict(best_model_wts)
+            save_path = model_save_path + DATASET + '_model_' + str(model.MODEL_ID) + ".pt"
+            torch.save(model, save_path)
             print('Saved model from valid accuracy {} to path {}'.format(best_valid_acc, save_path))
         else:
             print('For some reason I don\'t have a model to save')
@@ -448,7 +449,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     
     print('Best val Acc: {:4f}'.format(best_valid_acc))
 
-    return best_model
+    return best_model_wts
 
 def main():
     ## Build Dataset
