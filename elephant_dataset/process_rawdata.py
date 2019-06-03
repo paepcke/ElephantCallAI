@@ -5,6 +5,8 @@ import soundfile as sf
 import csv
 import os
 import librosa
+import time
+import multiprocessing
 
 # Inputs
 dataDir = './Data/' # Dir containing all raw data in seperate files like 'ceb1_XXXXXXX'
@@ -134,8 +136,18 @@ for dirName in allDirs:
                 tempID = eachFile.split('_')[1]
 
         # For each .flac file call processData()
-        for eachFile in filenames:
+        def wrapper_processData(eachFile):
             if eachFile.split('.')[1] == 'flac':
-                tempAudioFile = eachFile;
-                tempStartHour = int(eachFile.split('_')[2][0:2]);
+                tempAudioFile = eachFile
+                tempStartHour = int(eachFile.split('_')[2][0:2])
+
                 processData(dataDir,tempCurrentDir,out_path,tempAudioFile,tempLabelFile,'Data_'+tempID+'_Hour'+str(tempStartHour),'Label_'+tempID+'_Hour'+str(tempStartHour),tempStartHour)
+        pool = multiprocessing.Pool()
+        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+        start_time = time.time()
+        pool.map(wrapper_processData, filenames)
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+        pool.close()
+            
+
+                
