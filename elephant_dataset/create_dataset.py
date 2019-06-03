@@ -21,6 +21,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import random
 from random import shuffle 
 import math
+import multiprocessing
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -273,6 +274,9 @@ def main():
     split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
     train_data_files = datafiles[:split_index]
     test_data_files = datafiles[split_index:]
+
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     
     train_feature_set = []
     train_label_set = []
@@ -284,9 +288,9 @@ def main():
         print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
-            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
+            feature_set, label_set = pool.starmap(makeDataSet, [(data_directory+file,data_directory+label_file)])[0]
         else:
-            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
+            feature_set, label_set = pool.starmp(makeDataSetActivate, [(data_directory + file, data_directory + label_file)])[0]
         
         train_feature_set.extend(feature_set)
         train_label_set.extend(label_set) 
@@ -297,20 +301,23 @@ def main():
     X_train = np.stack(train_feature_set)
     y_train = np.stack(train_label_set)
 
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+
     print ("Making Test Set")
     print ("Size: ", len(test_data_files))
     # Make the test dataset
     test_feature_set = []
     test_label_set = []
-    # Make the training dataset
+    # Make the test dataset
     index = 0
     for file in test_data_files:
         print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
-            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
+            feature_set, label_set = pool.starmap(makeDataSet, [(data_directory+file,data_directory+label_file)])[0]
         else:
-            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
+            feature_set, label_set = pool.starmap(makeDataSetActivate, [(data_directory + file, data_directory + label_file)])[0]
         
         test_feature_set.extend(feature_set)
         test_label_set.extend(label_set)   
@@ -318,6 +325,8 @@ def main():
 
     X_test = np.stack(test_feature_set)
     y_test = np.stack(test_label_set)
+
+    pool.close()
     
 
     print (X_train.shape, X_test.shape)
