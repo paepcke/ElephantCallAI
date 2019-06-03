@@ -63,6 +63,8 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
+NORM = "Scale"
+
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -558,8 +560,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/" + DATASET + '_Label/', BATCH_SIZE, RANDOM_SEED)
-    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET + '_Label/', BATCH_SIZE, RANDOM_SEED)
+    train_loader = get_loader("../elephant_dataset/Train/" + DATASET + '_Label/', BATCH_SIZE, NORM)
+    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET + '_Label/', BATCH_SIZE, NORM)
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
@@ -607,7 +609,7 @@ def main():
 
         print(model)
 
-        writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
+        writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
 
         criterion = torch.nn.BCEWithLogitsLoss()

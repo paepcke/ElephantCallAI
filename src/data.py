@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 def get_loader(data_dir,
                batch_size,
+               norm="Scale",
                augment=False,
                shuffle=True,
                num_workers=4,
@@ -40,7 +41,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="Scale", scale=False)
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess=norm, scale=False)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
