@@ -279,7 +279,7 @@ class Model4(nn.Module):
         return logits
 
 """
-Adding some hidden layers to beginning of model0
+Adding a hidden layer to beginning of model0
 """
 class Model5(nn.Module):
     def __init__(self, input_size, output_size):
@@ -307,6 +307,42 @@ class Model5(nn.Module):
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         out = self.linear(inputs)
+        lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
+"""
+Adding two hidden layers to beginning of model0
+"""
+class Model6(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model6, self).__init__()
+
+        self.MODEL_ID = 6
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+
+        self.input_dim = input_size
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.linear = nn.Linear(input_size, self.hidden_size)
+        self.linear2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        out = self.linear(inputs)
+        out = self.linear2(out)
         lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                          self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
@@ -464,7 +500,8 @@ def main():
         # model = Model2(input_size, output_size)
         # model = Model3(input_size, output_size)
         # model = Model4(input_size, output_size)
-        model = Model5(input_size, output_size)
+        # model = Model5(input_size, output_size)
+        model = Model6(input_size, output_size)
 
         model.to(device)
 
