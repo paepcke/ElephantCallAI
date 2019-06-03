@@ -21,6 +21,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import random
 from random import shuffle 
 import math
+import multiprocessing
+import time
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -255,93 +257,89 @@ def makeDataSetActivate(featFile,labFile):
 
     return feature_set, label_set
 
+# 1. Iterate through all files in output
+data_directory = MFCC_Data if USE_MFCC_FEATURES else Spect_Data
+data_directory += activate_directory if USE_POST_CALL_LABEL else full_call_directory
 
+datafiles = []
+for i,fileName in enumerate(os.listdir(data_directory)):
+    if fileName[0:4] == 'Data':
+        datafiles.append(fileName)
 
-def main():
-    # 1. Iterate through all files in output
-    data_directory = MFCC_Data if USE_MFCC_FEATURES else Spect_Data
-    data_directory += activate_directory if USE_POST_CALL_LABEL else full_call_directory
+# Shuffle the files before train test split
+shuffle(datafiles)
 
-    datafiles = []
-    for i,fileName in enumerate(os.listdir(data_directory)):
-        if fileName[0:4] == 'Data':
-            datafiles.append(fileName)
+split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
+train_data_files = datafiles[:split_index]
+test_data_files = datafiles[split_index:]
 
-    # Shuffle the files before train test split
-    shuffle(datafiles)
+train_feature_set = []
+train_label_set = []
+print ("Making Train Set")
+print ("Size: ", len(train_data_files))
+# Make the training dataset
+def wrapper_makeDataSet(file):
+    print(file)
+    label_file = 'Label'+file[4:]
+    if (ACTIVATE_TIME == 0):
+        feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
+    else:
+        feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
     
-    split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
-    train_data_files = datafiles[:split_index]
-    test_data_files = datafiles[split_index:]
-    
-    train_feature_set = []
-    train_label_set = []
-    print ("Making Train Set")
-    print ("Size: ", len(train_data_files))
-    # Make the training dataset
-    index = 0
-    for file in train_data_files:
-        print(file, index)
-        label_file = 'Label'+file[4:]
-        if (ACTIVATE_TIME == 0):
-            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
-        else:
-            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
-        
-        train_feature_set.extend(feature_set)
-        train_label_set.extend(label_set) 
-        index += 1      
-
-    print (train_data_files)
-    X_train = np.stack(train_feature_set)
-    y_train = np.stack(train_label_set)
-
-    print ("Making Test Set")
-    print ("Size: ", len(test_data_files))
-    # Make the test dataset
-    test_feature_set = []
-    test_label_set = []
-    # Make the test dataset
-    index = 0
-    for file in test_data_files:
-        print(file, index)
-        label_file = 'Label'+file[4:]
-        if (ACTIVATE_TIME == 0):
-            feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
-        else:
-            feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
-        
-        test_feature_set.extend(feature_set)
-        test_label_set.extend(label_set)   
-        index += 1    
-
-    X_test = np.stack(test_feature_set)
-    y_test = np.stack(test_label_set)
-    
-    print (X_train.shape, X_test.shape)
-    print (y_train.shape, y_test.shape)
-
-    label_type = '/Activate_Label'
-    if (not USE_POST_CALL_LABEL):
-        label_type = "/Call_Label"
-
-    np.save(train_directory + label_type + '/features.npy', X_train)
-    np.save(train_directory + label_type + '/labels.npy', y_train)
-    np.save(test_directory + label_type + '/features.npy', X_test)
-    np.save(test_directory + label_type + '/labels.npy', y_test)
-
-    # Save the individual training files for visualization etc.
-    for i in range(X_train.shape[0]):
-        np.save(train_directory + label_type + '/features_{}'.format(i+1), X_train[i])
-        np.save(train_directory + label_type + '/labels_{}'.format(i+1), y_train[i])
-
-    for i in range(X_test.shape[0]):
-        np.save(test_directory + label_type + '/features_{}'.format(i+1), X_test[i])
-        np.save(test_directory + label_type + '/labels_{}'.format(i+1), y_test[i])
+    return feature_set, label_set
+pool = multiprocessing.Pool()
+print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+start_time = time.time()
+output = pool.map(wrapper_makeDataSet, train_data_files)
+pool.close()
+for feature, label in output:
+    train_feature_set.extend(feature)
+    train_label_set.extend(label)
+print('Multiprocessed took {}'.format(time.time()-start_time))
 
 
-if __name__ == '__main__':
-    main()
+print (train_data_files)
+X_train = np.stack(train_feature_set)
+y_train = np.stack(train_label_set)
+
+print ("Making Test Set")
+print ("Size: ", len(test_data_files))
+# Make the test dataset
+test_feature_set = []
+test_label_set = []
+pool = multiprocessing.Pool()
+print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+start_time = time.time()
+output = pool.map(wrapper_makeDataSet, test_data_files)
+pool.close()
+for feature, label in output:
+    test_feature_set.extend(feature)
+    test_label_set.extend(label)
+print('Multiprocessed took {}'.format(time.time()-start_time))  
+
+X_test = np.stack(test_feature_set)
+y_test = np.stack(test_label_set)
+
+print (X_train.shape, X_test.shape)
+print (y_train.shape, y_test.shape)
+
+label_type = '/Activate_Label'
+if (not USE_POST_CALL_LABEL):
+    label_type = "/Call_Label"
+
+np.save(train_directory + label_type + '/features.npy', X_train)
+np.save(train_directory + label_type + '/labels.npy', y_train)
+np.save(test_directory + label_type + '/features.npy', X_test)
+np.save(test_directory + label_type + '/labels.npy', y_test)
+
+# Save the individual training files for visualization etc.
+for i in range(X_train.shape[0]):
+    np.save(train_directory + label_type + '/features_{}'.format(i+1), X_train[i])
+    np.save(train_directory + label_type + '/labels_{}'.format(i+1), y_train[i])
+
+for i in range(X_test.shape[0]):
+    np.save(test_directory + label_type + '/features_{}'.format(i+1), X_test[i])
+    np.save(test_directory + label_type + '/labels_{}'.format(i+1), y_test[i])
 
 
 
