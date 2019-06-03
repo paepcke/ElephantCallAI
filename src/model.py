@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import precision_recall_curve
-from data import get_test_loader, get_train_valid_loader
+from data import get_loader
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
@@ -60,6 +60,8 @@ WEIGHT_DECAY = 1e-5
 BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
+
+DATASET_FOLDER = 'Call_Label/'
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -322,9 +324,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Call_Label/",
-                                                             BATCH_SIZE,
-                                                             RANDOM_SEED)
+    train_loader = get_loader("../elephant_dataset/Train/" + DATASET_FOLDER, BATCH_SIZE, RANDOM_SEED)
+    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET_FOLDER, BATCH_SIZE, RANDOM_SEED)
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
@@ -344,7 +345,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
 
-        model.load_state_dict(torch.load(MODEL_SAVE_PATH))
+        model.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=device))
 
         for inputs, labels in dloaders['valid']:
             inputs = inputs.float()
