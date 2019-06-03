@@ -279,13 +279,13 @@ class Model4(nn.Module):
         return logits
 
 """
-Basically what Brendan was doing
+Adding some hidden layers to beginning of model0
 """
-class Model0(nn.Module):
+class Model5(nn.Module):
     def __init__(self, input_size, output_size):
-        super(Model0, self).__init__()
+        super(Model5, self).__init__()
 
-        self.MODEL_ID = 0
+        self.MODEL_ID = 5
         self.HYPERPARAMETERS = {
         'lr': 1e-3,
         'lr_decay_step': 4,
@@ -300,12 +300,14 @@ class Model0(nn.Module):
         self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
         self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
 
-        self.lstm = nn.LSTM(input_size, self.hidden_size, batch_first=True)
+        self.linear = nn.Linear(input_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
-        lstm_out, _ = self.lstm(inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+        out = self.linear(inputs)
+        lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                          self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
         return logits
@@ -461,7 +463,8 @@ def main():
         # model = Model1(input_size, output_size)
         # model = Model2(input_size, output_size)
         # model = Model3(input_size, output_size)
-        model = Model4(input_size, output_size)
+        # model = Model4(input_size, output_size)
+        model = Model5(input_size, output_size)
 
         model.to(device)
 
