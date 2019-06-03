@@ -57,7 +57,7 @@ ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = False
+VERBOSE = True
 
 
 def makeChunk(start_index,feat_mat,label_mat):
@@ -201,7 +201,9 @@ def display_call(features, labels):
         Assumes features is of shape (time, freq)
     """
     fig, (ax1, ax2) = plt.subplots(2,1)
-    new_features = np.flipud(10*np.log10(features).T)
+    new_features = features.T
+    if not USE_MFCC_FEATURES:
+        new_features = np.flipud(10*np.log10(features).T)
     min_dbfs = new_features.flatten().mean()
     max_dbfs = new_features.flatten().mean()
     min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
@@ -285,8 +287,8 @@ def wrapper_makeDataSet(file):
         feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
     else:
         feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
-    
     return feature_set, label_set
+
 pool = multiprocessing.Pool()
 print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
 start_time = time.time()
@@ -296,7 +298,6 @@ for feature, label in output:
     train_feature_set.extend(feature)
     train_label_set.extend(label)
 print('Multiprocessed took {}'.format(time.time()-start_time))
-
 
 print (train_data_files)
 X_train = np.stack(train_feature_set)
@@ -323,9 +324,9 @@ y_test = np.stack(test_label_set)
 print (X_train.shape, X_test.shape)
 print (y_train.shape, y_test.shape)
 
-label_type = '/Activate_Label'
+label_type = '/Activate_Label' if not USE_MFCC_FEATURES else '/MFCC_Activate_Label'
 if (not USE_POST_CALL_LABEL):
-    label_type = "/Call_Label"
+    label_type = "/Call_Label" if not USE_MFCC_FEATURES else "/MFCC_Call_Label"
 
 np.save(train_directory + label_type + '/features.npy', X_train)
 np.save(train_directory + label_type + '/labels.npy', y_train)
@@ -340,6 +341,5 @@ for i in range(X_train.shape[0]):
 for i in range(X_test.shape[0]):
     np.save(test_directory + label_type + '/features_{}'.format(i+1), X_test[i])
     np.save(test_directory + label_type + '/labels_{}'.format(i+1), y_test[i])
-
 
 

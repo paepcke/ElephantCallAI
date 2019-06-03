@@ -60,7 +60,12 @@ MODEL_SAVE_PATH = '../weights/'
 LOGS_SAVE_PATH = './runs/'
 
 DATASET = 'Call'
+<<<<<<< Updated upstream
 # DATASET = 'activate'
+=======
+#DATASET = 'activate'
+#DATASET = 'MFCC_Call'
+>>>>>>> Stashed changes
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -156,18 +161,19 @@ class Model2(nn.Module):
 
         self.input_size = input_size
         self.hidden_size = 128
-        self.num_filters = 25
-        self.kernel_size = 5
-        self.num_layers = 1
+        self.num_filters = input_size
+        self.kernel_size = 19 # Roughly 77 / 4 
+        self.num_layers = 2
         self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
 
         self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
         self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
-        self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
-        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
+        self.maxpool = nn.MaxPool1d(self.conv_out) # Perform a max pool over the resulting 1d freq. conv.
+        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, inputs):
@@ -348,6 +354,102 @@ class Model6(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
+"""
+With linear layer pool after conv1d as well
+"""
+class Model7(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model7, self).__init__()
+        
+        self.MODEL_ID = 2
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = input_size
+        self.kernel_size = 19 # Roughly 77 / 4 
+        self.num_layers = 2
+        self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
+        self.linear_pool = nn.Linear(self.conv_out, 1) 
+        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        pooledFeatures = self.linear_pool(convFeatures)
+
+        # Re-Shape to be - (batch, seq_len, num_filters)
+        pooledFeatures = pooledFeatures.view(-1, inputs.shape[1], self.num_filters)
+
+        lstm_out, _ = self.lstm(pooledFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
+"""
+With avg-pool after conv1d as well
+"""
+class Model8(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model8, self).__init__()
+        
+        self.MODEL_ID = 2
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = input_size
+        self.kernel_size = 19 # Roughly 77 / 4 
+        self.num_layers = 2
+        self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
+        self.avgpool = nn.AvgPool1d(self.conv_out) # Perform a max pool over the resulting 1d freq. conv. 
+        self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        pooledFeatures = self.avgpool(convFeatures)
+
+        # Re-Shape to be - (batch, seq_len, num_filters)
+        pooledFeatures = pooledFeatures.view(-1, inputs.shape[1], self.num_filters)
+
+        lstm_out, _ = self.lstm(pooledFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
 
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
@@ -384,6 +486,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 for inputs, labels in dataloders[phase]:
                     # Cast the variables to the correct type
                     inputs = inputs.float()
+                    
                     labels = labels.float()
 
                     inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
@@ -500,9 +603,11 @@ def main():
         # model = Model1(input_size, output_size)
         # model = Model2(input_size, output_size)
         # model = Model3(input_size, output_size)
-        # model = Model4(input_size, output_size)
+        #model = Model4(input_size, output_size)
         # model = Model5(input_size, output_size)
-        model = Model6(input_size, output_size)
+        #model = Model6(input_size, output_size)
+        #model = Model7(input_size, output_size)
+        model = Model8(input_size, output_size)
 
         model.to(device)
 
