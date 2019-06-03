@@ -40,7 +40,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy')
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="Scale")
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 

@@ -288,15 +288,21 @@ def wrapper_makeDataSet(file):
         feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
     return feature_set, label_set
 
-pool = multiprocessing.Pool()
-print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-start_time = time.time()
-output = pool.map(wrapper_makeDataSet, train_data_files)
-pool.close()
-for feature, label in output:
-    train_feature_set.extend(feature)
-    train_label_set.extend(label)
-print('Multiprocessed took {}'.format(time.time()-start_time))
+if not VERBOSE:
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    output = pool.map(wrapper_makeDataSet, train_data_files)
+    pool.close()
+    for feature, label in output:
+        train_feature_set.extend(feature)
+        train_label_set.extend(label)
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+else:
+    for file in train_data_files:
+        feature_set, label_set = wrapper_makeDataSet(file)
+        train_feature_set.extend(feature_set)
+        train_label_set.extend(label_set)
 
 print (train_data_files)
 X_train = np.stack(train_feature_set)
@@ -307,15 +313,22 @@ print ("Size: ", len(test_data_files))
 # Make the test dataset
 test_feature_set = []
 test_label_set = []
-pool = multiprocessing.Pool()
-print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-start_time = time.time()
-output = pool.map(wrapper_makeDataSet, test_data_files)
-pool.close()
-for feature, label in output:
-    test_feature_set.extend(feature)
-    test_label_set.extend(label)
-print('Multiprocessed took {}'.format(time.time()-start_time))  
+
+if not VERBOSE:
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    output = pool.map(wrapper_makeDataSet, test_data_files)
+    pool.close()
+    for feature, label in output:
+        test_feature_set.extend(feature)
+        test_label_set.extend(label)
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+else:
+    for file in test_data_files:
+        feature_set, label_set = wrapper_makeDataSet(file)
+        test_feature_set.extend(feature_set)
+        test_label_set.extend(label_set)
 
 X_test = np.stack(test_feature_set)
 y_test = np.stack(test_label_set)

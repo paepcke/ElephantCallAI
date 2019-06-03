@@ -3,7 +3,7 @@ Also here is the command for an interactive shell:
 
 
 
-srun -p aida -w c0020 -n2 --ntasks-per-core 1 --mem 40G --gres=gpu:1 --time=1800 --pty /bin/bash
+srun -p aida -w c0019 -n2 --ntasks-per-core 1 --mem 40G --gres=gpu:1 --time=1800 --pty /bin/bash
 
 
 
