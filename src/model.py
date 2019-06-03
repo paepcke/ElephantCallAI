@@ -39,6 +39,16 @@ from data import get_test_loader, get_train_valid_loader
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
+import sys
+
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+import matplotlib.cm
+import matplotlib
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import matplotlib.ticker as plticker
+import matplotlib.patches as patches
+from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 RANDOM_SEED = 42
 
@@ -51,13 +61,8 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 MODEL_SAVE_PATH = '../weights/model.pt'
 
-
-
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-writer = SummaryWriter()
-writer.add_scalar('batch_size', BATCH_SIZE)
 
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -225,7 +230,7 @@ def num_correct(logits, labels, threshold=0.5):
 
     return num_correct
 
-def train_model(dataloders, model, criterion, optimizer, scheduler, num_epochs, model_save_path):
+def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs, model_save_path):
     since = time.time()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -315,33 +320,73 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, num_epochs, 
     model.load_state_dict(best_model_wts)
     return model
 
+def main():
+    ## Build Dataset
+    train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Call_Label/",
+                                                             BATCH_SIZE,
+                                                             RANDOM_SEED)
 
-train_loader, validation_loader = get_train_valid_loader("../elephant_dataset/Train/Call_Label/",
-                                                         BATCH_SIZE,
-                                                         RANDOM_SEED)
+    dloaders = {'train':train_loader, 'valid':validation_loader}
 
-dloaders = {'train':train_loader, 'valid':validation_loader}
+    ## Build Model
+    input_size = 77 # Num of frequency bands in the spectogram
+    hidden_size = 128
 
-## Build Model
-input_size = 77 # Num of frequency bands in the spectogram
-hidden_size = 128
+    # model = LSTM(input_size, hidden_size, 1)
+    model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
+    # model = CONV1D_LSTM(input_size, hidden_size, 1)
+    # model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
 
-# model = LSTM(input_size, hidden_size, 1)
-#model = CONV1D_NO_POOL_LSTM(input_size, hidden_size, 1)
-model = CONV1D_BiLSTM_NO_POOL(input_size, hidden_size, 1, num_layers=2)
-# model = CONV1D_LSTM(input_size, hidden_size, 1)
+    model.to(device)
 
-model.to(device)
+    print(model)
 
-print(model)
+    if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
+        ## Data Visualization
 
-criterion = torch.nn.BCEWithLogitsLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, LEARNING_RATE_DECAY_STEP, gamma=LEARNING_RATE_DECAY)
+        model.load_state_dict(torch.load(MODEL_SAVE_PATH))
 
-start_time = time.time()
-model = train_model(dloaders, model, criterion, optimizer, scheduler, NUM_EPOCHS, MODEL_SAVE_PATH)
+        for inputs, labels in dloaders['valid']:
+            inputs = inputs.float()
+            labels = labels.float()
 
-print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
+            inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
 
-writer.close()
+            # Forward pass
+            outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
+
+            for i in range(len(inputs)):
+                features = inputs[i].detach().numpy()
+                output = torch.sigmoid(outputs[i]).detach().numpy()
+                label = labels[i].detach().numpy()
+
+                fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+                # new_features = np.flipud(10*np.log10(features).T)
+                new_features = features.T
+                min_dbfs = new_features.flatten().mean()
+                max_dbfs = new_features.flatten().mean()
+                min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+                max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+                ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+                ax2.plot(np.arange(output.shape[0]), output)
+                ax3.plot(np.arange(label.shape[0]), label)
+                plt.show()
+
+    else:
+        ## Training
+        writer = SummaryWriter()
+        writer.add_scalar('batch_size', BATCH_SIZE)
+
+        criterion = torch.nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, LEARNING_RATE_DECAY_STEP, gamma=LEARNING_RATE_DECAY)
+
+        start_time = time.time()
+        model = train_model(dloaders, model, criterion, optimizer, scheduler, writer, NUM_EPOCHS, MODEL_SAVE_PATH)
+
+        print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
+
+        writer.close()
+
+if __name__ == '__main__':
+    main()
