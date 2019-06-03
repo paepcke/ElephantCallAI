@@ -271,9 +271,11 @@ def main():
     train_feature_set = []
     train_label_set = []
     print ("Making Train Set")
+    print ("Size: ", len(train_data_files))
     # Make the training dataset
+    index = 0
     for file in train_data_files:
-        print(file)
+        print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
             feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
@@ -281,19 +283,22 @@ def main():
             feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
         
         train_feature_set.extend(feature_set)
-        train_label_set.extend(label_set)       
+        train_label_set.extend(label_set) 
+        index += 1      
 
     print (train_data_files)
     X_train = np.stack(train_feature_set)
     y_train = np.stack(train_label_set)
 
     print ("Making Test Set")
+    print ("Size: ", len(test_data_files))
     # Make the test dataset
     test_feature_set = []
     test_label_set = []
     # Make the training dataset
+    index = 0
     for file in test_data_files:
-        print(file)
+        print(file, index)
         label_file = 'Label'+file[4:]
         if (ACTIVATE_TIME == 0):
             feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
@@ -301,7 +306,8 @@ def main():
             feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
         
         test_feature_set.extend(feature_set)
-        test_label_set.extend(label_set)       
+        test_label_set.extend(label_set)   
+        index += 1    
 
     X_test = np.stack(test_feature_set)
     y_test = np.stack(test_label_set)
