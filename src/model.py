@@ -57,9 +57,10 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
 MODEL_SAVE_PATH = '../weights/'
+LOGS_SAVE_PATH = './runs/'
 
-DATASET_FOLDER = 'Call_Label/'
-# DATASET_FOLDER = 'Activate_Label/'
+DATASET = 'call'
+# DATASET = 'activate'
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -277,6 +278,38 @@ class Model4(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
+"""
+Basically what Brendan was doing
+"""
+class Model0(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model0, self).__init__()
+
+        self.MODEL_ID = 0
+        self.HYPERPARAMETERS = {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+
+        self.input_dim = input_size
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.lstm = nn.LSTM(input_size, self.hidden_size, batch_first=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        lstm_out, _ = self.lstm(inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
 
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
@@ -368,8 +401,9 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
     finally:
         if best_model:
-            torch.save(best_model, model_save_path + 'model_' + str(best_model.MODEL_ID) + ".pt")
-            print('Saved model from valid accuracy: ', best_valid_acc)
+            save_path = model_save_path + DATASET + '_model_' + str(best_model.MODEL_ID) + ".pt"
+            torch.save(best_model, save_path)
+            print('Saved model from valid accuracy {} to path {}'.format(best_valid_acc, save_path))
         else:
             print('For some reason I don\'t have a model to save')
     
@@ -380,14 +414,14 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/" + DATASET_FOLDER, BATCH_SIZE, RANDOM_SEED)
-    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET_FOLDER, BATCH_SIZE, RANDOM_SEED)
+    train_loader = get_loader("../elephant_dataset/Train/" + DATASET + '_Label/', BATCH_SIZE, RANDOM_SEED)
+    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET + '_Label/', BATCH_SIZE, RANDOM_SEED)
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
-        model = torch.load(MODEL_SAVE_PATH + 'model_' + sys.argv[2] + ".pt", map_location=device)
+        model = torch.load(MODEL_SAVE_PATH + DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
         print(model)
 
         for inputs, labels in dloaders['valid']:
@@ -433,7 +467,7 @@ def main():
 
         print(model)
 
-        writer = SummaryWriter('runs/model' + str(model.MODEL_ID) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
+        writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
         writer.add_scalar('batch_size', BATCH_SIZE)
 
         criterion = torch.nn.BCEWithLogitsLoss()
