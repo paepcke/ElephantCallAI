@@ -40,7 +40,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="Scale")
+    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess="ChunkNorm")
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -74,6 +74,9 @@ class ElephantDataset(data.Dataset):
             #self.features = self.features.reshape(num_ex * seq_len, -1)
             #self.features = scaler.fit_transform(self.features)
             #self.features = self.features.reshape(num_ex, seq_len, -1)
+        elif preprocess == "ChunkNorm":
+            for i in range(self.features.shape[0]):
+                self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
 
     def __len__(self):
         return self.features.shape[0]
