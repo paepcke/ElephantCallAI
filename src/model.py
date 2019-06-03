@@ -118,15 +118,16 @@ class Model1(nn.Module):
         self.num_filters = 25
         self.kernel_size = 5
         self.num_layers = 1
+        self.padding = 2
         self.output_size = output_size
-        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+        self.conv_out = input_size - self.kernel_size + 2 * self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
         self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
         self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
@@ -257,15 +258,16 @@ class Model4(nn.Module):
         self.num_filters = 25
         self.kernel_size = 5
         self.num_layers = 1
+        self.padding = 2
         self.output_size = output_size
-        self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
+        self.conv_out = input_size - self.kernel_size + 2*self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
         self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
         self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         # I think that we want input size to be 1
-        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
@@ -599,14 +601,6 @@ def main():
         input_size = 77 # Num of frequency bands in the spectogram
         output_size = 1
 
-        # model = Model0(input_size, output_size)
-        # model = Model1(input_size, output_size)
-        # model = Model2(input_size, output_size)
-        # model = Model3(input_size, output_size)
-        #model = Model4(input_size, output_size)
-        # model = Model5(input_size, output_size)
-        #model = Model6(input_size, output_size)
-        #model = Model7(input_size, output_size)
         model = Model8(input_size, output_size)
 
         model.to(device)
