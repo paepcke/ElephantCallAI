@@ -3,7 +3,7 @@ DATASET = 'Call'
 #DATASET = 'MFCC_Call'
 
 NORM = "Background"
-SCALE = False
+SCALE = True
 
 HYPERPARAMETERS = {
 0: {
