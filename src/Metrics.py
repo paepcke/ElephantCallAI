@@ -212,8 +212,10 @@ def pcr(dloader, model):
     print ("Precision label 1 (call): ", precision[1])
     print ("Recall label 0 (no call): ", recall[0])
     print ("Recall label 1 (call): ", recall[1])
-    #print ("Precision label 0 (no call): ", precision[0])
-    #print ("Precision label 1 (call): ", precision[1])
+
+    # Calculate Accuracy
+    correct = (binary_preds == labelVals).sum()
+    accuracy = float(correct) / binary_preds.shape[0]
     #np.save('precision_Rnn.npy',precision)
     #np.save('recall_Rnn.npy',recall)
 
@@ -238,6 +240,9 @@ def main():
         pcr(validation_loader, model)
     elif run_type == "identify":
         call_identification(validation_loader, model)
+    elif run_type == "Full_Test":
+        full_data_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Full_test/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+        pcr(full_data_loader, model)
     else:
         print ("Enter options: (prc, identify)")
 

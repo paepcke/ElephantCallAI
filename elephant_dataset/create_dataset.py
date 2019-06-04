@@ -51,7 +51,7 @@ FRAME_LENGTH = 64
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = False
+USE_POST_CALL_LABEL = True
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
@@ -274,6 +274,30 @@ shuffle(datafiles)
 split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
 train_data_files = datafiles[:split_index]
 test_data_files = datafiles[split_index:]
+
+EXTRACT_TEST_AUDIO = True
+if EXTRACT_TEST_AUDIO:
+    # We want to save the entire audio files 
+    # for test time!
+    test_spects = []
+    test_spects_labels = []
+    for file in test_data_files:
+        label_file = 'Label'+file[4:]
+        feature_file = np.genfromtxt(data_directory+file,delimiter=',').transpose()
+        if (feature_file.shape[0] != 9374):
+            print ("ah fuck")
+        label_file = np.genfromtxt(data_directory+label_file,delimiter=',')
+        test_spects.append(feature_file)
+        test_spects_labels.append(label_file[:, 0])
+
+    # Should all be the same length!
+    # Others we will see
+    test_spects = np.stack(test_spects)
+    test_spects_labels = np.stack(test_spects_labels)
+    label_type = '/Activate_Full_test' if USE_POST_CALL_LABEL else "/Call_Full_test"
+    np.save(test_directory + label_type + '/features.npy', test_spects)
+    np.save(test_directory + label_type + '/labels.npy', test_spects_labels)
+    quit()
 
 train_feature_set = []
 train_label_set = []
