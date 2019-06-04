@@ -51,23 +51,32 @@ import matplotlib.ticker as plticker
 import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
-RANDOM_SEED = 42
-
-BATCH_SIZE = 32
-NUM_EPOCHS = 1000
-
-MODEL_SAVE_PATH = '../weights/'
-LOGS_SAVE_PATH = './runs/'
-
-DATASET = 'Call'
-#DATASET = 'Activate'
-#DATASET = 'MFCC_Call'
-
-NORM = "Norm"
-SCALE = True
+import parameters
 
 np.random.seed(RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+def get_model(idx):
+    if idx == 0:
+        return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 1:
+        return Model1(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 2:
+        return Model2(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 3:
+        return Model3(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 4:
+        return Model4(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 5:
+        return Model5(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 6:
+        return Model6(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 7:
+        return Model7(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 8:
+        return Model8(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 9:
+        return Model9(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 
 """
 Basically what Brendan was doing
@@ -75,14 +84,6 @@ Basically what Brendan was doing
 class Model0(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model0, self).__init__()
-
-        self.MODEL_ID = 0
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_dim = input_size
         self.hidden_size = 128
@@ -107,14 +108,6 @@ Now with a conv1d flavor
 class Model1(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model1, self).__init__()
-        
-        self.MODEL_ID = 1
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -152,14 +145,6 @@ With maxpool as well
 class Model2(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model2, self).__init__()
-        
-        self.MODEL_ID = 2
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -200,14 +185,6 @@ CONV1D_BiLSTM_Maxpool
 class Model3(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model3, self).__init__()
-        
-        self.MODEL_ID = 3
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -247,14 +224,6 @@ CONV1D_BiLSTM_NO_POOL
 class Model4(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model4, self).__init__()
-        
-        self.MODEL_ID = 4
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -296,14 +265,6 @@ class Model5(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model5, self).__init__()
 
-        self.MODEL_ID = 5
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
-
         self.input_dim = input_size
         self.hidden_size = 128
         self.output_size = output_size
@@ -329,14 +290,6 @@ Adding two hidden layers to beginning of model0
 class Model6(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model6, self).__init__()
-
-        self.MODEL_ID = 6
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_dim = input_size
         self.hidden_size = 128
@@ -365,14 +318,6 @@ With linear layer pool after conv1d as well
 class Model7(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model7, self).__init__()
-        
-        self.MODEL_ID = 2
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -413,14 +358,6 @@ With avg-pool after conv1d as well
 class Model8(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model8, self).__init__()
-        
-        self.MODEL_ID = 2
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -461,14 +398,6 @@ Model 4 but with a batchnorm first
 class Model9(nn.Module):
     def __init__(self, input_size, output_size):
         super(Model9, self).__init__()
-        
-        self.MODEL_ID = 9
-        self.HYPERPARAMETERS = {
-        'lr': 1e-3,
-        'lr_decay_step': 4,
-        'lr_decay': 0.95,
-        'l2_reg': 1e-5,
-        }
 
         self.input_size = input_size
         self.hidden_size = 128
@@ -526,100 +455,89 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_acc = 0.0
     best_model_wts = None
 
-    try:
-        for epoch in range(num_epochs):
-            for phase in ['train', 'valid']:
-                if phase == 'train':
-                    model.train(True)
-                else:
-                    model.train(False)
+    for epoch in range(num_epochs):
+        for phase in ['train', 'valid']:
+            if phase == 'train':
+                model.train(True)
+            else:
+                model.train(False)
 
-                running_loss = 0.0
-                running_corrects = 0
-                running_samples = 0
+            running_loss = 0.0
+            running_corrects = 0
+            running_samples = 0
 
-                for inputs, labels in dataloders[phase]:
-                    # Cast the variables to the correct type
-                    inputs = inputs.float()
-                    
-                    labels = labels.float()
-
-                    inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-
-                    optimizer.zero_grad()
-
-                    # Forward pass
-                    logits = model(inputs) # Shape - (batch_size, seq_len, 1)
-
-                    # Flatten it for criterion and num_correct
-                    logits = logits.view(-1, 1)
-                    labels = labels.view(-1, 1)
-
-                    logits = logits.squeeze()
-                    labels = labels.squeeze()
-
-                    loss = criterion(logits, labels)
-
-                    # Backward pass
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-
-                    running_loss += loss.item()
-                    running_corrects += num_correct(logits, labels)
-                    running_samples += logits.shape[0]
+            for inputs, labels in dataloders[phase]:
+                # Cast the variables to the correct type
+                inputs = inputs.float()
                 
+                labels = labels.float()
+
+                inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+
+                optimizer.zero_grad()
+
+                # Forward pass
+                logits = model(inputs) # Shape - (batch_size, seq_len, 1)
+
+                # Flatten it for criterion and num_correct
+                logits = logits.view(-1, 1)
+                labels = labels.view(-1, 1)
+
+                logits = logits.squeeze()
+                labels = labels.squeeze()
+
+                loss = criterion(logits, labels)
+
+                # Backward pass
                 if phase == 'train':
-                    train_epoch_loss = running_loss / running_samples
-                    train_epoch_acc = float(running_corrects) / running_samples
-                else:
-                    valid_epoch_loss = running_loss / running_samples
-                    valid_epoch_acc = float(running_corrects) / running_samples
-                    
-                if phase == 'valid' and valid_epoch_acc > best_valid_acc:
-                    best_valid_acc = valid_epoch_acc
-                    best_model_wts = model.state_dict()
+                    loss.backward()
+                    optimizer.step()
 
-            print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
-                  'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
-                    epoch, num_epochs - 1,
-                    train_epoch_loss, train_epoch_acc, 
-                    valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
+                running_loss += loss.item()
+                running_corrects += num_correct(logits, labels)
+                running_samples += logits.shape[0]
+            
+            if phase == 'train':
+                train_epoch_loss = running_loss / running_samples
+                train_epoch_acc = float(running_corrects) / running_samples
+            else:
+                valid_epoch_loss = running_loss / running_samples
+                valid_epoch_acc = float(running_corrects) / running_samples
+                
+            if phase == 'valid' and valid_epoch_acc > best_valid_acc:
+                best_valid_acc = valid_epoch_acc
+                best_model_wts = model.state_dict()
 
-            ## Write important metrics to tensorboard
-            writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
-            writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
-            writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
-            writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
-            writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
+        print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
+              'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
+                epoch, num_epochs - 1,
+                train_epoch_loss, train_epoch_acc, 
+                valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
 
-            scheduler.step()
+        ## Write important metrics to tensorboard
+        writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
+        writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
+        writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
+        writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+        writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
-    finally:
-        if best_model_wts:
-            model.load_state_dict(best_model_wts)
-            save_path = model_save_path + DATASET + '_model_' + str(model.MODEL_ID) + ".pt"
-            torch.save(model, save_path)
-            print('Saved model from valid accuracy {} to path {}'.format(best_valid_acc, save_path))
-        else:
-            print('For some reason I don\'t have a model to save')
-    
-    
+        scheduler.step()
+
     print('Best val Acc: {:4f}'.format(best_valid_acc))
 
     return best_model_wts
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/" + DATASET + '_Label/', BATCH_SIZE, NORM, SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test/" + DATASET + '_Label/', BATCH_SIZE, NORM, SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
-        model = torch.load(MODEL_SAVE_PATH + DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
+        model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
         print(model)
 
         for inputs, labels in dloaders['valid']:
@@ -631,7 +549,7 @@ def main():
             # Forward pass
             outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
 
-            print('Accuracy on the test set for this batch is {:4f}'.format(num_correct(outputs.view(-1, 1), labels.view(-1, 1)) / outputs.shape[0]))
+            print('Accuracy on the test set for this batch is {:4f}'.format(float(num_correct(outputs.view(-1, 1), labels.view(-1, 1))) / outputs.view(-1, 1).shape[0]))
 
             for i in range(len(inputs)):
                 features = inputs[i].detach().numpy()
@@ -652,27 +570,32 @@ def main():
 
     else:
         ## Training
-
-        ## Build Model
-        input_size = 77 # Num of frequency bands in the spectogram
-        output_size = 1
-
-        model = Model4(input_size, output_size)
+        model_id = int(sys.argv[1])
+        model = get_model(model_id)
 
         model.to(device)
 
         print(model)
 
-        writer = SummaryWriter(LOGS_SAVE_PATH + DATASET + '_model_' + str(model.MODEL_ID) + "_" + NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
-        writer.add_scalar('batch_size', BATCH_SIZE)
-        writer.add_scalar('weight_decay', model.HYPERPARAMETERS['l2_reg'])
+        writer = SummaryWriter(parameters.LOGS_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
+        writer.add_scalar('batch_size', parameters.BATCH_SIZE)
+        writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[model_id]['l2_reg'])
 
         criterion = torch.nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=model.HYPERPARAMETERS['lr'], weight_decay=model.HYPERPARAMETERS['l2_reg'])
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, model.HYPERPARAMETERS['lr_decay_step'], gamma=model.HYPERPARAMETERS['lr_decay'])
+        optimizer = torch.optim.Adam(model.parameters(), lr=parameters.HYPERPARAMETERS[model_id]['lr'], weight_decay=parameters.HYPERPARAMETERS[model_id]['l2_reg'])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
 
         start_time = time.time()
-        model = train_model(dloaders, model, criterion, optimizer, scheduler, writer, NUM_EPOCHS, MODEL_SAVE_PATH)
+        try:
+            model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS, parameters.MODEL_SAVE_PATH)
+        finally:
+            if model_wts:
+                model.load_state_dict(model_wts)
+                save_path = model_save_path + parameters.DATASET + '_model_' + str(model_id) + ".pt"
+                torch.save(model, save_path)
+                print('Saved model from valid accuracy {} to path {}'.format(best_valid_acc, save_path))
+            else:
+                print('For some reason I don\'t have a model to save')
 
         print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
 
