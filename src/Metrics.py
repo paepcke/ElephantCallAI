@@ -163,6 +163,34 @@ def trigger_word_accuracy(output, truth):
         return 0.0
     return num_triggered / num_calls
 
+def visual_time_series(spectrum, predicts, labels):
+    # Just visualize one time series
+    spect = spectrum[0].detach().numpy()
+    label = labels[0].detach().numpy()
+   
+    predict = torch.sigmoid(predicts[1]).detach().numpy()
+    # get num chunks
+    num_chunks = int(spect.shape[0] / 64)
+    for j in range(num_chunks):
+        chunk_start = j * 64
+        chunk = spect[chunk_start: chunk_start + 64, :]
+        lab = label[chunk_start: chunk_start + 64]
+        pred = predict[chunk_start: chunk_start + 64]
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+        # new_features = np.flipud(10*np.log10(features).T)
+        new_features = np.flipud(chunk.T)
+        min_dbfs = new_features.flatten().mean()
+        max_dbfs = new_features.flatten().mean()
+        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+        ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+        ax2.plot(np.arange(pred.shape[0]), pred)
+        ax2.set_ylim([0,1])
+        ax3.plot(np.arange(lab.shape[0]), lab)
+        ax3.set_ylim([0, 1])
+        plt.show()
+
 def pcr(dloader, model):
     """
         Generate Precision Recall Plot as well as print the F1 score for 
@@ -180,6 +208,8 @@ def pcr(dloader, model):
 
         # Forward pass
         outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
+        # Try to visualize
+        visual_time_series(inputs, outputs, labels)
         # Compress to 
         # Shape - (batch_size * seq_length)
         # Compute the sigmoid over our outputs
