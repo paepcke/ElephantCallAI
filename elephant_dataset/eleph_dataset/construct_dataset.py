@@ -177,6 +177,8 @@ def create_dataset_from_json(name="ceb1", use_mfcc=False):
 
 
     call_args = get_call_args(name=name, use_mfcc=use_mfcc)
+    if len(call_args) == 0:
+        return [], []
 
     # extract data from files
     with Pool(POOL_SIZE) as thread_pool:
@@ -191,16 +193,29 @@ def create_dataset_from_json(name="ceb1", use_mfcc=False):
 
 if __name__ == '__main__':
 
-
-    all_calls, all_empty = create_dataset_from_json()
+    all_calls = []
+    all_empty = []
+    for region in PLACE_NAMES:
+        calls, empty = create_dataset_from_json(name=region)
+        all_calls.extend(calls)
+        all_empty.extend(empty)
 
     print("in total we have", len(all_calls), "calls", "and", len(all_empty), "empty")
-    all_calls = np.dstack(all_calls)
-    all_empty = np.dstack(all_empty)
-    print (np.mean(10 * np.log10(all_empty)))
-    print (np.std(10 * np.log10(all_empty)))
-    print (np.median(np.max(10 * np.log10(all_calls), axis=(1,2))))
+    all_calls = np.stack(all_calls)
+    print (all_calls.shape)
+    all_empty = np.stack(all_empty)
 
+    print ("Mean: ", np.mean(all_empty))
+    print ("Std: ", np.std(all_empty))
+    print ("Median: ", np.median(np.max(all_calls, axis=(1,2))))
+    print ('')
+    print ("Mean Log: ", np.mean(10 * np.log10(all_empty)))
+    print ("Std Log: ", np.std(10 * np.log10(all_empty)))
+    print ("Median: ", (np.median(np.max(10 * np.log10(all_calls), axis=(1,2)))))
+
+    # Save the noise and call data files
+    np.save("empyt.npy", all_empty)
+    np.save("call.npy", all_calls)
 
     '''
     from .utils import plot_call
