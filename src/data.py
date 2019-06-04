@@ -94,14 +94,16 @@ class ElephantDataset(data.Dataset):
                 self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
         elif preprocess == "Background":
             if scale:
-                mean_noise = -72.42010269488962
-                std_noise = 9.492270157248566 
-                #med = -49.22886851608499
+                mean_noise = -72.11595372930367
+                std_noise = 10.974271921644418
+                #med = -42.92290263901995
             else:
-                mean_noise = -72.42010269488962
-                std_noise = 9.492270157248566 
-                #med = -49.22886851608499
+                mean_noise = 9.932566648900661e-06
+                std_noise = 0.00025099596398420274 
+                #med = 5.101639142110309e-05
             self.features = (self.features - mean_noise) / std_noise
+        elif preprocess == "FeatureNorm":
+            self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
 
     def __len__(self):
         return self.features.shape[0]
