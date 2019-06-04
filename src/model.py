@@ -77,6 +77,8 @@ def get_model(idx):
         return Model8(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 9:
         return Model9(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 10:
+        return Model10(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 
 """
 Basically what Brendan was doing
@@ -434,6 +436,33 @@ class Model9(nn.Module):
         logits = self.hiddenToClass(lstm_out)
         return logits
 
+"""
+Model0 but with batchnorm
+"""
+class Model10(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model10, self).__init__()
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.lstm = nn.LSTM(self.input_size, self.hidden_size, batch_first=True)
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size))
+        batch_norm_inputs = batch_norm_inputs.view(inputs.shape)
+        lstm_out, _ = self.lstm(batch_norm_inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
 
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
@@ -446,7 +475,7 @@ def num_correct(logits, labels, threshold=0.5):
 
     return num_correct
 
-def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs, model_save_path):
+def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs):
     since = time.time()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -455,77 +484,77 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_acc = 0.0
     best_model_wts = None
 
-    for epoch in range(num_epochs):
-        for phase in ['train', 'valid']:
-            if phase == 'train':
-                model.train(True)
-            else:
-                model.train(False)
-
-            running_loss = 0.0
-            running_corrects = 0
-            running_samples = 0
-
-            for inputs, labels in dataloders[phase]:
-                # Cast the variables to the correct type
-                inputs = inputs.float()
-                
-                labels = labels.float()
-
-                inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-
-                optimizer.zero_grad()
-
-                # Forward pass
-                logits = model(inputs) # Shape - (batch_size, seq_len, 1)
-
-                # Flatten it for criterion and num_correct
-                logits = logits.view(-1, 1)
-                labels = labels.view(-1, 1)
-
-                logits = logits.squeeze()
-                labels = labels.squeeze()
-
-                loss = criterion(logits, labels)
-
-                # Backward pass
+    try:
+        for epoch in range(num_epochs):
+            for phase in ['train', 'valid']:
                 if phase == 'train':
-                    loss.backward()
-                    optimizer.step()
+                    model.train(True)
+                else:
+                    model.train(False)
 
-                running_loss += loss.item()
-                running_corrects += num_correct(logits, labels)
-                running_samples += logits.shape[0]
-            
-            if phase == 'train':
-                train_epoch_loss = running_loss / running_samples
-                train_epoch_acc = float(running_corrects) / running_samples
-            else:
-                valid_epoch_loss = running_loss / running_samples
-                valid_epoch_acc = float(running_corrects) / running_samples
+                running_loss = 0.0
+                running_corrects = 0
+                running_samples = 0
+
+                for inputs, labels in dataloders[phase]:
+                    # Cast the variables to the correct type
+                    inputs = inputs.float()
+                    
+                    labels = labels.float()
+
+                    inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+
+                    optimizer.zero_grad()
+
+                    # Forward pass
+                    logits = model(inputs) # Shape - (batch_size, seq_len, 1)
+
+                    # Flatten it for criterion and num_correct
+                    logits = logits.view(-1, 1)
+                    labels = labels.view(-1, 1)
+
+                    logits = logits.squeeze()
+                    labels = labels.squeeze()
+
+                    loss = criterion(logits, labels)
+
+                    # Backward pass
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                    running_loss += loss.item()
+                    running_corrects += num_correct(logits, labels)
+                    running_samples += logits.shape[0]
                 
-            if phase == 'valid' and valid_epoch_acc > best_valid_acc:
-                best_valid_acc = valid_epoch_acc
-                best_model_wts = model.state_dict()
+                if phase == 'train':
+                    train_epoch_loss = running_loss / running_samples
+                    train_epoch_acc = float(running_corrects) / running_samples
+                else:
+                    valid_epoch_loss = running_loss / running_samples
+                    valid_epoch_acc = float(running_corrects) / running_samples
+                    
+                if phase == 'valid' and valid_epoch_acc > best_valid_acc:
+                    best_valid_acc = valid_epoch_acc
+                    best_model_wts = model.state_dict()
 
-        print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
-              'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
-                epoch, num_epochs - 1,
-                train_epoch_loss, train_epoch_acc, 
-                valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
+            print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
+                  'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
+                    epoch, num_epochs - 1,
+                    train_epoch_loss, train_epoch_acc, 
+                    valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
 
-        ## Write important metrics to tensorboard
-        writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
-        writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
-        writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
-        writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
-        writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
+            ## Write important metrics to tensorboard
+            writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
+            writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
+            writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
+            writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+            writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
-        scheduler.step()
-
-    print('Best val Acc: {:4f}'.format(best_valid_acc))
-
-    return best_model_wts
+            scheduler.step()
+    finally:
+        print('Best val Acc: {:4f}'.format(best_valid_acc))
+        return best_model_wts
 
 def main():
     ## Build Dataset
@@ -586,14 +615,15 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
 
         start_time = time.time()
+        model_wts = None
         try:
-            model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS, parameters.MODEL_SAVE_PATH)
+            model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
         finally:
             if model_wts:
                 model.load_state_dict(model_wts)
-                save_path = model_save_path + parameters.DATASET + '_model_' + str(model_id) + ".pt"
+                save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
                 torch.save(model, save_path)
-                print('Saved model from valid accuracy {} to path {}'.format(best_valid_acc, save_path))
+                print('Saved best val acc model to path {}'.format(save_path))
             else:
                 print('For some reason I don\'t have a model to save')
 
