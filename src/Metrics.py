@@ -159,6 +159,8 @@ def trigger_word_accuracy(output, truth):
                         num_triggered += 1
                 i += 1
         i += 1
+    if num_calls == 0:
+        return 0.0
     return num_triggered / num_calls
 
 def pcr(dloader, model):
