@@ -12,6 +12,7 @@ elephant_dataset/Test/*
 elephant_dataset/Train/*
 elephant_dataset/Processed_data_MFCC/*
 elephant_dataset/Test_Atlas/*
+elephant_dataset/Json_Data/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
