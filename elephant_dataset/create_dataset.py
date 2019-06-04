@@ -284,9 +284,21 @@ if EXTRACT_TEST_AUDIO:
     for file in test_data_files:
         label_file = 'Label'+file[4:]
         feature_file = np.genfromtxt(data_directory+file,delimiter=',').transpose()
-        if (feature_file.shape[0] != 9374):
-            print ("ah fuck")
         label_file = np.genfromtxt(data_directory+label_file,delimiter=',')
+        
+        if (feature_file.shape[0] != 9374):
+            # It is length 8593 - kinda hacky but whatevs
+            # Just extend with 0s
+            spec_zeros = np.zeros((781, 77))
+            label_zeros = np.zeros((781, 2))
+
+            feature_file = np.concatenate((feature_file, spec_zeros))
+            label_file = np.concatenate((label_file, label_zeros))
+
+            print (feature_file.shape[0])
+            print ("Corrected")
+
+        extend_activate_label(label_file)
         test_spects.append(feature_file)
         test_spects_labels.append(label_file[:, 0])
 
