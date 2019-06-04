@@ -7,7 +7,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import precision_recall_curve, f1_score
+from sklearn.metrics import precision_recall_curve, f1_score, precision_recall_fscore_support
 from data import get_loader
 from torchsummary import summary
 import time
@@ -204,11 +204,19 @@ def pcr(dloader, model):
     f1 = f1_score(labelVals, binary_preds, labels=[0, 1], average=None)  
     print ("F1 score label 0 (no call): ", f1[0])
     print ("F1 score label 1 (call): ", f1[1])
+
+    precision, recall, fbeta, _ = precision_recall_fscore_support(labelVals, binary_preds, labels=[0,1], average=None)
+    print ("Precision label 0 (no call): ", precision[0])
+    print ("Precision label 1 (call): ", precision[1])
+    print ("Recall label 0 (no call): ", recall[0])
+    print ("Recall label 1 (call): ", recall[1])
+    #print ("Precision label 0 (no call): ", precision[0])
+    #print ("Precision label 1 (call): ", precision[1])
     #np.save('precision_Rnn.npy',precision)
     #np.save('recall_Rnn.npy',recall)
 
-    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(predVals, labelVals)))
-    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, predVals)))
+    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(binary_preds, labelVals)))
+    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, binary_preds)))
     print("Those two should be different overall. Problem if they're the same (?)")
 
 def main():
@@ -222,7 +230,7 @@ def main():
     model = loadModel(model_id)
 
     # Load val dataset to test on metrics 
-    validation_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
     if run_type == "prc":
         pcr(validation_loader, model)

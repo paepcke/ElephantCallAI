@@ -79,6 +79,8 @@ def get_model(idx):
         return Model9(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 10:
         return Model10(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 11:
+        return Model11(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 
 """
 Basically what Brendan was doing
@@ -460,6 +462,46 @@ class Model10(nn.Module):
         batch_norm_inputs = batch_norm_inputs.view(inputs.shape)
         lstm_out, _ = self.lstm(batch_norm_inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                          self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
+        return logits
+
+"""
+Model1 with batchnorm
+"""
+class Model11(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model11, self).__init__()
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 25
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.padding = 2
+        self.output_size = output_size
+        self.conv_out = input_size - self.kernel_size + 2 * self.padding + 1 # Ouput of the feature vectors after the 1D conv
+        self.lstm_input = self.conv_out * self.num_filters
+
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
+        self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size))
+        batch_norm_inputs = batch_norm_inputs.view(inputs.shape)
+        # Reshape the input before passing to the 1d
+        reshaped_inputs = batch_norm_inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer(reshaped_inputs)
+        convFeatures = convFeatures.view(inputs.shape[0], inputs.shape[1], -1)
+        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
         return logits
 
