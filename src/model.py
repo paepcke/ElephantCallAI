@@ -86,6 +86,8 @@ def get_model(idx):
         return Model12(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 13:
         return Model13(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 14:
+        return Model14(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -576,6 +578,41 @@ class Model13(nn.Module):
         lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                                  self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
+        return logits
+
+"""
+Basically what Brendan was doing
+"""
+class Model14(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model14, self).__init__()
+
+        self.input_size = input_size
+        self.lin_size = 64
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.linear = nn.Linear(self.input_size, self.lin_size)
+        self.linear2 = nn.Linear(self.lin_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
+        self.linear3 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
+        self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
+        out = self.linear(batch_norm_inputs)
+        out = self.linear2(out)
+        lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        out = self.linear3(lstm_out)
+        out = self.linear4(out)
+        logits = self.hiddenToClass(out)
         return logits
 
 
