@@ -648,11 +648,11 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     running_samples += logits.shape[0]
 
                     # Bad style sorry don't care its late
-                    output = nn.Sigmoid()(logits)
-                    output = np.where(output.cpu().detach().numpy() > 0.5, 1, 0)
-                    running_trig_word_recall += Metrics.trigger_word_accuracy(output, labels)
-                    running_trig_word_precision += Metrics.trigger_word_accuracy(labels, output)
-                    running_trig_word_count += 1
+                    # output = nn.Sigmoid()(logits)
+                    # output = np.where(output.cpu().detach().numpy() > 0.5, 1, 0)
+                    # running_trig_word_recall += Metrics.trigger_word_accuracy(output, labels)
+                    # running_trig_word_precision += Metrics.trigger_word_accuracy(labels, output)
+                    # running_trig_word_count += 1
                 
                 if phase == 'train':
                     train_epoch_loss = running_loss / running_samples
@@ -660,8 +660,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 else:
                     valid_epoch_loss = running_loss / running_samples
                     valid_epoch_acc = float(running_corrects) / running_samples
-                    valid_epoch_trig_recall = running_trig_word_recall / running_trig_word_count
-                    valid_epoch_trig_prec = running_trig_word_precision / running_trig_word_count
+                    valid_epoch_trig_recall = 0
+                    valid_epoch_trig_prec = 0
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
