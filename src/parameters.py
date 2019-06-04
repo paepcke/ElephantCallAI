@@ -1,8 +1,8 @@
-DATASET = 'Call'
-#DATASET = 'Activate'
+#DATASET = 'Call'
+DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-NORM = "Background"
+NORM = "Norm"
 SCALE = True
 
 HYPERPARAMETERS = {
@@ -67,6 +67,13 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         },
 10: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
+
+11: {
         'lr': 1e-3,
         'lr_decay_step': 4,
         'lr_decay': 0.95,

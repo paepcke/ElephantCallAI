@@ -617,7 +617,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 def main():
     ## Build Dataset
     train_loader = get_loader("../elephant_dataset/Train/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
