@@ -2,8 +2,8 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-NORM = "Norm"
-SCALE = True
+NORM = "Background"
+SCALE = False
 
 HYPERPARAMETERS = {
 0: {

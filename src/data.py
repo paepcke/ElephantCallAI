@@ -11,6 +11,8 @@ import os
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
+Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
+
 def get_loader(data_dir,
                batch_size,
                norm="Scale",
@@ -95,13 +97,18 @@ class ElephantDataset(data.Dataset):
             for i in range(self.features.shape[0]):
                 self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
         elif preprocess == "Background":
-            if scale:
-                mean_noise = -72.11595372930367
-                std_noise = 10.974271921644418
+            # Load in the pre-calculated mean,std,etc.
+            if not scale:
+                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+                std_noise = np.load(Noise_Stats_Directory + "std.npy")
+                #mean_noise = -72.11595372930367
+                #std_noise = 10.974271921644418
                 #med = -42.92290263901995
             else:
-                mean_noise = 9.932566648900661e-06
-                std_noise = 0.00025099596398420274 
+                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+                std_noise = np.load(Noise_Stats_Directory + "std_log.npy")
+                #mean_noise = 9.932566648900661e-06
+                #std_noise = 0.00025099596398420274 
                 #med = 5.101639142110309e-05
             self.features = (self.features - mean_noise) / std_noise
         elif preprocess == "FeatureNorm":

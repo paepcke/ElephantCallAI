@@ -217,34 +217,33 @@ if __name__ == '__main__':
         print ("Median: ", (np.median(np.max(10 * np.log10(all_calls), axis=(1,2)))))
 
         # Save the noise and call data files
-        np.save("empyt.npy", all_empty)
+        np.save("empty.npy", all_empty)
         np.save("call.npy", all_calls)
     else:
-        all_empty = np.load("empyt.npy")
+        all_empty = np.load("empty.npy")
         all_calls = np.load("call.npy")
 
         # Do the means now over the feature axis!
-        print (all_empty.shape)
+        all_calls = np.transpose(all_calls, (0, 2, 1)) # Flip the time and freq axis
+        all_empty = np.transpose(all_empty, (0, 2, 1))
+
         mean = np.mean(all_empty, axis=(0, 1))
         std = np.std(all_empty, axis=(0, 1))
         median = np.median(np.max(all_calls, axis=1), axis = 0)
 
-        mean_log = np.mean(all_empty, axis=(0, 1))
-        std_log = np.std(all_empty, axis=(0, 1))
-        median_log = np.median(np.max(all_calls, axis=1), axis = 0)
+        mean_log = np.mean(10 * np.log10(all_empty), axis=(0, 1))
+        std_log = np.std(10 * np.log10(all_empty), axis=(0, 1))
+        median_log = np.median(np.max(10 * np.log10(all_empty), axis=1), axis = 0)
 
-        
+        #Noise data
+        Noise_Directory = "./Noise_Stats/"
+        np.save(Noise_Directory + "mean.npy", mean)
+        np.save(Noise_Directory + "std.npy", std)
+        np.save(Noise_Directory + "median.npy", median)
+        np.save(Noise_Directory + "mean_log.npy", mean_log)
+        np.save(Noise_Directory + "std_log.npy", std_log)
+        np.save(Noise_Directory + "median_log.npy", median_log)
 
-    '''
-    from .utils import plot_call
-    for i in range(5):
-        call = all_calls[i]
-        plot_call(call, "plotDir/call_{}.png".format(i))
-
-    for i in range(5):
-        call = all_empty[i]
-        plot_call(call, "plotDir/empty_{}.png".format(i))
-    '''
 
 
 
