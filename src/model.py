@@ -82,7 +82,8 @@ def get_model(idx):
         return Model10(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 11:
         return Model11(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
-
+    elif idx == 12:
+        return Model12(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -504,6 +505,36 @@ class Model11(nn.Module):
         lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                                  self.cell_state.repeat(1, inputs.shape[0], 1)])
         logits = self.hiddenToClass(lstm_out)
+        return logits
+
+"""
+Basically what Brendan was doing
+"""
+class Model12(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model12, self).__init__()
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.linear = nn.Linear(self.input_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
+        self.linear2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
+        out = self.linear(batch_norm_inputs)
+        lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        out = self.linear2(lstm_out)
+        logits = self.hiddenToClass(out)
         return logits
 
 
