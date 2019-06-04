@@ -577,7 +577,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                     # Bad style sorry don't care its late
                     output = nn.Sigmoid()(logits)
-                    output = np.where(output > 0.5, 1, 0)
+                    output = np.where(output.cpu().detach().numpy() > 0.5, 1, 0)
                     running_trig_word_recall += Metrics.trigger_word_accuracy(output, labels)
                     running_trig_word_precision += Metrics.trigger_word_accuracy(labels, output)
                     running_trig_word_count += 1
