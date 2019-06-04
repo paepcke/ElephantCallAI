@@ -33,9 +33,23 @@ def loadModel(model_id):
     model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=device)
     print (model)
     return model
-  
-  
 
+def trigger_word_accuracy(output, truth):
+    num_triggered = 0
+    num_calls = 0
+    i = 0
+    while i < len(truth):
+        if truth[i] == 1:
+            num_calls += 1
+            call_detected_flag = False
+            while i < len(truth) and truth[i] == 1:
+                if not call_detected_flag:
+                    if output[i] == 1:
+                        call_detected_flag = True
+                        num_triggered += 1
+                i += 1
+        i += 1
+    return num_triggered / num_calls
 
 def pcr(dloader, model):
     """
@@ -64,7 +78,6 @@ def pcr(dloader, model):
         compressed_labels = labels.view(-1, 1)
         compressed_labels = compressed_labels.squeeze()
 
-
         predVals = np.concatenate((predVals, predictions.detach().numpy()))
         labelVals = np.concatenate((labelVals, compressed_labels.detach().numpy()))
         
@@ -84,7 +97,9 @@ def pcr(dloader, model):
     #np.save('precision_Rnn.npy',precision)
     #np.save('recall_Rnn.npy',recall)
 
-
+    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(predVals, labelVals)))
+    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, predVals)))
+    print("Those two should be different overall. Problem if they're the same (?)")
 
 def main():
     # Make sure we specify the metric to test and
