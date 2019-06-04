@@ -52,6 +52,7 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 import parameters
+import Metrics
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -496,6 +497,11 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 running_corrects = 0
                 running_samples = 0
 
+                running_trig_word_recall = 0.0
+                running_trig_word_precision = 0.0
+                running_trig_word_count = 0
+
+
                 for inputs, labels in dataloders[phase]:
                     # Cast the variables to the correct type
                     inputs = inputs.float()
@@ -526,6 +532,13 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     running_loss += loss.item()
                     running_corrects += num_correct(logits, labels)
                     running_samples += logits.shape[0]
+
+                    # Bad style sorry don't care its late
+                    output = nn.Sigmoid()(logits)
+                    output = np.where(output > 0.5, 1, 0)
+                    running_trig_word_recall += Metrics.trigger_word_accuracy(output, labels)
+                    running_trig_word_precision += Metrics.trigger_word_accuracy(labels, output)
+                    running_trig_word_count += 1
                 
                 if phase == 'train':
                     train_epoch_loss = running_loss / running_samples
@@ -533,16 +546,19 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 else:
                     valid_epoch_loss = running_loss / running_samples
                     valid_epoch_acc = float(running_corrects) / running_samples
+                    valid_epoch_trig_recall = running_trig_word_recall / running_trig_word_count
+                    valid_epoch_trig_prec = running_trig_word_precision / running_trig_word_count
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
                     best_model_wts = model.state_dict()
 
             print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
-                  'valid loss: {:.6f} acc: {:.4f} time: {:.4f}'.format(
+                  'valid loss: {:.6f} acc: {:.4f} trig recall: {:.4f} trig precision: {:.4f} time: {:.4f}'.format(
                     epoch, num_epochs - 1,
                     train_epoch_loss, train_epoch_acc, 
-                    valid_epoch_loss, valid_epoch_acc, (time.time()-since)/60))
+                    valid_epoch_loss, valid_epoch_acc, 
+                    valid_epoch_trig_recall, valid_epoch_trig_prec, (time.time()-since)/60))
 
             ## Write important metrics to tensorboard
             writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
