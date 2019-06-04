@@ -92,6 +92,16 @@ class ElephantDataset(data.Dataset):
         elif preprocess == "ChunkNorm":
             for i in range(self.features.shape[0]):
                 self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
+        elif preprocess == "Background":
+            if scale:
+                mean_noise = -72.42010269488962
+                std_noise = 9.492270157248566 
+                #med = -49.22886851608499
+            else:
+                mean_noise = -72.42010269488962
+                std_noise = 9.492270157248566 
+                #med = -49.22886851608499
+            self.features = (self.features - mean_noise) / std_noise
 
     def __len__(self):
         return self.features.shape[0]
