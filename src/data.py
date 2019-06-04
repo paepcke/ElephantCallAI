@@ -67,6 +67,8 @@ class ElephantDataset(data.Dataset):
         self.features = np.load(feature_path) # Shape - (num_train, time, freqs)
         self.labels = np.load(label_path) # Shape - (num_train, time)
 
+        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+
         # Potentially include other transforms
         self.transforms = transform
 
