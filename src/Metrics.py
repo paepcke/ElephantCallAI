@@ -97,8 +97,8 @@ def pcr(dloader, model):
     #np.save('precision_Rnn.npy',precision)
     #np.save('recall_Rnn.npy',recall)
 
-    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(predVals, labelVals)))
-    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, predVals)))
+    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(binary_preds, labelVals)))
+    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, binary_preds)))
     print("Those two should be different overall. Problem if they're the same (?)")
 
 def main():
