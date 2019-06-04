@@ -96,21 +96,26 @@ class ElephantDataset(data.Dataset):
         elif preprocess == "ChunkNorm":
             for i in range(self.features.shape[0]):
                 self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
-        elif preprocess == "Background":
+        elif preprocess == "BackgroundS":
             # Load in the pre-calculated mean,std,etc.
             if not scale:
                 mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
                 std_noise = np.load(Noise_Stats_Directory + "std.npy")
-                #mean_noise = -72.11595372930367
-                #std_noise = 10.974271921644418
-                #med = -42.92290263901995
             else:
                 mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
                 std_noise = np.load(Noise_Stats_Directory + "std_log.npy")
-                #mean_noise = 9.932566648900661e-06
-                #std_noise = 0.00025099596398420274 
-                #med = 5.101639142110309e-05
+
             self.features = (self.features - mean_noise) / std_noise
+        elif preprocess == "BackgroundM":
+            # Load in the pre-calculated mean,std,etc.
+            if not scale:
+                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+                median_noise = np.load(Noise_Stats_Directory + "median.npy")
+            else:
+                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+                median_noise = np.load(Noise_Stats_Directory + "median_log.npy")
+                
+            self.features = (self.features - mean_noise) / median_noise
         elif preprocess == "FeatureNorm":
             self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
 
