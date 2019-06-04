@@ -88,6 +88,8 @@ def get_model(idx):
         return Model13(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 14:
         return Model14(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 15:
+        return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -613,6 +615,50 @@ class Model14(nn.Module):
         out = self.linear3(lstm_out)
         out = self.linear4(out)
         logits = self.hiddenToClass(out)
+        return logits
+
+"""
+Now with a conv1d flavor
+"""
+class Model15(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model15, self).__init__()
+
+        self.input_size = input_size
+        self.hidden_size = 128
+        self.num_filters = 128
+        self.kernel_size = 5
+        self.num_layers = 1
+        self.padding = 2
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+
+        # I think that we want input size to be 1
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.convLayer1 = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
+        self.linear1 = nn.Linear(77, 1)
+        self.convLayer2 = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
+        self.linear2 = nn.Linear(128, 1)
+        self.lstm = nn.LSTM(128, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
+        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+
+        # Reshape the input before passing to the 1d
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
+        reshaped_inputs = inputs.view(-1, 1, self.input_size)
+        convFeatures = self.convLayer1(reshaped_inputs)
+        out = self.linear1(convFeatures)
+        out = out.permute(0, 2, 1)
+        out = self.convLayer2(out)
+        out = self.linear2(out)
+        convFeatures = out.view(inputs.shape[0], inputs.shape[1], -1)
+        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
+        logits = self.hiddenToClass(lstm_out)
         return logits
 
 
