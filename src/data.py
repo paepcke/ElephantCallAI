@@ -19,8 +19,8 @@ def get_loader(data_dir,
                scale=False,
                augment=False,
                shuffle=True,
-               num_workers=4,
-               pin_memory=False):
+               num_workers=1,
+               pin_memory=True):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -48,7 +48,7 @@ def get_loader(data_dir,
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
 
     return data_loader
 
