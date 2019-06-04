@@ -53,7 +53,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 import parameters
 
-np.random.seed(RANDOM_SEED)
+np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def get_model(idx):
