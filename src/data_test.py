@@ -8,14 +8,14 @@ import aifc
 
 #print(torch.backends.mkl.is_available())
 
-data, sample_rate = torchaudio.load("./data/whale_calls/data/train/train9.aiff")
+data, sample_rate = torchaudio.load("../data/whale_calls/data/train/train9.aiff")
 print (sample_rate)
 #data, sample_rate, enc = aiffread("./whale-detection-challenge/data/train/train1.aiff")
 fft_data = torch.rfft(data, 1)
 
 print (fft_data.shape)
 
-filename = "./whale-detection-challenge/data/train/train893.aiff"
+filename = "../whale-detection-challenge/data/train/train893.aiff"
 
 s = aifc.open(filename)
 
