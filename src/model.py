@@ -31,7 +31,6 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch.autograd import Variable
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import precision_recall_curve
@@ -42,17 +41,9 @@ from tensorboardX import SummaryWriter
 import sys
 import copy
 
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-import matplotlib.cm
-import matplotlib
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import matplotlib.ticker as plticker
-import matplotlib.patches as patches
-from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
-
 import parameters
 #import Metrics
+from visualization import visualize
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -861,19 +852,7 @@ def main():
                 output = torch.sigmoid(outputs[i]).detach().numpy()
                 label = labels[i].detach().numpy()
 
-                fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-                # new_features = np.flipud(10*np.log10(features).T)
-                new_features = np.flipud(features.T)
-                min_dbfs = new_features.flatten().mean()
-                max_dbfs = new_features.flatten().mean()
-                min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-                max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
-                ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
-                ax2.plot(np.arange(output.shape[0]), output)
-                ax2.set_ylim([0,1])
-                ax2.axhline(y=0.5, color='r', linestyle='-')
-                ax3.plot(np.arange(label.shape[0]), label)
-                plt.show()
+                visualize(features, output, label)
 
     else:
         ## Training
