@@ -3,6 +3,7 @@ Methods for visualizing numpy arrays of the spectograms, outputs, and labels
 
 Can run as a standalone function to visualize individual wav files. TODO!!!
 """
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -50,5 +51,5 @@ def main():
 	# TODO: access the files and visualize the array
 
 
-if name == '__main__':
+if __name__ == '__main__':
 	main()
