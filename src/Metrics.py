@@ -24,7 +24,7 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
-from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10
+from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
@@ -164,11 +164,29 @@ def trigger_word_accuracy(output, truth):
     return num_triggered / num_calls
 
 def visual_time_series(spectrum, predicts, labels):
+    # Do the timeseries with the most calls
+    most_index = 0
+    number_most = 0
+    for i in range(20):
+        num_calls = 0
+        inCall = False
+        for j in range(spectrum.shape[1]):
+            if not inCall and labels[i, j] == 1:
+                inCall = True
+                num_calls += 1
+            if labels[i, j] == 0:
+                inCall = False
+
+        if num_calls > number_most:
+            most_index = i
+            number_most = num_calls
+
+    print (number_most)
     # Just visualize one time series
-    spect = spectrum[0].detach().numpy()
-    label = labels[0].detach().numpy()
-   
-    predict = torch.sigmoid(predicts[1]).detach().numpy()
+    spect = spectrum[most_index].detach().numpy()
+    label = labels[most_index].detach().numpy()
+    predict = torch.sigmoid(predicts[most_index]).detach().numpy()
+
     # get num chunks
     num_chunks = int(spect.shape[0] / 64)
     for j in range(num_chunks):
@@ -186,12 +204,22 @@ def visual_time_series(spectrum, predicts, labels):
         max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
         ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
         ax2.plot(np.arange(pred.shape[0]), pred)
+        # Plot the threshold
+        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
         ax2.set_ylim([0,1])
         ax3.plot(np.arange(lab.shape[0]), lab)
         ax3.set_ylim([0, 1])
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()
+        #x,y,dx,dy = geom.getRect()
+        #mngr.window.Position((400, 500))
+        mngr.window.wm_geometry("+400+250")
+        #plt.draw()
+        #plt.pause(0.001)
+        #plt.clf()
         plt.show()
 
-def pcr(dloader, model):
+def pcr(dloader, model, visualize=False):
     """
         Generate Precision Recall Plot as well as print the F1 score for 
         each binary class
@@ -209,7 +237,8 @@ def pcr(dloader, model):
         # Forward pass
         outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
         # Try to visualize
-        visual_time_series(inputs, outputs, labels)
+        if visualize:
+            visual_time_series(inputs, outputs, labels)
         # Compress to 
         # Shape - (batch_size * seq_length)
         # Compute the sigmoid over our outputs
@@ -271,8 +300,8 @@ def main():
     elif run_type == "identify":
         call_identification(validation_loader, model)
     elif run_type == "Full_Test":
-        full_data_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Full_test/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-        pcr(full_data_loader, model)
+        full_data_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Full_test/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+        pcr(full_data_loader, model, False)
     else:
         print ("Enter options: (prc, identify)")
 
