@@ -615,6 +615,75 @@ class Model14(nn.Module):
         logits = self.hiddenToClass(out)
         return logits
 
+"""
+Try new convolutional model (not based on 1D convolutions)
+"""
+class Model15(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model15, self).__init__()
+
+        self.input_size = input_size
+
+        self.pool_sizes = [5, 2, 2]
+        self.filter_size = [(5, 5), (5, 5), (5, 5)]
+        self.num_filters = [128, 128, 128]
+
+        self.hidden_size = 128
+        self.output_size = output_size
+
+        # Make the conv layers
+        cnn_layers = []
+        in_channels = 1
+        for i in range(len(self.pool_sizes)):
+            # We should set the padding later as another hyper param!
+            conv2d = nn.Conv2D(in_channels, self.num_filters[i], kernel_size=self.filter_size[i], padding=2)
+            # Gotta figure out the shapes here so skip the batch norm for now
+            #layers += [conv2d, nn.BatchNorm1d(self.)]
+            #layers +=  [conv2d, nn.ReLU(inplace=True)]
+
+            # Now we need to do the max pooling!
+
+            in_channels = self.num_filters[i]
+
+
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.linear = nn.Linear(self.input_size, self.lin_size)
+        self.linear2 = nn.Linear(self.lin_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
+        self.linear3 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
+        self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
+
+
+    def make_layers(cfg, batch_norm=False):
+        layers = []
+        in_channels = 1 # The input spectogram is always 
+        for v in cfg:
+            if v == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+                if batch_norm:
+                    layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                else:
+                    layers += [conv2d, nn.ReLU(inplace=True)]
+                in_channels = v
+        return nn.Sequential(*layers)
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
+        out = self.linear(batch_norm_inputs)
+        out = self.linear2(out)
+        lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+        out = self.linear3(lstm_out)
+        out = self.linear4(out)
+        logits = self.hiddenToClas
+
 
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
@@ -761,6 +830,8 @@ def main():
                 max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
                 ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
                 ax2.plot(np.arange(output.shape[0]), output)
+                ax2.set_ylim([0,1])
+                ax2.axhline(y=0.5, color='r', linestyle='-')
                 ax3.plot(np.arange(label.shape[0]), label)
                 plt.show()
 

@@ -68,6 +68,10 @@ class ElephantDataset(data.Dataset):
         # TODO: Do some things depending on how data looks
         self.features = np.load(feature_path) # Shape - (num_train, time, freqs)
         self.labels = np.load(label_path) # Shape - (num_train, time)
+        # Uncomment to only get a 2 test examples.
+        # Used for comparing normalization schemes.
+        #self.features = self.features[31 : 33] # 31 - 33
+        #self.labels = self.labels[31: 33]
 
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
 
@@ -114,7 +118,7 @@ class ElephantDataset(data.Dataset):
             else:
                 mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
                 median_noise = np.load(Noise_Stats_Directory + "median_log.npy")
-                
+
             self.features = (self.features - mean_noise) / median_noise
         elif preprocess == "FeatureNorm":
             self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))

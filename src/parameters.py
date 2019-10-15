@@ -1,5 +1,5 @@
-#DATASET = 'Call'
-DATASET = 'Activate'
+DATASET = 'Call'
+#DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
 NORM = "Norm"
