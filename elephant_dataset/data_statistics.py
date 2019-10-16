@@ -61,7 +61,8 @@ def get_call_stats(label_file_path):
         # so far, we have an overlap
         if start_time <= last_call_ending:
             num_overlap += 1
-            last_call_ending = max(end_time, last_call_ending)
+        
+        last_call_ending = max(end_time, last_call_ending)
 
         min_call_length = min(call_length, min_call_length)
         max_call_length = max(call_length, max_call_length)
