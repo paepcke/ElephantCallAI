@@ -8,7 +8,7 @@ import time
 import multiprocessing
 from scipy.io import wavfile
 
-dataDir = './New_Data/Truth_Logs/'
+dataDir = '../elephant_dataset/New_Data/Truth_Logs/'
 
 def get_call_stats(label_file_path):
     '''
