@@ -17,11 +17,11 @@ np.random.seed(seed)
 dataDir = '../elephant_dataset/New_Data/Truth_Logs/' # Dir containing .wav and corresponding label files
 outputDir = '../elephant_dataset/Processed_data_new/' # Dir that will contain all of the output data
 
-numFFT = 3208 
+numFFT = 4096 # was 3208 # We want a frequency resolution of 1.95 Hz
 hop_length = 641
-FREQ_MAX = 150.
+FREQ_MAX = 100.
 
-CHUNK_LENGTH = 20 # Will make this a parameter to pass in!
+CHUNK_LENGTH = 21 # Will make this a parameter to pass in! - Use power of two frames
 VERBOSE = True
 num_empty = 48
 
@@ -106,7 +106,7 @@ def generate_empty_chunks(raw_audio, label_file, spectrogram_info):
         # Extract the spectogram
         [spectrum, freqs, t] = ml.specgram(raw_audio[chunk_start: chunk_end], 
                     NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
-
+        
         # Cutout the high frequencies that are not of interest
         spectrum = spectrum[(freqs <= max_freq)]
         print (spectrum.shape)
@@ -264,8 +264,8 @@ if __name__ == '__main__':
                 label_file = data_pair[1]
                 data_id = data_pair[2]
 
-                empty = generate_empty_chunks(currentDir + '/' + audio_file, 
-                                                currentDir + '/' + label_file, spectrogram_info)
+                #empty = generate_empty_chunks(currentDir + '/' + audio_file, 
+                                                #currentDir + '/' + label_file, spectrogram_info)
                 feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
                                                 currentDir + '/' + label_file, spectrogram_info)
                 return feature_set, label_set

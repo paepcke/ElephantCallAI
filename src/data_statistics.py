@@ -41,6 +41,8 @@ def get_call_stats(label_file_path):
     max_call_length = 0
     lowest_boxed_freq = float("inf")
     highest_boxed_freq = 0
+    num_above_100 = 0
+    num_complete_above_100 = 0 # How many calls are completely above 100
 
     # Tracks the call with the
     # latest ending time seen so far
@@ -69,12 +71,20 @@ def get_call_stats(label_file_path):
         lowest_boxed_freq = min(low_freq, lowest_boxed_freq)
         highest_boxed_freq = max(high_freq, highest_boxed_freq)
 
+        if (high_freq > 100):
+            num_above_100 += 1
+
+        if (low_freq > 100):
+            num_complete_above_100 += 1
+
     stats = {'num_calls': num_calls,
              'num_overlap': num_overlap,
              'min_call_length': min_call_length,
              'max_call_length': max_call_length,
              'lowest_boxed_freq': lowest_boxed_freq,
-             'highest_boxed_freq': highest_boxed_freq}
+             'highest_boxed_freq': highest_boxed_freq,
+             'num_above_100': num_above_100, 
+             'num_complete_above_100': num_complete_above_100}
 
     return stats
 
@@ -91,7 +101,9 @@ def main():
              'min_call_length': float("inf"),
              'max_call_length': 0,
              'lowest_boxed_freq': float("inf"),
-             'highest_boxed_freq': 0}
+             'highest_boxed_freq': 0,
+             'num_above_100': 0, 
+             'num_complete_above_100': 0}
     # Iterate through all files with in data directories
     for dirName in allDirs:
         #Iterate through each dir and get files within
@@ -110,6 +122,8 @@ def main():
                     stats['max_call_length'] = max(temp_stats['max_call_length'], stats['max_call_length'])
                     stats['lowest_boxed_freq'] = min(temp_stats['lowest_boxed_freq'], stats['lowest_boxed_freq'])
                     stats['highest_boxed_freq'] = max(temp_stats['highest_boxed_freq'], stats['highest_boxed_freq'])
+                    stats['num_above_100'] += temp_stats['num_above_100']
+                    stats['num_complete_above_100'] += temp_stats['num_complete_above_100']
                 
     for item in stats.items():
         print (item[0], ':', item[1])
