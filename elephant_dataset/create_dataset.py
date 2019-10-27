@@ -46,12 +46,12 @@ TEST_SIZE = 0.2
 # Creation of the spectogram this equates to 25.5 second windows
 # Definitely should do some padding then on both sides and do a random crop
 # so the call is not always centered! 
-FRAME_LENGTH = 64
+FRAME_LENGTH = 256
 
 # Define whether we label the call itself
 # or label when the call ends. If True labels
 # when the call ends
-USE_POST_CALL_LABEL = True
+USE_POST_CALL_LABEL = False
 # Number of time steps to add the 1
 ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
@@ -275,7 +275,7 @@ split_index = math.floor(len(datafiles) * (1 - TEST_SIZE))
 train_data_files = datafiles[:split_index]
 test_data_files = datafiles[split_index:]
 
-EXTRACT_TEST_AUDIO = True
+EXTRACT_TEST_AUDIO = False
 if EXTRACT_TEST_AUDIO:
     # We want to save the entire audio files 
     # for test time!
