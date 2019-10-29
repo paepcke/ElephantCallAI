@@ -25,6 +25,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
 from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11
+from process_rawdata_new import generate_labels
+from visualization import visualize
+from scipy.io import wavfile
+import math
+from matplotlib import mlab as ml
+
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
@@ -282,9 +288,137 @@ def pcr(dloader, model, visualize=False):
     print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, binary_preds)))
     print("Those two should be different overall. Problem if they're the same (?)")
 
+
+
+def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
+    """
+        Generate the prediction sequence for a full audio sequence
+        that may be very long (such as a 24 hours day). Because of
+        the audio size it is inefficient to generate
+        and store the entire spectrogram at once. Therefore, we 
+        pass in chunks of the spectrogram at a time. Since the real
+        time model does not use temporal convolutions, we can essentially
+        feed in each spectrogram slice indepentently while not re-setting the
+        hidden state. Here we will do a psuedo real time version where
+        we given chunks of a certain size rather than one spectrogram slice at a time.
+    """
+    prediction = np.zeros(1)
+    
+    NFFT = spectrogram_info['NFFT']
+    samplerate = spectrogram_info['samplerate']
+    hop = spectrogram_info['hop']
+    max_freq = spectrogram_info['max_freq']
+    chunk_size = int(spectrogram_info['window'] * spectrogram_info['hop'] + spectrogram_info['NFFT']) - 1
+
+    start_idx = 0 # Index within the 1d audio
+    inital_hidden = None
+    while start_idx < raw_audio.shape[0]:
+        # Extract the spectrogram chunk
+        chunk_end = start_idx + chunk_size
+        [spectrum, freqs, t] = ml.specgram(raw_audio[start_idx: chunk_end], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
+
+        spectrum = spectrum[(freqs <= max_freq)]
+
+        # If the start index = 0 
+        # zero out the hidden state of the model
+        # DO HERE ****
+        if (start_idx == 0):
+            print("zero out initial hidden state")
+        else:
+            # Use the hidden state from the end of the
+            # last chunk (i.e. when we call forward in the LSTM
+            # block we need to save the value of the returned final
+            # hidden state
+            # In the forward function we should define the
+            # ability to pass in a starting hidden state
+            print ("run model on chunk with old hidden state")
+            print ("save the last hidden state for next time")
+
+        start_idx += chunk_size
+
+
+def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
+    """
+        Generate the prediction sequence for a full audio sequence
+        using a sliding window. Slide the window by one spectrogram frame
+        and pass each window through the given model. Compute the average
+        over overlapping window predictions to get the final prediction.
+    """
+    # Get the number of frames in the full audio clip
+    #raw_audio = raw_audio[:324596]
+    len_audio = math.floor((raw_audio.shape[0] - spectrogram_info['NFFT']) / spectrogram_info['hop'] + 1)
+    print (len_audio)
+    prediction = np.zeros(len_audio)
+    # Keep a count of how many terms to average buy
+    # for each index
+    overlap_counts = np.zeros(len_audio)
+
+    NFFT = spectrogram_info['NFFT']
+    samplerate = spectrogram_info['samplerate']
+    hop = spectrogram_info['hop']
+    max_freq = spectrogram_info['max_freq']
+    window = spectrogram_info['window'] # In spectrogram frames
+    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] # In raw audio frames
+
+    # Create the first chunk
+    spectrum, freqs, _ = ml.specgram(raw_audio[0: chunk_size], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
+    spectrum = spectrum[(freqs <= max_freq)]
+
+    # For the sliding window we slide the window by one spectrogram
+    # frame, determined by the hop size.
+    raw_audio_idx = chunk_size - NFFT # The beginning of the last fft window computed
+    spect_idx = 0 # The frame idx of the beginning of the current window
+    while  True:
+        # Make predictions on the current chunk ??? Check what the expected input shape
+        # is!
+        #visualize(spectrum, labels=np.arange(spect_idx, spect_idx + window))
+        #temp_predictions = model(spectrum.T)
+        # Look at shape!! Probably need to compress dimension / squeeze
+
+        #predictions[spect_idx: window] += temp_predictions
+        overlap_counts[spect_idx: spect_idx + window] += 1
+
+        # Try generating the next slice
+        raw_audio_idx += hop
+        spect_idx += 1
+        if raw_audio_idx + NFFT >= raw_audio.shape[0]:
+            break
+
+        # For end of the file pad with zeros if necessary!
+        #if (raw_audio.shape[0] - raw_audio_idx < window):
+            #print ('here')
+            #raw_audio = np.concatenate((raw_audio, np.zeros(window - (raw_audio.shape[0] - raw_audio_idx + 1))))
+        # Generate a single spectrogram slice
+        new_slice, freqs, _ = ml.specgram(raw_audio[raw_audio_idx: min(raw_audio_idx + NFFT, raw_audio.shape[0])], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
+        new_slice = new_slice[(freqs <= max_freq)]
+        # Check this shape, should be 1 dim in the time axis
+
+        # Add the new time slice
+        spectrum = np.concatenate((spectrum, new_slice), axis = 1)
+        # Get rid of old slice
+        spectrum = spectrum[:, 1:]
+
+    print (spect_idx - 1)
+    print (len_audio)
+
+
+
+
 def main():
     # Make sure we specify the metric to test and
     # the model to test on!
+    samplerate, raw_audio = wavfile.read("../elephant_dataset/New_Data/Truth_Logs/nn_201801_jan/nn10b_20180604_000000.wav")
+    spectrogram_info = {'NFFT': 4096,
+                        'hop': 641,
+                        'max_freq': 100,
+                        'window': 256, 
+                        'samplerate': samplerate}
+
+    predict_full_audio_sliding_window(raw_audio, None, spectrogram_info)
+    '''
     assert(len(sys.argv) > 2)
 
     run_type = sys.argv[1]
@@ -304,6 +438,7 @@ def main():
         pcr(full_data_loader, model, False)
     else:
         print ("Enter options: (prc, identify)")
+    '''
 
 
 if __name__ == '__main__':

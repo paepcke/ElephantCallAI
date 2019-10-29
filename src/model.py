@@ -765,6 +765,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                     # Forward pass
                     logits = model(inputs) # Shape - (batch_size, seq_len, 1)
+                    # Are we zeroing out the hidden state in the model??
 
                     # Flatten it for criterion and num_correct
                     logits = logits.view(-1, 1)

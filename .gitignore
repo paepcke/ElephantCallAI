@@ -8,6 +8,7 @@ elephant_dataset/Test_full/
 elephant_dataset/Data/*
 elephant_dataset/New_Data/*
 elephant_dataset/Processed_data/*
+elephant_dataset/Processed_data_new/*
 elephant_dataset/Features_Labels/*
 elephant_dataset/Test/*
 elephant_dataset/Train/*
