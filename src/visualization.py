@@ -1,7 +1,7 @@
 """
 Methods for visualizing numpy arrays of the spectograms, outputs, and labels
 
-Can run as a standalone function to visualize individual wav files. TODO!!!
+Can run as a standalone function to visualize individual wav files.
 """
 import argparse
 import matplotlib.pyplot as plt
@@ -15,9 +15,9 @@ import math
 parser = argparse.ArgumentParser()
 parser.add_argument('wav', help='name of wav file to visualize') # may not want the -
 parser.add_argument('labelWav', help='The label file for the corresponding wav')
-parser.add_argument('-NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
-parser.add_argument('-hop', type=int, default=641, help='Hop size used for creating spectrograms')
-parser.add_argument('-window', type=int, default=10, help='Deterimes the window size in seconds of the resulting spectrogram')
+parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
+parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
+parser.add_argument('--window', type=int, default=10, help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
 def visualize(features, outputs=None, labels=None):
@@ -108,7 +108,15 @@ def visualize_wav(wav, labels, spectrogram_info):
         visualize(spectrum, labels=temp_labels)
 
 def generate_labels(labels, spectrogram_info, len_wav, samplerate):
-
+    '''
+        Given ground truth label file 'label' create the full 
+        segmentation labeling for a .wav file. Namely, return
+        a vector containing a 0/1 labeling for each time slice
+        corresponding to the .wav file transformed into a spectrogram.
+        The key challenge here is that we want the labeling to match
+        up with the corresponding spectrogram without actually creating
+        the spectrogram 
+    '''
     labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
     len_labels = math.ceil((len_wav - spectrogram_info['NFFT']) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
@@ -125,9 +133,7 @@ def generate_labels(labels, spectrogram_info, len_wav, samplerate):
         # slice. This math transforms .wav indeces to spectrogram
         # indices
         start_spec = max(math.ceil((start_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), 0)
-        #end_spec = start_spec + math.ceil((call_length * samplerate - (spectrogram_info['NFFT']))/ spectrogram_info['hop'])
         end_spec = min(math.ceil((end_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), labelMatrix.shape[0])
-        #print ("Believed Start:", start_spec, "Test end:", end_spec)
         labelMatrix[start_spec : end_spec] = 1
 
     return labelMatrix
