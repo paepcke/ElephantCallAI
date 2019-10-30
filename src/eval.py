@@ -290,6 +290,52 @@ def pcr(dloader, model, visualize=False):
 
 
 
+##############################################################################
+### Full Time series evaluation assuming we have access to the spectrogram ###
+##############################################################################
+
+def predict_spec_full(spectrogram, model, threshold=0.5):
+    """
+        Generate the frame level predictions for a full spectrogram.
+        Here we assume that the model does not use convolutions across
+        the time dimension and thus can be simply run over the entire
+        audio sequence with lstm model. 
+
+        Return:
+        Output segmentation where we use threshold to convert
+        the models output to 0/1 predictions 
+
+        Note: Even a convolutional model could be run over the entire
+        sequence, if the convolutions are only used to create feature
+        representations of the spectrogram before running an LSTM model
+        over these representations; however, for this case, because we
+        cannot run "on the edge" or "real-time" (i.e. one spectrogram
+        frame at a time) we likely want to do a sliding window model
+    """
+    # By default the spectrogram has the time axis second
+    spectrogram = spectrogram.T
+    spectrogram = spectrogram.float()
+
+    spectrogram = Variable(spectrogram.to(device))
+
+    outputs = model(spectrogram) # Shape - (batch_size, seq_len, 1)
+    compressed_out = outputs.view(-1, 1)
+    compressed_out = outputs.squeeze()
+
+    sig = nn.Sigmoid()
+    predictions = sig(compressed_out)
+    # Generate the binary predictions
+    binary_preds = predictions > threshold
+    # Cast to proper type!
+    binary_preds = binary_preds.float()
+
+    return binary_preds
+
+
+
+
+
+
 def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
     """
         Generate the prediction sequence for a full audio sequence

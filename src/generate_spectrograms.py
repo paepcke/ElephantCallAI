@@ -63,7 +63,7 @@ def generate_labels(labels, spectrogram_info, len_labels):
     return labelMatrix
 
 
-def generate_whole_spectogram(audio_file, spectrogram_info, chunk_size=1000):
+def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000):
     """
         For a given complete audio file generate the corresponding
         spectrogram in chunks. Namley, generate 1000 window block
@@ -86,6 +86,8 @@ def generate_whole_spectogram(audio_file, spectrogram_info, chunk_size=1000):
     start_chunk = 0
     i = 0
     while start_chunk + len_chunk < raw_audio.shape[0]:
+        if (i % 10 == 0):
+            print (str(i) + ": " + id)
         [spectrum, freqs, t] = ml.specgram(raw_audio[start_chunk: start_chunk + len_chunk], 
                 NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
         # Cutout the high frequencies that are not of interest
@@ -166,7 +168,7 @@ if __name__ == '__main__':
                 label_file = data_pair[1]
                 data_id = data_pair[2]
 
-                spectrogram = generate_whole_spectogram(currentDir + '/' + audio_file, spectrogram_info)
+                spectrogram = generate_whole_spectogram(currentDir + '/' + audio_file, spectrogram_info, data_id)
                 print (spectrogram.shape)
                 labels = generate_labels(currentDir + '/' + label_file, spectrogram_info, spectrogram.shape[1])
                 
