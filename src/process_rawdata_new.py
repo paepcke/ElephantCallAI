@@ -15,11 +15,14 @@ parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_D
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
      help='The output directory')
-parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms')
+parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
 parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
     help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s
 parser.add_argument('--max_f', dest='max_freq', type=int, default=100, help='Deterimes the maximum frequency band')
+parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
+    help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
+
 
 np.random.seed(8)
 VERBOSE = False
@@ -35,7 +38,8 @@ def generate_labels(labels, spectrogram_info, len_wav):
         the spectrogram 
     '''
     labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
-    len_labels = math.ceil((len_wav - spectrogram_info['NFFT']) / spectrogram_info['hop'])
+    # Formula is: frames = floor((wav - overlap) / hop)
+    len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram['hop'])) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
 
     samplerate = spectrogram_info['samplerate']
@@ -66,21 +70,32 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
     # i.e. all start indeces such that the window (start, start + window_sz)
     # does not contain an elephant call
     valid_starts = []
-    # Step backwards and keep track of the last
-    # elephant call seen
-    last_elephant = 245  # For now is the size of the window
+    window_size = spectrogram_info['window']
+    # Step backwards and keep track of how far away the
+    # last elephant call was
+    last_elephant = 0  # For now is the size of the window
     for i in range(label_vec.shape[0] - 1, -1, -1):
         last_elephant += 1
+
+        # Check if we encounter an elephant call
+        if (label_vec[i] == 1):
+            last_elephant = 0
+
         # If we haven't seen an elephant call
         # for a chunk size than record this index
-        if (last_elephant >= 245):
+        if (last_elephant >= window_size):
             valid_starts.append(i)
-            last_elephant = 0
 
     # Generate num_empty uniformally random 
     # empty chunks
     empty_features = []
     empty_labels = []
+    NFFT = spectrogram_info['NFFT']
+    samplerate = spectrogram_info['samplerate']
+    hop = spectrogram_info['hop']
+    max_freq = spectrogram_info['max_freq']
+    pad_to = spectrogram_info['pad_to']
+
     for i in range(n):
         # Generate a valid empty start chunk
         # index by randomly sampling from our
@@ -89,24 +104,23 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
 
         # Now we have to do a litle back conversion to get 
         # the raw audio index in raw audio frames
-        chunk_start = int(start * spectrogram_info['hop'] + spectrogram_info['NFFT'] / 2.)
+        # Number of hops in we are marks the first raw audio frame to use
+        chunk_start = start * spectrogram_info['hop']
         chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
         chunk_end = int(chunk_start + chunk_size)
 
         # Get the spectrogram chunk
-        NFFT = spectrogram_info['NFFT']
-        samplerate = spectrogram_info['samplerate']
-        hop = spectrogram_info['hop']
-        max_freq = spectrogram_info['max_freq']
         # Extract the spectogram
         [spectrum, freqs, t] = ml.specgram(raw_audio[chunk_start: chunk_end], 
-                    NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
+                    NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
         
         # Cutout the high frequencies that are not of interest
         spectrum = spectrum[(freqs <= max_freq)]
         assert(spectrum.shape[1] == spectrogram_info['window'])
 
         data_labels = label_vec[start : start + spectrum.shape[1]]
+        # Make sure that no call exists in the chunk
+        assert(np.sum(data_labels) == 0)
 
         if VERBOSE:
             visualize(spectrum, labels=data_labels)
@@ -133,16 +147,17 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     end_frame = int(math.ceil(end_time * spectrogram_info['samplerate']))
     # Convert from window size in spectrogram frames to raw audio size
     # Note we use the -1 term to force the correct number of frames
-    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] #- 1 
+    # wav = frames * hop - hop + window ==> wav = frames * hop + overlap
+    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
 
     # Padding to call
     call_length = end_frame - start_frame # In .wav frames
-    # Figure out how much to go before and after in seconds. 
     padding_length = chunk_size - call_length
     # if padding_frame is neg skip call
     # but still want to go to the next!!
     if padding_length < 0:
         print ("skipping too long of call") # Maybe don't need this let us se
+        return None, None
     
     # Randomly split the pad to before and after
     pad_front = np.random.randint(0, padding_length + 1)
@@ -164,16 +179,21 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
         chunk_start = sound_file.shape[0] - chunk_size
 
     assert(chunk_end - chunk_start == chunk_size)
+    # Make sure the call is fully in the region
     assert(chunk_start <= start_frame and chunk_end >= end_frame)
 
     NFFT = spectrogram_info['NFFT']
     samplerate = spectrogram_info['samplerate']
     hop = spectrogram_info['hop']
     max_freq = spectrogram_info['max_freq']
+    pad_to = spectrogram_info['pad_to']
     # Extract the spectogram
     [spectrum, freqs, t] = ml.specgram(raw_audio[chunk_start: chunk_end], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
+
+    # Check our math
     assert(spectrum.shape[1] == spectrogram_info['window'])
+    
     # Cutout the high frequencies that are not of interest
     spectrum = spectrum[(freqs <= max_freq)]
     # Get the corresponding labels
@@ -218,53 +238,15 @@ def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
 
     return feature_set, label_set
 
-def generate_whole_spectogram(audio_file, outputDir, spectrogram_info):
-    samplerate, raw_audio = wavfile.read(audio_file)
-    NFFT = spectrogram_info['NFFT']
-    hop = spectrogram_info['hop']
-    max_freq = spectrogram_info['max_freq']
-
-    # Generate the spectogram in chunks
-    # Should be full lengthed spectrograms
-    # i.e. should be able to divide the audio
-    # into complete windows 
-    len_chunk = 999 * hop + NFFT
-    print (raw_audio.shape[0])
-    #quit()
-    #num_chunks = math.ceil(raw_audio.shape[0] / len_chunk)
-
-    final_spec = None
-    start_chunk = 0
-    i = 0
-    while start_chunk + len_chunk < raw_audio.shape[0]:
-        print (i)
-        [spectrum, freqs, t] = ml.specgram(raw_audio[start_chunk: start_chunk + len_chunk], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
-        print (spectrum.shape)
-        # Cutout the high frequencies that are not of interest
-        spectrum = spectrum[(freqs <= max_freq)]
-
-        if i == 0:
-            final_spec = spectrum
-        else:
-            final_spec = np.concatenate((final_spec, spectrum), axis=1)
-
-        # Remember that we want to start as if we are doing one continuous sliding window
-        i += 1
-        start_chunk += len_chunk - NFFT + hop 
-
-    # Do one final chunk?
-    [spectrum, freqs, t] = ml.specgram(raw_audio[start_chunk: start_chunk + len_chunk], 
-            NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
-    print (spectrum.shape)
-    # Cutout the high frequencies that are not of interest
-    spectrum = spectrum[(freqs <= max_freq)]
-    final_spec = np.concatenate((final_spec, spectrum), axis=1)
-
-    np.save(outputDir + '/spec.npy', final_spec)
-
 
 def extract_data_chunks(audio_file, label_file, spectrogram_info):
+    """
+        Extract an equal number of empty and elephant call
+        data chunks from a raw audio file. Each data chunk
+        is of a fixed size, and for data chunks with an 
+        elephant call we make a chunk around a given reference
+        call and then randomly place that call within the fram
+    """
     samplerate, raw_audio = wavfile.read(audio_file)
     labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
     # Generate the spectrogram index labelings
@@ -286,7 +268,8 @@ if __name__ == '__main__':
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
                         'max_freq': args.max_freq,
-                        'window': args.window}
+                        'window': args.window, 
+                        'pad_to': args.pad_to}
     # Iterate through all data directories
     allDirs = [];
     # Get the directories that contain the data files
@@ -329,10 +312,8 @@ if __name__ == '__main__':
                 label_file = data_pair[1]
                 data_id = data_pair[2]
 
-                generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
-                quit()
-                #empty = generate_empty_chunks(currentDir + '/' + audio_file, 
-                                                #currentDir + '/' + label_file, spectrogram_info)
+                #generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
+                #quit()
                 feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
                                                 currentDir + '/' + label_file, spectrogram_info)
                 return feature_set, label_set
