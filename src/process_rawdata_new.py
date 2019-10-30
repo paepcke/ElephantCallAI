@@ -39,7 +39,7 @@ def generate_labels(labels, spectrogram_info, len_wav):
     '''
     labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
     # Formula is: frames = floor((wav - overlap) / hop)
-    len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram['hop'])) / spectrogram_info['hop'])
+    len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram_info['hop'])) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
 
     samplerate = spectrogram_info['samplerate']
