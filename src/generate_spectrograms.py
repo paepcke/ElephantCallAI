@@ -15,6 +15,11 @@ parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_D
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
      help='The output directory')
+# For use on quatro
+#parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
+#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+#parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
+     #help='The output directory')
 parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms') 
 parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
