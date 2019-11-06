@@ -15,6 +15,11 @@ from random import shuffle
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+
+# For use on quatro
+#parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
+#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
      help='The output directory')
 parser.add_argument('--train_dir', default='../elephant_dataset/Train_New', 
