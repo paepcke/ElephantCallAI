@@ -9,12 +9,18 @@ from scipy.io import wavfile
 from visualization import visualize
 import math
 import argparse
+from random import shuffle 
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
      help='The output directory')
+parser.add_argument('--train_dir', default='../elephant_dataset/Train_New', 
+     help='Directory for the training chunks for the new data')
+parser.add_argument('--test_dir', default='../elephant_dataset/Test_New',
+     help='Directory for the test chunks for the new data')
 parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
 parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
@@ -22,6 +28,7 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=100, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
+parser.add_argument('--test_size', type=float, default=0.1, help='Determines the relative size of the test set')
 
 
 np.random.seed(8)
@@ -125,6 +132,8 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         if VERBOSE:
             visualize(spectrum, labels=data_labels)
 
+        # We want spectrograms to be time x freq
+        spectrum = spectrum.T
         empty_features.append(spectrum)
         empty_labels.append(data_labels)
 
@@ -207,7 +216,8 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     if VERBOSE:
         visualize(spectrum, labels=data_labels)
 
-    # Note we want axis 0 to be sound and axis 1 to be freq???
+    # We want spectrograms to be time x freq
+    spectrum = spectrum.T
     return spectrum, data_labels
 
 def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
@@ -265,11 +275,140 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dataDir = args.dataDir
     outputDir = args.outputDir
+    test_size = args.test_size
+    train_dir = args.train_dir
+    test_dir = args.test_dir
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
                         'max_freq': args.max_freq,
                         'window': args.window, 
                         'pad_to': args.pad_to}
+
+
+    # Create Train / Test split
+    # Really should also include Val set, but
+    # we will worry about this later
+    # Collect the wav/txt file pairs that
+    # we will then split
+    # Iterate through all data directories
+    allDirs = [];
+    # Get the directories that contain the data files
+    for (dirpath, dirnames, filenames) in os.walk(dataDir):
+        allDirs.extend(dirnames);
+        break
+
+    # Iterate through all files with in data directories
+    for dirName in allDirs:
+        #Iterate through each dir and get files within
+        currentDir = dataDir + '/' + dirName;
+        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
+            # Iterate through the files to create data/label 
+            # pairs (i.e. (.wav, .txt))
+            data_pairs = {}
+            for eachFile in filenames:
+                # Strip off the location and time tags
+                tags = eachFile.split('_')
+                data_id = tags[0] + '_' + tags[1]
+                file_type = eachFile.split('.')[1]
+
+                if (file_type not in ['wav', 'txt']):
+                    continue
+
+                # Insert the file name into the dictionary
+                # with the file type tag for a given id
+                if not data_id in data_pairs:
+                    data_pairs[data_id] = {}
+
+                data_pairs[data_id][file_type] = eachFile
+                data_pairs[data_id]['id'] = data_id
+
+    # data_pairs now contains all of the wav/txt data file pairs.
+    # Let us create a list of these pairs to randomly split into
+    # train/test or train/val/test or whatever we want
+
+    file_pairs = [(pair['wav'], pair['txt'], pair['id']) for _, pair in data_pairs.items()]
+    # Shuffle the files before train test split
+    shuffle(file_pairs)
+
+    # Some inherant issues even with this!
+    split_index = math.ceil(len(file_pairs) * (1 - test_size))
+    train_data_files = file_pairs[:split_index]
+    test_data_files = file_pairs[split_index:]
+
+    train_feature_set = []
+    train_label_set = []
+    print ("Making Train Set")
+    print ("Size: ", len(train_data_files))
+
+    def wrapper_processData(data_pair):
+        audio_file = data_pair[0]
+        label_file = data_pair[1]
+        data_id = data_pair[2]
+
+        #generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
+        #quit()
+        feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
+                                        currentDir + '/' + label_file, spectrogram_info)
+        return feature_set, label_set
+
+    if not VERBOSE:
+        pool = multiprocessing.Pool()
+        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+        start_time = time.time()
+        output = pool.map(wrapper_processData, file_pairs)
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+        pool.close()
+        for feature, label in output:
+            train_feature_set.extend(feature)
+            train_label_set.extend(label)
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+    else:
+        for pair in file_pairs:
+            feature, label = wrapper_processData(pair)
+            train_feature_set.extend(feature)
+            train_label_set.extend(label)
+    
+    X_train = np.stack(train_feature_set)
+    y_train = np.stack(train_label_set)
+
+    test_feature_set = []
+    test_label_set = []
+
+    if not VERBOSE:
+        pool = multiprocessing.Pool()
+        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+        start_time = time.time()
+        output = pool.map(wrapper_processData, test_data_files)
+        pool.close()
+        for feature, label in output:
+            test_feature_set.extend(feature)
+            test_label_set.extend(label)
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+    else:
+        for file in test_data_files:
+            feature_set, label_set = wrapper_processData(file)
+            test_feature_set.extend(feature_set)
+            test_label_set.extend(label_set)
+
+    X_test = np.stack(test_feature_set)
+    y_test = np.stack(test_label_set)
+
+    print (X_train.shape, X_test.shape)
+    print (y_train.shape, y_test.shape)
+
+    if not os.path.isdir(train_dir):
+        os.mkdir(train_dir)
+
+    if not os.path.isdir(test_dir):
+        os.mkdir(test_dir)
+
+    np.save(train_dir + '/features.npy', X_train)
+    np.save(train_dir + '/labels.npy', y_train)
+    np.save(test_dir + '/features.npy', X_test)
+    np.save(test_dir + '/labels.npy', y_test)
+
+
+    '''
     # Iterate through all data directories
     allDirs = [];
     # Get the directories that contain the data files
@@ -349,5 +488,6 @@ if __name__ == '__main__':
     for i in range(X_train.shape[0]):
         np.save(outputDir + '/features_{}'.format(i+1), X_train[i])
         np.save(outputDir + '/labels_{}'.format(i+1), y_train[i])
+    '''
 
 
