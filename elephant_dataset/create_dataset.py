@@ -57,7 +57,7 @@ ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = True
+VERBOSE = False
 
 
 def makeChunk(start_index,feat_mat,label_mat):
