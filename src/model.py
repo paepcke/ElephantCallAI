@@ -84,7 +84,7 @@ def get_model(idx):
     elif idx == 15:
         return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 16:
-        return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -635,7 +635,7 @@ class Model15(nn.Module):
         in_channels = 1
         for i in range(len(self.pool_sizes)):
             # We should set the padding later as another hyper param!
-            conv2d = nn.Conv2D(in_channels, self.num_filters[i], kernel_size=self.filter_size[i], padding=2)
+            conv2d = nn.Conv2d(in_channels, self.num_filters[i], kernel_size=self.filter_size[i], padding=2)
             # Gotta figure out the shapes here so skip the batch norm for now
             #layers += [conv2d, nn.BatchNorm1d(self.)]
             #layers +=  [conv2d, nn.ReLU(inplace=True)]
@@ -689,21 +689,22 @@ Go bigger with lstm
 """
 class Model16(nn.Module):
     def __init__(self, input_size, output_size):
-        super(Model14, self).__init__()
+        super(Model16, self).__init__()
 
         self.input_size = input_size
         self.lin_size = 64
         self.hidden_size = 128
+        self.num_layers = 2 # lstm
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.cell_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.linear = nn.Linear(self.input_size, self.lin_size)
         self.linear2 = nn.Linear(self.lin_size, self.hidden_size)
-        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, num_layers=2, batch_first=True, bidirectional=True)
-        self.linear3 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
+        self.linear3 = nn.Linear(self.hidden_size * 2, self.hidden_size)
         self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
