@@ -293,6 +293,7 @@ if __name__ == '__main__':
                         'pad_to': args.pad_to,
                         'neg_fact': args.neg_fact}
 
+    print(args)
 
     # Create Train / Test split
     # Really should also include Val set, but
