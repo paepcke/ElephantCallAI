@@ -901,7 +901,7 @@ def main():
         model_wts = None
         try:
             model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
-        except KeyboardInterrupt:
+
             if model_wts:
                 model.load_state_dict(model_wts)
                 save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
