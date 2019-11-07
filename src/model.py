@@ -41,6 +41,7 @@ from tensorboardX import SummaryWriter
 import sklearn
 import sys
 import copy
+import os
 
 import parameters
 #import Metrics
@@ -904,6 +905,8 @@ def main():
             if model_wts:
                 model.load_state_dict(model_wts)
                 save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
+                if not os.path.exists(parameters.MODEL_SAVE_PATH):
+                    os.makedirs(parameters.MODEL_SAVE_PATH)
                 torch.save(model, save_path)
                 print('Saved best val acc model to path {}'.format(save_path))
             else:
