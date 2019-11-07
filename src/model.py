@@ -38,6 +38,7 @@ from data import get_loader
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
+import sklearn
 import sys
 import copy
 
@@ -600,10 +601,12 @@ class Model14(nn.Module):
         # input shape - (batch, seq_len, input_size)
         batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
         out = self.linear(batch_norm_inputs)
+        out = nn.ReLU()(out)
         out = self.linear2(out)
         lstm_out, _ = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
                                          self.cell_state.repeat(1, inputs.shape[0], 1)])
         out = self.linear3(lstm_out)
+        out = nn.ReLU()(out)
         out = self.linear4(out)
         logits = self.hiddenToClass(out)
         return logits
@@ -727,6 +730,19 @@ def num_correct(logits, labels, threshold=0.5):
 
     return num_correct
 
+
+def get_f_score(logits, labels, threshold=0.5):
+    sig = nn.Sigmoid()
+    with torch.no_grad():
+        pred = sig(logits)
+        binary_preds = pred > threshold
+        # Cast to proper type!
+        binary_preds = binary_preds.float()
+        f_score = sklearn.metrics.f1_score(labels, binary_preds)
+
+    return f_score
+
+
 def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs):
     since = time.time()
 
@@ -747,6 +763,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 running_loss = 0.0
                 running_corrects = 0
                 running_samples = 0
+                running_fscore = 0.0
+                iterations = 0
 
                 running_trig_word_recall = 0.0
                 running_trig_word_precision = 0.0
@@ -784,6 +802,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     running_loss += loss.item()
                     running_corrects += num_correct(logits, labels)
                     running_samples += logits.shape[0]
+                    running_fscore += get_f_score(logits, labels)
+                    iterations += 1
 
                     # Bad style sorry don't care its late
                     # output = nn.Sigmoid()(logits)
@@ -793,11 +813,12 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     # running_trig_word_count += 1
                 
                 if phase == 'train':
-                    train_epoch_loss = running_loss / running_samples
+                    train_epoch_loss = running_loss / iterations
                     train_epoch_acc = float(running_corrects) / running_samples
                 else:
-                    valid_epoch_loss = running_loss / running_samples
+                    valid_epoch_loss = running_loss / iterations
                     valid_epoch_acc = float(running_corrects) / running_samples
+                    valid_epoch_fscore = running_fscore / iterations
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
                     
@@ -805,12 +826,12 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     best_valid_acc = valid_epoch_acc
                     best_model_wts = model.state_dict()
 
-            print('Epoch [{}/{}] train loss: {:.6f} acc: {:.4f} ' 
-                  'valid loss: {:.6f} acc: {:.4f} trig recall: {:.4f} trig precision: {:.4f} time: {:.4f}'.format(
+            print('Epoch [{}/{}] Training loss: {:.6f} acc: {:.4f} ' 
+                  'Validation loss: {:.6f} acc: {:.4f} f-score: {:.4f} trig recall: {:.4f} trig precision: {:.4f} time: {:.4f}'.format(
                     epoch, num_epochs - 1,
                     train_epoch_loss, train_epoch_acc, 
                     valid_epoch_loss, valid_epoch_acc, 
-                    valid_epoch_trig_recall, valid_epoch_trig_prec, (time.time()-since)/60))
+                    valid_epoch_fscore, valid_epoch_trig_recall, valid_epoch_trig_prec, (time.time()-since)/60))
 
             ## Write important metrics to tensorboard
             writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
@@ -820,14 +841,17 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
             scheduler.step()
-    finally:
-        print('Best val Acc: {:4f}'.format(best_valid_acc))
-        return best_model_wts
+
+    except KeyboardInterrupt:
+        print("Early stopping due to keyboard intervention")
+
+    print('Best val Acc: {:4f}'.format(best_valid_acc))
+    return best_model_wts
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train_New/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("../elephant_dataset/Test_New/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
@@ -876,7 +900,7 @@ def main():
         model_wts = None
         try:
             model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
-        finally:
+        except KeyboardInterrupt:
             if model_wts:
                 model.load_state_dict(model_wts)
                 save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
