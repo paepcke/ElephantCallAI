@@ -29,11 +29,13 @@ parser.add_argument('--test_dir', default='../elephant_dataset/Test_New',
 parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
 parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
-    help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s
-parser.add_argument('--max_f', dest='max_freq', type=int, default=100, help='Deterimes the maximum frequency band')
+    help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s - should just check this! 
+parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 parser.add_argument('--test_size', type=float, default=0.1, help='Determines the relative size of the test set')
+parser.add_argument('--neg_fact', type=int, default=1, 
+    help="Determines number of negative samples to sample as neg_fact x (pos samples)")
 
 
 np.random.seed(8)
@@ -270,7 +272,8 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
 
     feature_set, label_set = generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info)
     # Generate an equal number of empty examples
-    empty_features, empty_labels = generate_empty_chunks(len(feature_set),raw_audio, label_vec, spectrogram_info)
+    empty_features, empty_labels = generate_empty_chunks(len(feature_set) * spectrogram_info['neg_fact'],
+            raw_audio, label_vec, spectrogram_info)
     feature_set.extend(empty_features)
     label_set.extend(empty_labels)
 
@@ -287,7 +290,8 @@ if __name__ == '__main__':
                         'hop': args.hop,
                         'max_freq': args.max_freq,
                         'window': args.window, 
-                        'pad_to': args.pad_to}
+                        'pad_to': args.pad_to,
+                        'neg_fact': args.neg_fact}
 
 
     # Create Train / Test split
@@ -378,6 +382,8 @@ if __name__ == '__main__':
 
     test_feature_set = []
     test_label_set = []
+    print ("Making Test Set")
+    print ("Size: ", len(test_data_files))
 
     if not VERBOSE:
         pool = multiprocessing.Pool()
@@ -400,6 +406,9 @@ if __name__ == '__main__':
 
     print (X_train.shape, X_test.shape)
     print (y_train.shape, y_test.shape)
+
+    train_dir += '/Neg_Samples_x' + str(arg.neg_fact)
+    test_dir += '/Neg_Samples_x' + str(arg.neg_fact)
 
     if not os.path.isdir(train_dir):
         os.mkdir(train_dir)
