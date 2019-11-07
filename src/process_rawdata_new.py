@@ -271,7 +271,7 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
     label_vec = generate_labels(label_file, spectrogram_info, raw_audio.shape[0])
 
     feature_set, label_set = generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info)
-    # Generate an equal number of empty examples
+
     empty_features, empty_labels = generate_empty_chunks(len(feature_set) * spectrogram_info['neg_fact'],
             raw_audio, label_vec, spectrogram_info)
     feature_set.extend(empty_features)
@@ -293,6 +293,7 @@ if __name__ == '__main__':
                         'pad_to': args.pad_to,
                         'neg_fact': args.neg_fact}
 
+    print(args)
 
     # Create Train / Test split
     # Really should also include Val set, but
