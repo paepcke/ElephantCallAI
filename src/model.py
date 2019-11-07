@@ -898,18 +898,18 @@ def main():
 
         start_time = time.time()
         model_wts = None
-        try:
-            model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
 
-            if model_wts:
-                model.load_state_dict(model_wts)
-                save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
-                if not os.path.exists(parameters.MODEL_SAVE_PATH):
-                    os.makedirs(parameters.MODEL_SAVE_PATH)
-                torch.save(model, save_path)
-                print('Saved best val acc model to path {}'.format(save_path))
-            else:
-                print('For some reason I don\'t have a model to save')
+        model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
+
+        if model_wts:
+            model.load_state_dict(model_wts)
+            save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
+            if not os.path.exists(parameters.MODEL_SAVE_PATH):
+                os.makedirs(parameters.MODEL_SAVE_PATH)
+            torch.save(model, save_path)
+            print('Saved best val acc model to path {}'.format(save_path))
+        else:
+            print('For some reason I don\'t have a model to save')
 
         print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
 
