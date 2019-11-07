@@ -738,7 +738,7 @@ def get_f_score(logits, labels, threshold=0.5):
         binary_preds = pred > threshold
         # Cast to proper type!
         binary_preds = binary_preds.float()
-        f_score = sklearn.metrics.f1_score(labels, binary_preds)
+        f_score = sklearn.metrics.f1_score(labels.data.cpu().numpy(), binary_preds.data.cpu().numpy())
 
     return f_score
 
