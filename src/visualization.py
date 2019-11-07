@@ -33,8 +33,7 @@ def visualize(features, outputs=None, labels=None):
     fig, (ax1, ax2, ax3) = plt.subplots(3,1)
     # new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
-
-    new_features = 10*np.log10(features)
+    new_features = features.T
     min_dbfs = new_features.flatten().mean()
     max_dbfs = new_features.flatten().mean()
     min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
@@ -105,7 +104,8 @@ def visualize_wav(wav, labels, spectrogram_info):
         end_spec = start_spec + spectrum.shape[1] #min(math.ceil((end_spec - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), labelMatrix.shape[0])
         temp_labels = labelMatrix[start_spec: end_spec]
         
-        visualize(spectrum, labels=temp_labels)
+        new_features = 10*np.log10(spectrum.T) # Probably wrong
+        visualize(new_features, labels=temp_labels)
 
 def generate_labels(labels, spectrogram_info, len_wav, samplerate):
     '''

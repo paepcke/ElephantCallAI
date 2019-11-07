@@ -59,6 +59,8 @@ USE_MFCC_FEATURES = False
 
 VERBOSE = False
 
+NEG_FACT = 3
+
 
 def makeChunk(start_index,feat_mat,label_mat):
     # 1. Determine length of call in number of indices
@@ -109,6 +111,56 @@ def makeChunk(start_index,feat_mat,label_mat):
     # Note make sure that we skip over the call and the activate labels
     return start_index + length_of_call + 1, return_features, return_labels
 
+def generate_empty_chunks(n, features, labels):
+    """
+        Generate n empty data chunks by uniformally sampling 
+        time sections with no elephant calls present
+    """
+    # Step through the labels vector and collect the indeces from
+    # which we can define a window with now elephant call
+    # i.e. all start indeces such that the window (start, start + window_sz)
+    # does not contain an elephant call
+    valid_starts = []
+    # Step backwards and keep track of how far away the
+    # last elephant call was
+    last_elephant = 0  # For now is the size of the window
+    for i in range(labels.shape[0] - 1, -1, -1):
+        last_elephant += 1
+
+        # Check if we encounter an elephant call
+        if (labels[i] == 1):
+            last_elephant = 0
+
+        # If we haven't seen an elephant call
+        # for a chunk size than record this index
+        if (last_elephant >= FRAME_LENGTH):
+            valid_starts.append(i)
+
+    # Generate num_empty uniformally random 
+    # empty chunks
+    empty_features = []
+    empty_labels = []
+
+    for i in range(n):
+        # Generate a valid empty start chunk
+        # index by randomly sampling from our
+        # ground truth labels
+        start = np.random.choice(valid_starts)
+
+        spectrum = features[start: start + FRAME_LENGTH, :]
+        data_labels = labels[start : start + FRAME_LENGTH]
+        # Make sure that no call exists in the chunk
+        assert(np.sum(data_labels) == 0)
+
+        if VERBOSE:
+            visualize(spectrum, labels=data_labels)
+
+        # We want spectrograms to be time x freq
+        empty_features.append(spectrum)
+        empty_labels.append(data_labels)
+
+    return empty_features, empty_labels
+
 
 def makeDataSet(featFile,labFile):
     # 1. Open both feature file and label file as np arrays
@@ -131,6 +183,12 @@ def makeDataSet(featFile,labFile):
                 feature_set.append(feature_chunk)
                 label_set.append(label_chunk)
             skip_to_index = True
+
+    # Add the negative samples
+    empty_features, empty_labels = generate_empty_chunks(len(feature_set) * NEG_FACT,
+            feature_file, label_file)
+    feature_set.extend(empty_features)
+    label_set.extend(empty_labels)
 
     return feature_set, label_set
 
