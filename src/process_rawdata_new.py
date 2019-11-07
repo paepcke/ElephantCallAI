@@ -365,7 +365,7 @@ if __name__ == '__main__':
         pool = multiprocessing.Pool()
         print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
         start_time = time.time()
-        output = pool.map(wrapper_processData, file_pairs)
+        output = pool.map(wrapper_processData, train_data_files)
         print('Multiprocessed took {}'.format(time.time()-start_time))
         pool.close()
         for feature, label in output:
