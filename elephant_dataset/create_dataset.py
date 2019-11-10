@@ -59,7 +59,7 @@ USE_MFCC_FEATURES = False
 
 VERBOSE = False
 
-NEG_FACT = 3
+NEG_FACT = 2
 
 
 def makeChunk(start_index,feat_mat,label_mat):
@@ -431,22 +431,32 @@ y_test = np.stack(test_label_set)
 print (X_train.shape, X_test.shape)
 print (y_train.shape, y_test.shape)
 
-label_type = '/Activate_Label' if not USE_MFCC_FEATURES else '/MFCC_Activate_Label'
+label_type = '/Activate_Label/' if not USE_MFCC_FEATURES else '/MFCC_Activate_Label/'
 if (not USE_POST_CALL_LABEL):
-    label_type = "/Call_Label" if not USE_MFCC_FEATURES else "/MFCC_Call_Label"
+    label_type = "/Call_Label/" if not USE_MFCC_FEATURES else "/MFCC_Call_Label/"
 
-np.save(train_directory + label_type + '/features.npy', X_train)
-np.save(train_directory + label_type + '/labels.npy', y_train)
-np.save(test_directory + label_type + '/features.npy', X_test)
-np.save(test_directory + label_type + '/labels.npy', y_test)
+neg_samples = '/Neg_Samples_x' + str(NEG_FACT) + '/'
+train_directory = train_directory + label_type + neg_samples
+test_directory = test_directory + label_type + neg_samples
+# This is where we should make the directories
+if not os.path.isdir(train_directory):
+    os.mkdir(train_directory)
+
+if not os.path.isdir(test_directory):
+    os.mkdir(test_directory)
+
+np.save(train_directory + 'features.npy', X_train)
+np.save(train_directory + 'labels.npy', y_train)
+np.save(test_directory + 'features.npy', X_test)
+np.save(test_directory + 'labels.npy', y_test)
 
 # Save the individual training files for visualization etc.
 for i in range(X_train.shape[0]):
-    np.save(train_directory + label_type + '/features_{}'.format(i+1), X_train[i])
-    np.save(train_directory + label_type + '/labels_{}'.format(i+1), y_train[i])
+    np.save(train_directory + 'features_{}'.format(i+1), X_train[i])
+    np.save(train_directory + 'labels_{}'.format(i+1), y_train[i])
 
 for i in range(X_test.shape[0]):
-    np.save(test_directory + label_type + '/features_{}'.format(i+1), X_test[i])
-    np.save(test_directory + label_type + '/labels_{}'.format(i+1), y_test[i])
+    np.save(test_directory  + 'features_{}'.format(i+1), X_test[i])
+    np.save(test_directory  + 'labels_{}'.format(i+1), y_test[i])
 
 
