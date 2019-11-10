@@ -373,7 +373,7 @@ if __name__ == '__main__':
             train_label_set.extend(label)
         print('Multiprocessed took {}'.format(time.time()-start_time))
     else:
-        for pair in file_pairs:
+        for pair in train_data_files:
             feature, label = wrapper_processData(pair)
             train_feature_set.extend(feature)
             train_label_set.extend(label)
