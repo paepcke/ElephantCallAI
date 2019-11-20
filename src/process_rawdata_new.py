@@ -397,6 +397,16 @@ if __name__ == '__main__':
     pool.close()
     print('Multiprocessed took {}'.format(time.time()-start_time))
 
+    # Also save which files were used for each of the datasets
+    with open(train_dir + '/files.txt') as f:
+        for file in train_data_files:
+            # write just the id of each file pair (wav/txt)
+            f.write(file[2])
+
+    with open(test_dir + 'files.txt') as f:
+        for file in test_data_files:
+            # write just the id of each file pair (wav/txt)
+            f.write(file[2])
 
     '''
     # Iterate through all data directories
