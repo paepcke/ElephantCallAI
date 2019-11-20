@@ -739,7 +739,7 @@ class Model17(nn.Module):
         self.model.fc = nn.Sequential(
            nn.Linear(512, 128),
            nn.ReLU(inplace=True),
-           nn.Linear(128, 64))
+           nn.Linear(128, 256))
 
 
     def forward(self, inputs):
