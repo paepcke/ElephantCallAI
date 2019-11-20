@@ -46,6 +46,10 @@ import os
 import parameters
 #import Metrics
 from visualization import visualize
+import torchvision.models as models
+from torchvision import transforms
+import matplotlib
+import matplotlib.pyplot as plt
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -85,6 +89,8 @@ def get_model(idx):
         return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 16:
         return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 17:
+        return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -722,44 +728,28 @@ class Model16(nn.Module):
         logits = self.hiddenToClass(out)
         return logits
 
-'''
-Old Model Stuff oopsies
-        self.hidden_size = 128
-        self.num_filters = 128
-        self.kernel_size = 5
-        self.num_layers = 1
-        self.padding = 2
-        self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+class Model17(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model17, self).__init__()
 
-        # I think that we want input size to be 1
-        self.batchnorm = nn.BatchNorm1d(self.input_size)
-        self.convLayer1 = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
-        self.linear1 = nn.Linear(77, 1)
-        self.convLayer2 = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
-        self.linear2 = nn.Linear(128, 1)
-        self.lstm = nn.LSTM(128, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
-        self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 64))
+
 
     def forward(self, inputs):
-        # input shape - (batch, seq_len, input_size)
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
 
-        # Reshape the input before passing to the 1d
-        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
-        reshaped_inputs = inputs.view(-1, 1, self.input_size)
-        convFeatures = self.convLayer1(reshaped_inputs)
-        out = self.linear1(convFeatures)
-        out = out.permute(0, 2, 1)
-        out = self.convLayer2(out)
-        out = self.linear2(out)
-        convFeatures = out.view(inputs.shape[0], inputs.shape[1], -1)
-        lstm_out, _ = self.lstm(convFeatures, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
-                                                 self.cell_state.repeat(1, inputs.shape[0], 1)])
-        logits = self.hiddenToClass(lstm_out)
-        return logits
-'''
+
+##### END OF MODELS
 
 
 def num_correct(logits, labels, threshold=0.5):
@@ -895,7 +885,6 @@ def main():
     ## Build Dataset
     train_loader = get_loader("../elephant_dataset/Train_New/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     validation_loader = get_loader("../elephant_dataset/Test_New/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
