@@ -460,3 +460,37 @@ for i in range(X_test.shape[0]):
     np.save(test_directory  + 'labels_{}'.format(i+1), y_test[i])
 
 
+"""
+# Some util code from downloading from box
+
+from boxsdk import OAuth2
+
+oauth = OAuth2(
+    client_id='zofisutrx5cnbwcap5kmpvoszfc7a26r',
+    client_secret='1nANURXFq4f8TrbNOQ9tsJwlXKYLZJLp',
+)
+
+auth_url, csrf_token = oauth.get_authorization_url('https://nikitademir.com')
+access_token, refresh_token = oauth.authenticate('mUuZ8FtTDpqKIPcfjBTj1Ie0ilhCimId')
+
+from boxsdk import LoggingClient
+client = LoggingClient(oauth)
+import os
+shared_folder = client.get_shared_item("https://cornell.box.com/s/lhymnsl28odm50u2qnx7xbrb5vfo733o")
+
+def download(folder, path):
+    # TODO: Make folder locally
+    path += folder.name + '/'
+    os.makedirs(path, exist_ok=True)
+    items = folder.get_items()
+    for item in items:
+        if item.type == 'folder':
+            download(item, path)
+        elif item.type == 'file':
+            output_file = open(path + item.name, 'wb')
+            client.file(file_id=item.id).download_to(output_file)
+
+download(shared_folder, "")
+"""
+
+

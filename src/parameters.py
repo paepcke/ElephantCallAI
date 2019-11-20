@@ -103,6 +103,18 @@ HYPERPARAMETERS = {
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
         },
+16: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
+17: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
 }
 
 RANDOM_SEED = 42

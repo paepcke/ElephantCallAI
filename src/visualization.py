@@ -182,7 +182,6 @@ def test_generate_labels(wav, labels, spectrogram_info):
     print (np.sum(test_label_1 - test_label_2))
 
 
-
 def main():
     args = parser.parse_args()
 
