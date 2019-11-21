@@ -57,7 +57,7 @@ ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = False
+VERBOSE = True
 
 NEG_FACT = 2
 
@@ -369,95 +369,66 @@ if EXTRACT_TEST_AUDIO:
     np.save(test_directory + label_type + '/labels.npy', test_spects_labels)
     quit()
 
-train_feature_set = []
-train_label_set = []
-print ("Making Train Set")
-print ("Size: ", len(train_data_files))
+
 # Make the training dataset
-def wrapper_makeDataSet(file):
+def wrapper_makeDataSet(directory, file):
     print(file)
     label_file = 'Label'+file[4:]
+
     if (ACTIVATE_TIME == 0):
         feature_set, label_set = makeDataSet(data_directory+file,data_directory+label_file)
     else:
         feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
-    return feature_set, label_set
 
-if not VERBOSE:
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    start_time = time.time()
-    output = pool.map(wrapper_makeDataSet, train_data_files)
-    pool.close()
-    for feature, label in output:
-        train_feature_set.extend(feature)
-        train_label_set.extend(label)
-    print('Multiprocessed took {}'.format(time.time()-start_time))
-else:
-    for file in train_data_files:
-        feature_set, label_set = wrapper_makeDataSet(file)
-        train_feature_set.extend(feature_set)
-        train_label_set.extend(label_set)
+    for i in range(len(feature_set)):
+        np.save(directory + '/' + file[:-4] + "_features_" + i, feature_set[i])
+        np.save(directory + '/' + file[:-4] + "_labels_" + i, label_set[i])
 
-print (train_data_files)
-X_train = np.stack(train_feature_set)
-y_train = np.stack(train_label_set)
 
-print ("Making Test Set")
-print ("Size: ", len(test_data_files))
-# Make the test dataset
-test_feature_set = []
-test_label_set = []
-
-if not VERBOSE:
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    start_time = time.time()
-    output = pool.map(wrapper_makeDataSet, test_data_files)
-    pool.close()
-    for feature, label in output:
-        test_feature_set.extend(feature)
-        test_label_set.extend(label)
-    print('Multiprocessed took {}'.format(time.time()-start_time))
-else:
-    for file in test_data_files:
-        feature_set, label_set = wrapper_makeDataSet(file)
-        test_feature_set.extend(feature_set)
-        test_label_set.extend(label_set)
-
-X_test = np.stack(test_feature_set)
-y_test = np.stack(test_label_set)
-
-print (X_train.shape, X_test.shape)
-print (y_train.shape, y_test.shape)
-
-label_type = '/Activate_Label/' if not USE_MFCC_FEATURES else '/MFCC_Activate_Label/'
-if (not USE_POST_CALL_LABEL):
-    label_type = "/Call_Label/" if not USE_MFCC_FEATURES else "/MFCC_Call_Label/"
-
-neg_samples = '/Neg_Samples_x' + str(NEG_FACT) + '/'
-train_directory = train_directory + label_type + neg_samples
-test_directory = test_directory + label_type + neg_samples
-# This is where we should make the directories
+# Generate Train Set
+train_directory += '/Neg_Samples_x' + str(NEG_FACT)
 if not os.path.isdir(train_directory):
     os.mkdir(train_directory)
 
+print ("Making Train Set")
+print ("Size: ", len(train_data_files))
+
+pool = multiprocessing.Pool()
+print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+start_time = time.time()
+pool.map(partial(wrapper_makeDataSet, train_directory), train_data_files)
+pool.close()
+print('Multiprocessed took {}'.format(time.time()-start_time))
+
+
+# Generate Test Set
+test_directory += '/Neg_Samples_x' + str(NEG_FACT)
 if not os.path.isdir(test_directory):
     os.mkdir(test_directory)
 
-np.save(train_directory + 'features.npy', X_train)
-np.save(train_directory + 'labels.npy', y_train)
-np.save(test_directory + 'features.npy', X_test)
-np.save(test_directory + 'labels.npy', y_test)
+print ("Making Test Set")
+print ("Size: ", len(test_data_files))
 
-# Save the individual training files for visualization etc.
-for i in range(X_train.shape[0]):
-    np.save(train_directory + 'features_{}'.format(i+1), X_train[i])
-    np.save(train_directory + 'labels_{}'.format(i+1), y_train[i])
+pool = multiprocessing.Pool()
+print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+start_time = time.time()
+pool.map(partial(wrapper_makeDataSet, test_directory), test_data_files)
+pool.close()
+print('Multiprocessed took {}'.format(time.time()-start_time))
 
-for i in range(X_test.shape[0]):
-    np.save(test_directory  + 'features_{}'.format(i+1), X_test[i])
-    np.save(test_directory  + 'labels_{}'.format(i+1), y_test[i])
+# label_type = '/Activate_Label/' if not USE_MFCC_FEATURES else '/MFCC_Activate_Label/'
+# if (not USE_POST_CALL_LABEL):
+#     label_type = "/Call_Label/" if not USE_MFCC_FEATURES else "/MFCC_Call_Label/"
+
+
+# # Save the individual training files for visualization etc.
+# for i in range(X_train.shape[0]):
+#     np.save(train_directory + 'features_{}'.format(i+1), X_train[i])
+#     np.save(train_directory + 'labels_{}'.format(i+1), y_train[i])
+
+# for i in range(X_test.shape[0]):
+#     np.save(test_directory  + 'features_{}'.format(i+1), X_test[i])
+#     np.save(test_directory  + 'labels_{}'.format(i+1), y_test[i])
 
 
 """

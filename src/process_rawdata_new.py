@@ -362,9 +362,7 @@ if __name__ == '__main__':
 
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + i, feature_set[i])
-            np.save(directory + '/' + data_id + "_labels_" + i, feature_set[i])
-
-        return feature_set, label_set
+            np.save(directory + '/' + data_id + "_labels_" + i, label_set[i])
 
 
     # Generate Train Set
