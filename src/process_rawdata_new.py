@@ -9,16 +9,17 @@ from scipy.io import wavfile
 from visualization import visualize
 import math
 import argparse
-from random import shuffle 
+from random import shuffle
+from functools import partial
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
-    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+# parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
+#     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
 # For use on quatro
-#parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
-#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
+   type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
      help='The output directory')
@@ -345,12 +346,11 @@ if __name__ == '__main__':
     train_data_files = file_pairs[:split_index]
     test_data_files = file_pairs[split_index:]
 
-    train_feature_set = []
-    train_label_set = []
-    print ("Making Train Set")
-    print ("Size: ", len(train_data_files))
 
-    def wrapper_processData(data_pair):
+    def wrapper_processData(directory, data_pair):
+        """
+        This worker function is called on every data sample
+        """
         audio_file = data_pair[0]
         label_file = data_pair[1]
         data_id = data_pair[2]
@@ -359,68 +359,45 @@ if __name__ == '__main__':
         #quit()
         feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
                                         currentDir + '/' + label_file, spectrogram_info)
+
+        for i in range(len(feature_set)):
+            np.save(directory + '/' + data_id + "_features_" + i, feature_set[i])
+            np.save(directory + '/' + data_id + "_labels_" + i, feature_set[i])
+
         return feature_set, label_set
 
-    if not VERBOSE:
-        pool = multiprocessing.Pool()
-        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-        start_time = time.time()
-        output = pool.map(wrapper_processData, train_data_files)
-        print('Multiprocessed took {}'.format(time.time()-start_time))
-        pool.close()
-        for feature, label in output:
-            train_feature_set.extend(feature)
-            train_label_set.extend(label)
-        print('Multiprocessed took {}'.format(time.time()-start_time))
-    else:
-        for pair in train_data_files:
-            feature, label = wrapper_processData(pair)
-            train_feature_set.extend(feature)
-            train_label_set.extend(label)
-    
-    X_train = np.stack(train_feature_set)
-    y_train = np.stack(train_label_set)
 
-    test_feature_set = []
-    test_label_set = []
-    print ("Making Test Set")
-    print ("Size: ", len(test_data_files))
-
-    if not VERBOSE:
-        pool = multiprocessing.Pool()
-        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-        start_time = time.time()
-        output = pool.map(wrapper_processData, test_data_files)
-        pool.close()
-        for feature, label in output:
-            test_feature_set.extend(feature)
-            test_label_set.extend(label)
-        print('Multiprocessed took {}'.format(time.time()-start_time))
-    else:
-        for file in test_data_files:
-            feature_set, label_set = wrapper_processData(file)
-            test_feature_set.extend(feature_set)
-            test_label_set.extend(label_set)
-
-    X_test = np.stack(test_feature_set)
-    y_test = np.stack(test_label_set)
-
-    print (X_train.shape, X_test.shape)
-    print (y_train.shape, y_test.shape)
+    # Generate Train Set
+    print ("Making Train Set")
+    print ("Size: ", len(train_data_files))
 
     train_dir += '/Neg_Samples_x' + str(arg.neg_fact)
-    test_dir += '/Neg_Samples_x' + str(arg.neg_fact)
-
     if not os.path.isdir(train_dir):
         os.mkdir(train_dir)
 
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    pool.map(partial(wrapper_processData, train_dir), train_data_files)
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+    pool.close()
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+    
+
+    # Generate Test Set
+    print ("Making Test Set")
+    print ("Size: ", len(test_data_files))
+
+    test_dir += '/Neg_Samples_x' + str(arg.neg_fact)
     if not os.path.isdir(test_dir):
         os.mkdir(test_dir)
 
-    np.save(train_dir + '/features.npy', X_train)
-    np.save(train_dir + '/labels.npy', y_train)
-    np.save(test_dir + '/features.npy', X_test)
-    np.save(test_dir + '/labels.npy', y_test)
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    pool.map(partial(wrapper_processData, test_dir), test_data_files)
+    pool.close()
+    print('Multiprocessed took {}'.format(time.time()-start_time))
 
 
     '''
