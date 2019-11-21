@@ -371,7 +371,7 @@ if __name__ == '__main__':
     print ("Making Train Set")
     print ("Size: ", len(train_data_files))
 
-    train_dir += '/Neg_Samples_x' + str(arg.neg_fact)
+    train_dir += '/Neg_Samples_x' + str(args.neg_fact)
     if not os.path.isdir(train_dir):
         os.mkdir(train_dir)
 
