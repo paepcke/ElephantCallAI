@@ -386,7 +386,7 @@ if __name__ == '__main__':
     print ("Making Test Set")
     print ("Size: ", len(test_data_files))
 
-    test_dir += '/Neg_Samples_x' + str(arg.neg_fact)
+    test_dir += '/Neg_Samples_x' + str(args.neg_fact)
     if not os.path.isdir(test_dir):
         os.mkdir(test_dir)
 
