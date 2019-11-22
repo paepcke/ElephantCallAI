@@ -23,6 +23,7 @@ from random import shuffle
 import math
 import multiprocessing
 import time
+from functools import partial
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -30,7 +31,6 @@ Spect_Data = './Processed_data/'
 full_call_directory = 'call/'
 activate_directory = 'activate/'
 
-output_directory = './Features_Labels'
 test_directory = './Test'
 train_directory = './Train'
 
