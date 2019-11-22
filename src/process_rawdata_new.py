@@ -361,8 +361,8 @@ if __name__ == '__main__':
                                         currentDir + '/' + label_file, spectrogram_info)
 
         for i in range(len(feature_set)):
-            np.save(directory + '/' + data_id + "_features_" + i, feature_set[i])
-            np.save(directory + '/' + data_id + "_labels_" + i, label_set[i])
+            np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
+            np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
 
 
     # Generate Train Set

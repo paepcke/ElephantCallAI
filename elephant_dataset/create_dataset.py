@@ -381,8 +381,8 @@ def wrapper_makeDataSet(directory, file):
         feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
 
     for i in range(len(feature_set)):
-        np.save(directory + '/' + file[:-4] + "_features_" + i, feature_set[i])
-        np.save(directory + '/' + file[:-4] + "_labels_" + i, label_set[i])
+        np.save(directory + '/' + file[:-4] + "_features_" + str(i), feature_set[i])
+        np.save(directory + '/' + file[:-4] + "_labels_" + str(i), label_set[i])
 
 
 # Generate Train Set
