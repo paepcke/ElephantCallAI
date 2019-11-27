@@ -96,12 +96,12 @@ class ElephantDataset(data.Dataset):
         label = np.load(self.labels[index])
 
         feature = self.apply_transforms(feature)
-        if self.transforms:
+        if self.user_transforms:
             feature = self.user_transforms(feature)
             
         # Honestly may be worth pre-process this
-        feature = torch.from_numpy(feature)
-        label = torch.from_numpy(label)
+        feature = torch.from_numpy(feature).float()
+        label = torch.from_numpy(label).float()
 
         return feature, label
 
@@ -113,7 +113,7 @@ class ElephantDataset(data.Dataset):
         if self.preprocess == "norm":
             data = (data - np.mean(data)) / np.std(data)
         elif self.preprocess == "globalnorm":
-            data = (data - 132.228) / 726.319 # Calculated these over the training dataset # Take mean over log
+            data = (data - 132.228) / 726.319 # Calculated these over the training dataset 
 
         return data
 
@@ -235,60 +235,5 @@ class ElephantDatasetFull(data.Dataset):
         #label = torch.from_numpy(label)
 
         return spectrogram, label, gt_call_path
-
-class WhaleDataset(data.Dataset):
-  # 'Characterizes a dataset for PyTorch'
-  def __init__(self, train_csv, train_dir, resize_shape=None):
-        # Initialization
-
-        csv = pd.read_csv(train_csv)
-
-        self.file_names = csv.iloc[:, 0]
-        self.labels = csv.iloc[:, 1]
-
-        self.train_dir = train_dir
-
-        self.resize_shape = resize_shape
-
-  def __len__(self):
-        # Denotes the total number of samples
-        return len(self.labels)
-
-  def __getitem__(self, index):
-        # 'Generates one sample of data'
-
-        # Select sample
-        filename = os.path.join(self.train_dir, self.file_names[index])
-
-        # Load data and get label
-        # Here we want to actually load the audio
-        # and perform the short time FT
-        file = aifc.open(filename)
-
-        nframes = file.getnframes()
-        strsig = file.readframes(nframes)
-
-        audio = np.frombuffer(strsig, np.short).byteswap()
-
-        # See documentation on what each of these actually means
-        freqs, times, Sx = signal.spectrogram(audio, fs=2000, window='hanning',
-                                      nperseg=256, noverlap=236,
-                                      detrend=False, scaling='spectrum')
-
-        # Right-whale calls only occur under 250Hz
-        Sx = Sx[freqs<250.] 
-
-        if self.resize_shape:
-            Sx = imresize(np.log10(Sx),(self.resize_shape[0],self.resize_shape[1]), interp= 'lanczos').astype('float32')
-        else:
-            # Want to take the log to decrease extremity of values
-            Sx = np.log10(Sx)
-
-        X = Sx / 255.# Here could convert to ints if we want
-        X = np.repeat(X[np.newaxis, :, :], 3, axis=0)
-        y = self.labels[index]
-
-        return X, y
-
 
 

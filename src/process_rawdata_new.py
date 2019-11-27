@@ -14,12 +14,12 @@ from functools import partial
 
 
 parser = argparse.ArgumentParser()
-# parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
-#     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs', 
+     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
 # For use on quatro
-parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
-   type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+#parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
+#   type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
      help='The output directory')
@@ -311,13 +311,14 @@ if __name__ == '__main__':
         break
 
     # Iterate through all files with in data directories
+    data_pairs = {}
     for dirName in allDirs:
         #Iterate through each dir and get files within
         currentDir = dataDir + '/' + dirName;
         for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
             # Iterate through the files to create data/label 
             # pairs (i.e. (.wav, .txt))
-            data_pairs = {}
+
             for eachFile in filenames:
                 # Strip off the location and time tags
                 tags = eachFile.split('_')
@@ -334,19 +335,24 @@ if __name__ == '__main__':
 
                 data_pairs[data_id][file_type] = eachFile
                 data_pairs[data_id]['id'] = data_id
+                data_pairs[data_id]['dir'] = currentDir
 
     # data_pairs now contains all of the wav/txt data file pairs.
     # Let us create a list of these pairs to randomly split into
     # train/test or train/val/test or whatever we want
-
-    file_pairs = [(pair['wav'], pair['txt'], pair['id']) for _, pair in data_pairs.items()]
+   
+    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items()]
     # Shuffle the files before train test split
     shuffle(file_pairs)
 
     # Some inherant issues even with this!
     split_index = math.ceil(len(file_pairs) * (1 - test_size))
-    train_data_files = file_pairs[:split_index]
-    test_data_files = file_pairs[split_index:]
+    #train_data_files = file_pairs[:split_index]
+    #test_data_files = file_pairs[split_index:]
+
+    ## JUST TO TEST RIGHT NOW
+    train_data_files = file_pairs[:1]
+    test_data_files = file_pairs[1:]
 
 
     def wrapper_processData(directory, data_pair):
@@ -356,11 +362,12 @@ if __name__ == '__main__':
         audio_file = data_pair[0]
         label_file = data_pair[1]
         data_id = data_pair[2]
+        curren_dir = data_pair[3]
 
         #generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
         #quit()
-        feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
-                                        currentDir + '/' + label_file, spectrogram_info)
+        feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
+                                        curren_dir + '/' + label_file, spectrogram_info)
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
