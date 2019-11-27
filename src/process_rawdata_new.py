@@ -361,8 +361,8 @@ if __name__ == '__main__':
                                         currentDir + '/' + label_file, spectrogram_info)
 
         for i in range(len(feature_set)):
-            np.save(directory + '/' + data_id + "_features_" + i, feature_set[i])
-            np.save(directory + '/' + data_id + "_labels_" + i, label_set[i])
+            np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
+            np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
 
 
     # Generate Train Set
@@ -386,7 +386,7 @@ if __name__ == '__main__':
     print ("Making Test Set")
     print ("Size: ", len(test_data_files))
 
-    test_dir += '/Neg_Samples_x' + str(arg.neg_fact)
+    test_dir += '/Neg_Samples_x' + str(args.neg_fact)
     if not os.path.isdir(test_dir):
         os.mkdir(test_dir)
 

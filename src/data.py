@@ -15,11 +15,11 @@ Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
 
 def get_loader(data_dir,
                batch_size,
-               norm="Scale",
+               norm="norm",
                scale=False,
                augment=False,
                shuffle=True,
-               num_workers=1,
+               num_workers=4,
                pin_memory=True):
     """
     Utility function for loading and returning train and valid
@@ -44,7 +44,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir + 'features.npy', data_dir + 'labels.npy', preprocess=norm, scale=scale)
+    dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -64,67 +64,28 @@ def get_loader(data_dir,
     - Preprocess = Scale range (-1, 1), Scale = True ===> Overfit but huge variance issue
 """
 class ElephantDataset(data.Dataset):
-    def __init__(self, feature_path, label_path, transform=None, preprocess="Norm", scale=False):
-        # TODO: Do some things depending on how data looks
-        self.features = np.load(feature_path) # Shape - (num_train, time, freqs)
-        self.labels = np.load(label_path) # Shape - (num_train, time)
-        # Uncomment to only get a 2 test examples.
-        # Used for comparing normalization schemes.
-        #self.features = self.features[31 : 33] # 31 - 33
-        #self.labels = self.labels[31: 33]
+    def __init__(self, data_path, transform=None, preprocess="norm", scale=False):
+        # Plan: Load in all feature and label names to create a list
+        self.data_path = data_path
+        self.user_transforms = transform
+        self.preprocess = preprocess
+        self.scale = scale
 
+        self.features = glob.glob(data_path + "*_features_*")
+        self.labels = []
+
+        for feature_path in self.features:
+            feature_parts = feature_path.split("_features_")
+            self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
+
+        assert len(self.features) == len(self.labels)
+
+        print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
 
-        # Potentially include other transforms
-        self.transforms = transform
-
-        if scale:
-            self.features = 10 * np.log10(self.features)
-
-        # Normalize Features
-        if preprocess == "Norm":
-            self.features = (self.features - np.mean(self.features)) / np.std(self.features)
-        elif preprocess == "Scale":
-            scaler = MinMaxScaler()
-            # Scale features for each training example
-            # to be within a certain range. Preserves the
-            # relative distribution of each feature. Here
-            # each feature is the different frequency band
-            for i in range(self.features.shape[0]):
-                self.features[i, :, :] = scaler.fit_transform(self.features[i,:,:].astype(np.float32))
-            #num_ex = self.features.shape[0]
-            #seq_len = self.features.shape[1]
-            #self.features = self.features.reshape(num_ex * seq_len, -1)
-            #self.features = scaler.fit_transform(self.features)
-            #self.features = self.features.reshape(num_ex, seq_len, -1)
-        elif preprocess == "ChunkNorm":
-            for i in range(self.features.shape[0]):
-                self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
-        elif preprocess == "BackgroundS":
-            # Load in the pre-calculated mean,std,etc.
-            if not scale:
-                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
-                std_noise = np.load(Noise_Stats_Directory + "std.npy")
-            else:
-                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
-                std_noise = np.load(Noise_Stats_Directory + "std_log.npy")
-
-            self.features = (self.features - mean_noise) / std_noise
-        elif preprocess == "BackgroundM":
-            # Load in the pre-calculated mean,std,etc.
-            if not scale:
-                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
-                median_noise = np.load(Noise_Stats_Directory + "median.npy")
-            else:
-                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
-                median_noise = np.load(Noise_Stats_Directory + "median_log.npy")
-
-            self.features = (self.features - mean_noise) / median_noise
-        elif preprocess == "FeatureNorm":
-            self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
 
     def __len__(self):
-        return self.features.shape[0]
+        return len(self.features)
 
     """
     Return a single element at provided index
@@ -133,14 +94,67 @@ class ElephantDataset(data.Dataset):
         data = self.features[index]
         label = self.labels[index]
 
+        data = self.apply_transforms(data)
         if self.transforms:
-            data = self.transforms(data)
+            data = self.user_transforms(data)
             
         # Honestly may be worth pre-process this
         data = torch.from_numpy(data)
         label = torch.from_numpy(label)
 
         return data, label
+
+
+    def apply_transforms(self, data):
+        if self.scale:
+            data = 10 * np.log10(data)
+
+        # Normalize Features
+        if self.preprocess == "norm":
+            data = (data - np.mean(data)) / np.std(data)
+        elif self.preprocess == "globalnorm":
+            data = (data - 132.228) / 726.319 # Calculated these over the training dataset
+
+        return data
+
+        # elif self.preprocess == "Scale":
+        #     scaler = MinMaxScaler()
+        #     # Scale features for each training example
+        #     # to be within a certain range. Preserves the
+        #     # relative distribution of each feature. Here
+        #     # each feature is the different frequency band
+        #     for i in range(self.features.shape[0]):
+        #         self.features[i, :, :] = scaler.fit_transform(self.features[i,:,:].astype(np.float32))
+        #     #num_ex = self.features.shape[0]
+        #     #seq_len = self.features.shape[1]
+        #     #self.features = self.features.reshape(num_ex * seq_len, -1)
+        #     #self.features = scaler.fit_transform(self.features)
+        #     #self.features = self.features.reshape(num_ex, seq_len, -1)
+        # elif self.preprocess == "ChunkNorm":
+        #     for i in range(self.features.shape[0]):
+        #         self.features[i, :, :] = (self.features[i, :, :] - np.mean(self.features[i, :, :])) / np.std(self.features[i, :, :])
+        # elif self.preprocess == "BackgroundS":
+        #     # Load in the pre-calculated mean,std,etc.
+        #     if not scale:
+        #         mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+        #         std_noise = np.load(Noise_Stats_Directory + "std.npy")
+        #     else:
+        #         mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+        #         std_noise = np.load(Noise_Stats_Directory + "std_log.npy")
+
+        #     self.features = (self.features - mean_noise) / std_noise
+        # elif self.preprocess == "BackgroundM":
+        #     # Load in the pre-calculated mean,std,etc.
+        #     if not scale:
+        #         mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+        #         median_noise = np.load(Noise_Stats_Directory + "median.npy")
+        #     else:
+        #         mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+        #         median_noise = np.load(Noise_Stats_Directory + "median_log.npy")
+
+        #     self.features = (self.features - mean_noise) / median_noise
+        # elif self.preprocess == "FeatureNorm":
+        #     self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
 
 class WhaleDataset(data.Dataset):
   # 'Characterizes a dataset for PyTorch'

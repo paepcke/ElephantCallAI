@@ -23,6 +23,7 @@ from random import shuffle
 import math
 import multiprocessing
 import time
+from functools import partial
 
 
 MFCC_Data = './Processed_data_MFCC/'
@@ -30,7 +31,6 @@ Spect_Data = './Processed_data/'
 full_call_directory = 'call/'
 activate_directory = 'activate/'
 
-output_directory = './Features_Labels'
 test_directory = './Test'
 train_directory = './Train'
 
@@ -57,7 +57,7 @@ ACTIVATE_TIME = 5 if USE_POST_CALL_LABEL else 0
 
 USE_MFCC_FEATURES = False
 
-VERBOSE = True
+VERBOSE = False
 
 NEG_FACT = 2
 
@@ -381,8 +381,8 @@ def wrapper_makeDataSet(directory, file):
         feature_set, label_set = makeDataSetActivate(data_directory + file, data_directory + label_file)
 
     for i in range(len(feature_set)):
-        np.save(directory + '/' + file[:-4] + "_features_" + i, feature_set[i])
-        np.save(directory + '/' + file[:-4] + "_labels_" + i, label_set[i])
+        np.save(directory + '/' + file[:-4] + "_features_" + str(i), feature_set[i])
+        np.save(directory + '/' + file[:-4] + "_labels_" + str(i), label_set[i])
 
 
 # Generate Train Set

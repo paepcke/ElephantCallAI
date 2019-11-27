@@ -2,7 +2,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-NORM = "Norm"
+NORM = "norm"
 SCALE = True
 
 HYPERPARAMETERS = {
