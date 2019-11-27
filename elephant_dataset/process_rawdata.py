@@ -83,7 +83,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
             # Change input times to be relative to file, by subtracting start hour
             # begin_time (s) - begin_hour * 3600 sec/hour
             relStartTime = float(row['begin_time']) - float(row['begin_hour'])*3600
-            relEndTime = float(row['end_time']) - float(row    ['begin_hour'])*3600
+            relEndTime = float(row['end_time']) - float(row ['begin_hour'])*3600
 
 
             # Mark the end of the call with a single 1 

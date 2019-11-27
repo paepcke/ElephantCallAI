@@ -27,8 +27,8 @@ parser.add_argument('--train_dir', default='../elephant_dataset/Train_New',
      help='Directory for the training chunks for the new data')
 parser.add_argument('--test_dir', default='../elephant_dataset/Test_New',
      help='Directory for the test chunks for the new data')
-parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms')
-parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
+parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') # was 3208!!
+parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms') # was 641!!
 parser.add_argument('--window', type=int, default=256, 
     help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s - should just check this! 
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
@@ -138,7 +138,8 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         assert(np.sum(data_labels) == 0)
 
         if VERBOSE:
-            visualize(spectrum, labels=data_labels)
+            new_features = 10*np.log10(spectrum)
+            visualize(new_features.T, labels=data_labels)
 
         # We want spectrograms to be time x freq
         spectrum = spectrum.T
@@ -222,7 +223,8 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     data_labels = truth_labels[start_spec: end_spec]
 
     if VERBOSE:
-        visualize(spectrum, labels=data_labels)
+        new_features = 10*np.log10(spectrum)
+        visualize(new_features.T, labels=data_labels)
 
     # We want spectrograms to be time x freq
     spectrum = spectrum.T
@@ -359,7 +361,6 @@ if __name__ == '__main__':
         #quit()
         feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
                                         currentDir + '/' + label_file, spectrogram_info)
-
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
@@ -395,99 +396,19 @@ if __name__ == '__main__':
     start_time = time.time()
     pool.map(partial(wrapper_processData, test_dir), test_data_files)
     pool.close()
-    print('Multiprocessed took {}'.format(time.time()-start_time))
+    print('Multiprocessed took {}'.format(time.time()-start_time))    
 
     # Also save which files were used for each of the datasets
-    with open(train_dir + '/files.txt') as f:
+    with open(train_dir + '/files.txt', 'w') as f:
         for file in train_data_files:
             # write just the id of each file pair (wav/txt)
             f.write(file[2])
-
-    with open(test_dir + 'files.txt') as f:
+    
+    with open(test_dir + '/files.txt', 'w') as f:
         for file in test_data_files:
             # write just the id of each file pair (wav/txt)
             f.write(file[2])
+    
 
-    '''
-    # Iterate through all data directories
-    allDirs = [];
-    # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir):
-        allDirs.extend(dirnames);
-        break
-
-    feature_set = []
-    label_set = []
-    # Iterate through all files with in data directories
-    for dirName in allDirs:
-        #Iterate through each dir and get files within
-        currentDir = dataDir + '/' + dirName;
-        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
-            # Iterate through the files to create data/label 
-            # pairs (i.e. (.wav, .txt))
-            data_pairs = {}
-            for eachFile in filenames:
-                # Strip off the location and time tags
-                tags = eachFile.split('_')
-                data_id = tags[0] + '_' + tags[1]
-                file_type = eachFile.split('.')[1]
-
-                if (file_type not in ['wav', 'txt']):
-                    continue
-
-                # Insert the file name into the dictionary
-                # with the file type tag for a given id
-                if not data_id in data_pairs:
-                    data_pairs[data_id] = {}
-
-                data_pairs[data_id][file_type] = eachFile
-                data_pairs[data_id]['id'] = data_id
-                
-            # Create a list of (wav_file, label_file, id) tuples to be processed
-            file_pairs = [(pair['wav'], pair['txt'], pair['id']) for _, pair in data_pairs.items()]
-            # For each .flac file call processData()
-            def wrapper_processData(data_pair):
-                audio_file = data_pair[0]
-                label_file = data_pair[1]
-                data_id = data_pair[2]
-
-                #generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
-                #quit()
-                feature_set, label_set = extract_data_chunks(currentDir + '/' + audio_file, 
-                                                currentDir + '/' + label_file, spectrogram_info)
-                return feature_set, label_set
-
-
-            if not VERBOSE:
-                pool = multiprocessing.Pool()
-                print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-                start_time = time.time()
-                output = pool.map(wrapper_processData, file_pairs)
-                print('Multiprocessed took {}'.format(time.time()-start_time))
-                pool.close()
-                for feature, label in output:
-                    feature_set.extend(feature)
-                    label_set.extend(label)
-                print('Multiprocessed took {}'.format(time.time()-start_time))
-            else:
-                for pair in file_pairs:
-                    feature, label = wrapper_processData(pair)
-                    feature_set.extend(feature)
-                    label_set.extend(label)
-                    
-
-    # Last thing is to do train/val/test splits
-    X_train = np.stack(feature_set)
-    y_train = np.stack(label_set)
-    print (X_train.shape)
-    print (y_train.shape)
-    np.save(outputDir + '/features.npy', X_train)
-    np.save(outputDir + '/labels.npy', y_train)
-
-    # Save the individual training files for visualization etc.
-    for i in range(X_train.shape[0]):
-        np.save(outputDir + '/features_{}'.format(i+1), X_train[i])
-        np.save(outputDir + '/labels_{}'.format(i+1), y_train[i])
-    '''
-
+    
 

@@ -20,6 +20,7 @@ elephant_dataset/eleph_dataset/call.npy
 elephant_dataset/eleph_dataset/empty.npy
 elephant_dataset/Train_New/*
 elephant_dataset/Test_New/*
+Predictions/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
