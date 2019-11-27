@@ -96,12 +96,12 @@ class ElephantDataset(data.Dataset):
         label = np.load(self.labels[index])
 
         feature = self.apply_transforms(feature)
-        if self.transforms:
+        if self.user_transforms:
             feature = self.user_transforms(feature)
             
         # Honestly may be worth pre-process this
-        feature = torch.from_numpy(feature)
-        label = torch.from_numpy(label)
+        feature = torch.from_numpy(feature).float()
+        label = torch.from_numpy(label).float()
 
         return feature, label
 

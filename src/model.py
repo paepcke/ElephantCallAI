@@ -739,7 +739,7 @@ class Model17(nn.Module):
         self.model.fc = nn.Sequential(
            nn.Linear(512, 128),
            nn.ReLU(inplace=True),
-           nn.Linear(128, 256))
+           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
 
     def forward(self, inputs):
