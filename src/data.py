@@ -10,6 +10,7 @@ import pandas as pd
 import os
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import glob
 
 Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
 
@@ -91,20 +92,18 @@ class ElephantDataset(data.Dataset):
     Return a single element at provided index
     """
     def __getitem__(self, index):
-        data = self.features[index]
-        label = self.labels[index]
+        feature = np.load(self.features[index])
+        label = np.load(self.labels[index])
 
-        # Load into numpy arrays here!
-
-        data = self.apply_transforms(data)
+        feature = self.apply_transforms(feature)
         if self.transforms:
-            data = self.user_transforms(data)
+            feature = self.user_transforms(feature)
             
         # Honestly may be worth pre-process this
-        data = torch.from_numpy(data)
+        feature = torch.from_numpy(feature)
         label = torch.from_numpy(label)
 
-        return data, label
+        return feature, label
 
     def apply_transforms(self, data):
         if self.scale:
