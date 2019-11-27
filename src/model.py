@@ -883,8 +883,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train_New/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test_New/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 
