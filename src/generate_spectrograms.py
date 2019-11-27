@@ -25,7 +25,7 @@ parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for
 parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
     help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s
-parser.add_argument('--max_f', dest='max_freq', type=int, default=100, help='Deterimes the maximum frequency band')
+parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 
@@ -87,7 +87,7 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
     i = 0
     while start_chunk + len_chunk < raw_audio.shape[0]:
         if (i % 10 == 0):
-            print (str(i) + ": " + id)
+            print ("Chunk number " + str(i) + ": " + id)
         [spectrum, freqs, t] = ml.specgram(raw_audio[start_chunk: start_chunk + len_chunk], 
                 NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
         # Cutout the high frequencies that are not of interest
@@ -111,6 +111,22 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
 
     return final_spec
 
+def copy_csv_file(file_path, out_path):
+    '''
+        Simply copy the contents of a source csv
+        file to a new location. This is used when
+        generating the spectrograms to save
+        the spectrogram, the label vector, and 
+        the ground truth (start, end) call times.
+    '''
+    with open(file_path, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        lines = list(reader)
+
+    with open(out_path, 'w') as write_file:
+        writer = csv.writer(write_file, delimiter='\t')
+        writer.writerows(lines)
+    
 
 
 #########################
@@ -177,9 +193,11 @@ if __name__ == '__main__':
                 dir = os.path.join(outputDir,dirName)
                 if not os.path.exists(dir):
                     os.mkdir(dir)
+
+                # Want to save the corresponding label_file with the spectrogram!!
+                copy_csv_file(currentDir + '/' + label_file, dir + '/' + data_id + "_gt.txt")
                 np.save(dir + '/' + data_id + "_spec.npy", spectrogram)
                 np.save(dir + '/' + data_id + "_label.npy", labels)
-
                 print ("processed " + data_id)
 
             

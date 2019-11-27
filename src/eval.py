@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import precision_recall_curve, f1_score, precision_recall_fscore_support
-from data import get_loader
+from data import get_loader, ElephantDatasetFull
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
@@ -24,16 +24,23 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
-from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11
+from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14
 from process_rawdata_new import generate_labels
-from visualization import visualize
+from visualization import visualize, visualize_predictions
 from scipy.io import wavfile
 import math
 from matplotlib import mlab as ml
+import parameters
+import sklearn
+from scipy.ndimage import gaussian_filter1d
+import csv
+import os
+
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
+predictions_path = '../Predictions'
 
 def loadModel(model_id):
     model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=device)
@@ -41,8 +48,6 @@ def loadModel(model_id):
     return model
 
   
-#def call_matched(start_idx, ground_truth, )
-
 def call_recall(dloader, model):
     """
         Metric:
@@ -225,6 +230,68 @@ def visual_time_series(spectrum, predicts, labels):
         #plt.clf()
         plt.show()
 
+def visual_full_test(spectrogram, predictions, labels, chunk_size=256):
+    # get num chunks
+    num_chunks = int(spectrogram.shape[0] / chunk_size)
+    for j in range(num_chunks):
+        chunk_start = j * chunk_size
+        chunk = spectrogram[chunk_start: chunk_start + chunk_size, :]
+        lab = labels[chunk_start: chunk_start + chunk_size]
+        pred = predictions[chunk_start: chunk_start + chunk_size]
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+        new_features = chunk.T
+        min_dbfs = new_features.flatten().mean()
+        max_dbfs = new_features.flatten().mean()
+        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+        ax2.plot(np.arange(pred.shape[0]), pred)
+        # Plot the threshold
+        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
+        ax2.set_ylim([0,1])
+        ax3.plot(np.arange(lab.shape[0]), lab)
+        ax3.set_ylim([0, 1])
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()
+        mngr.window.wm_geometry("+400+250")
+        plt.show()
+
+def visual_full_recall(spectrogram, predictions, labels, binary_preds, chunk_size=256):
+    """
+        Step through the ground truth labels and visualize
+        the models predictions around these calls
+    """
+    search = 0
+    while True:
+        begin = search
+        # Look for the start of a predicted calls
+        while begin < spectrogram.shape[0] and labels[begin] == 0:
+            begin += 1
+
+        if begin >= spectrogram.shape[0]:
+            break
+
+        end = begin + 1
+        # Look for the end of the call
+        while end < spectrogram.shape[0] and labels[end] == 1:
+            end += 1
+
+        call_length = end - begin
+
+        if (call_length > chunk_size):
+            visualize(spectrogram[begin: end], predictions[begin: end] ,labels[begin:end])
+        else:
+            # Let us position the call in the middle
+            padding = (chunk_size - call_length) // 2
+            window_start = max(begin - padding, 0)
+            window_end = min(end + padding, spectrogram.shape[0])
+            visualize(spectrogram[window_start: window_end], predictions[window_start: window_end], 
+                labels[window_start: window_end], binary_preds[window_start: window_end], vert_lines=(begin - window_start, end - window_start))
+
+        search = end + 1
+
+
 def pcr(dloader, model, visualize=False):
     """
         Generate Precision Recall Plot as well as print the F1 score for 
@@ -293,158 +360,250 @@ def pcr(dloader, model, visualize=False):
 ##############################################################################
 ### Full Time series evaluation assuming we have access to the spectrogram ###
 ##############################################################################
+
 def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
     """
-        Test is the source call defined by [s1: e1] 
+        Test is the source call defined by [s1: e1 + 1] 
         overlaps (if is_truth = False) or is overlaped
         (if is_truth = True) by the call defined by
-        [s2: e2] with given threshold.
+        [s2: e2 + 1] with given threshold.
     """
-    len_source = e1 - s1
-    test_call_length = e2 - s2
+    print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
+    print ("and s2 = {}, e2 = {}".format(s2, e2))
+    len_source = e1 - s1 + 1
+    test_call_length = e2 - s2 + 1
     # Overlap check
-    if s2 < s1: # Call starts before the source call
+    if s2 < s1: # Test call starts before the source call
         # The call is larger than our source call
         if e2 > e1:
             if is_truth:
                 return True
             # The call we are comparing to is larger then the source 
             # call, but we must make sure that the source covers at least
-            # 10 % of this call. Kind of edge case should watch this
-            elif len_source > threshold * test_call_length: 
-                print ('edge case')
+            # overlap xs this call. Kind of edge case should watch this
+            elif len_source >= max(threshold * test_call_length, 1): 
+                print ('Prediction = portion of GT')
                 return True
         else:
-            overlap = e2 - s1
-
-            if is_truth and overlap >= threshold * len_source: # Overlap 10% of ourself
+            overlap = e2 - s1 + 1
+            print ("Test call starts before source call")
+            if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
                 return True
-            elif not is_truth and overlap >= threshold * test_call_length: # Overlap 10% of found call
+            elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
                 return True
     elif e2 > e1: # Call ends after the source call
-        overlap = e1 - s1
-
-        if is_truth and overlap >= threshold * len_source: # Overlap 10% of ourself
+        overlap = e1 - s2 + 1
+        print ('Test call ends after source')
+        if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
             return True
-        elif not is_truth and overlap >= threshold * test_call_length: # Overlap 10% of found call
+        elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
             return True
     else: # We are completely in the call
+        print ('Test call completely in source call')
         if not is_truth:
             return True
-        elif test_call_length >= threshold * len_source:
+        elif test_call_length >= max(threshold * len_source, 1):
             return True
 
     return False
 
-def call_overlaps(start, end, source, compare, threshold=.1, is_truth=False):
-    """
-        Given a call in the "source" stream (start, end)
-        see if there is a call in the "compare" stream that overlaps.
-        The measure of overlap changes depending on the value of is_truth.
-
-        1) is_truth == True: the source sequence is the ground truth
-        labeling and we want to see if there is a call that overlaps at least
-        10% of the source call
-
-        2) is_truth == False: the source sequence is the prediction and
-        we want to see if we overlap a ground truth call by at least 10%
-    """
-    # Find the bounds of overlaping calls in the compare stream
-    start_comp = start
-    while start_comp >= 0 and compare[start_comp] == 1:
-        start_comp -= 1
-    # Need to add one back
-    if start_comp != 0:
-        start_comp += 1
-
-    end_comp = end
-    while end_comp < compare.shape[0] and compare[end_comp] == 1:
-        end_comp += 1
-
-    # Now we have defined the new bounded region in compare 
-    # where overlapping calls can exist. Now we want to look 
-    # to see if these calls are either overlapped by 10% or 
-    # overlapp by 10%
-    len_call = end - start 
-
-    start_call = -1
-    in_call = False
-    index = start_comp
-    while index < end_comp:
-        if compare[index] == 1 and not in_call:
-            print ("in", index)
-            in_call = True
-            start_call = index
-
-        # Exiting call so check overlap
-        if in_call and compare[index] == 0 or in_call and index == end_comp - 1:
-            # Edge case on right end of the window
-            if (index == end_comp -1):
-                index += 1
-
-            if test_overlap(start_call, index, start, end, threshold=threshold, is_truth=is_truth):
-                return True
-    
-            in_call = False
-            start_call = index
-
-        index += 1
-
-    return False # No good overlaps found
-
-
-
-def test_event_metric(test, compare, threshold=0.1, is_truth=False):
+def call_prec_recall(test, compare, threshold=0.1, is_truth=False, spectrogram=None):
     """
         Adapted from Peter's paper.
-        We are comparing the calls in the test sequence to the compare sequence.
-        The is_truth tells us if test is the ground truth set or not. From there
-        we look to for each call in the test set see if it overlaps with a call in
-        the compare set to a "certain" degree determined by if is_truth or not:
+        Given calls defined by their start and end time (in sorted order by occurence)
+        we want to compute the "precision" and "recall." If is_truth = False then 
+        we are comparing the predicted elephant calls from the detector to the ground
+        truth elephant calls ==> (True Pos. and False Pos.). If is_truth = True then we
+        are comparing the ground truth to the predictions and looking for ==>
+        (True Pos. and False Neg.).
 
-        1) is_truth: try to find a call in compare that overlaps 10% for
+        1) is_truth = True: try to find a call in compare that overlaps (by at least prop. threshold) for
         each call in test
 
-        2) not is_truth: try to find a call in compare that each call in test 
-        overlaps at least 10 % of.
+        2) is_truth = False: for a call in test, try to find a call in compare that it
+        overlaps (by at least prop. threshold).
 
-        Note) Only say call if length >= 2 seconds (calculate this based on the samplerate)
-        which for NFFT = 3208, hop = 641, sr = 8000 is 20 frames
+        Note 2) if threshold = 0 then we just want any amount of threshold
     """
-    two_sec = 2
+    index_compare = 0
+    true_events = []
+    false_events = []
+    for call in test:
+        # Loop through the calls compare checking if the start is before 
+        # our end
+        start = call[0]
+        end = call[1]
+        length = call[2]
+
+        # Rewind index_compare. Although this leads
+        # to potentially extra computation, it is necessary
+        # to avoid issues with overlapping calls, etc.
+        # Can occur if on call overlaps two calls
+        # or if we have overlapping calls
+        # We basically want to consider all the calls
+        # that could possibly overlap us.
+        while index_compare > 0:
+            # Back it up if we are past the end
+            if (index_compare >= len(compare)):
+                index_compare -= 1
+                continue
+
+            compare_call = compare[index_compare]
+            compare_start = compare_call[0]
+            compare_end = compare_call[1]
+
+            # May have gone to far so back up
+            if (compare_end > start):
+                index_compare -= 1
+            else:
+                break
+
+        found = False
+        while index_compare < len(compare):
+            # Get the call we are on to compare
+            compare_call = compare[index_compare]
+            compare_start = compare_call[0]
+            compare_end = compare_call[1]
+            compare_len = compare_call[2]
+
+            # Call ends before 
+            if compare_end < start:
+                index_compare += 1
+                continue
+
+            # Call start after. Thus
+            # all further calls end after. 
+            if compare_start > end:
+                break
+
+            # If we are here then we know
+            # compare_end >= start and compare_start <= end
+            # so the calls overlap.
+            if test_overlap(start, end, compare_start, compare_end, threshold, is_truth):
+                found = True
+                break
+
+            # Let us think about tricky case with overlapping calls!
+            # May need to rewind!
+            index_compare += 1
+
+        if found:
+            true_events.append(call)
+        else:
+            false_events.append(call)
+
+    return true_events, false_events
+
+
+def process_ground_truth(label_path, in_seconds=False, samplerate=8000, NFFT=4096., hop=800.): # Was 3208, 641
+    """
+        Given ground truth call data for a given day / spectrogram, 
+        generate a list of elephant calls as (start, end, duration).
+
+        If in_seconds = True we leave the values in seconds
+
+        Otherwise convert to the corresponding spectrogram "slice"
+    """
+    labelFile = csv.DictReader(open(label_path,'rt'), delimiter='\t')
+    calls = []
+
+    for row in labelFile:
+        # Use the file offset to determine the start of the call
+        start_time = float(row['File Offset (s)'])
+        call_length = float(row['End Time (s)']) - float(row['Begin Time (s)'])
+        end_time = start_time + call_length
+        
+        if in_seconds:
+            calls.append((start_time, end_time, call_length))
+        else: 
+            # Figure out which spectrogram slices we are on
+            # to get columns that we want to span with the given
+            # slice. This math transforms .wav indeces to spectrogram
+            # indices
+            start_spec = max(math.ceil((start_time * samplerate - NFFT / 2.) / hop), 0)
+            end_spec = min(math.ceil((end_time * samplerate - NFFT / 2.) / hop), labelMatrix.shape[0])
+            len_spec = end_spec - start_spec 
+            calls.append((start_spec, end_spec, len_spec))
+
+    return calls
+
+
+def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerate=8000., NFFT=4096., hop=800.): # Was 3208, 641
+    """
+        Given a binary predictions vector, we now want
+        to step through and locate all of the elephant
+        calls. For each continuous stream of 1s, we define
+        a found call by the start and end frame within 
+        the spectrogram (if in_seconds = False), otherwise
+        we convert to the true start and end time of the call
+        from begin time 0.
+
+        If min_length != 0, then we only keep calls of
+        a given length. Note that min_length is in FRAMES!!
+
+        Note: some reference frame lengths.
+        - 20 frames = 2.4 seconds 
+        - 15 frames = 1.9 seconds
+        - 10 frames = 1.4 seconds
+    """
+    calls = []
+    processed_preds = binary_preds.copy()
     search = 0
-    true_events = 0
-    false_events = 0
     while True:
         begin = search
         # Look for the start of a predicted calls
-        while begin < test.shape[0] and test[begin] == 0:
+        while begin < binary_preds.shape[0] and binary_preds[begin] == 0:
             begin += 1
 
-        if begin >= test.shape[0]:
+        if begin >= binary_preds.shape[0]:
             break
 
         end = begin + 1
         # Look for the end of the call
-        while end < test.shape[0] and test[end] == 1:
+        while end < binary_preds.shape[0] and binary_preds[end] == 1:
             end += 1
 
-        # Check to see if the call is of adequete length to be a predicted call
-        # may not need this!
-        if end - begin < two_sec: 
-            search = end + 1
-            continue
+        call_length = end - begin
 
-        # Check if we overlap a call
-        if call_overlaps(begin, end, test, compare, threshold=threshold, is_truth=is_truth):
-            true_events += 1
-        else:
-            false_events +=1
+        # Found a predicted call!
+        if (call_length >= min_length):
+            if not in_seconds:
+                # Note we subtract -1 to get the last frame 
+                # that has the actual call
+                calls.append((begin, end - 1, call_length))
+            else:
+                # Frame k is centered around second
+                # (NFFT / sr / 2) + (k) * (hop / sr)
+                # Meaning the first time it captures is (k) * (hop / sr)
+                # Remember we zero index!
+                begin_s = (begin) * (hop / samplerate) #(NFFT / samplerate / 2.) + 
+                # Here we subtract 1 because end goes one past last column
+                # And the last time it captures is (k) * (hop / sr) + NFFT / sr
+                end_s = (end - 1) * (hop / samplerate) + (NFFT / samplerate)
+                # k frames spans ==> (NFFT / sr) + (k-1) * (hop / sr) seconds
+                call_length_s = (NFFT / samplerate) + (call_length - 1) * (hop / samplerate)
+
+                calls.append((begin_s, end_s, call_length_s))
+        else: # zero out the too short predictions
+            processed_preds[begin:end] = 0
 
         search = end + 1
 
-    return true_events, false_events
+    return calls, processed_preds
 
+
+def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
+    """
+        Generate the binary 0/1 predictions and output the 
+        predictions vector used to do so. Note this is only important
+        when we smooth the predictions vector.
+    """
+    if (smooth):
+        predictions = gaussian_filter1d(predictions, sigma)
+
+    binary_preds = np.where(predictions > threshold, 1, 0)
+
+    return binary_preds, predictions
 
 
 def predict_spec_full(spectrogram, model, threshold=0.5):
@@ -466,25 +625,25 @@ def predict_spec_full(spectrogram, model, threshold=0.5):
         frame at a time) we likely want to do a sliding window model
     """
     # By default the spectrogram has the time axis second
-    spectrogram = spectrogram.T
+    spectrogram = torch.from_numpy(spectrogram).float()
+    # Add a batch dim for the model!
+    spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
     print (spectrogram.shape)
-    spectrogram = spectrogram.float()
 
     spectrogram = Variable(spectrogram.to(device))
 
-    outputs = model(spectrogram) # Shape - (batch_size, seq_len, 1)
+    outputs = model(spectrogram) # Shape - (1, seq_len, 1)
     compressed_out = outputs.view(-1, 1)
     compressed_out = outputs.squeeze()
 
     sig = nn.Sigmoid()
     predictions = sig(compressed_out)
     # Generate the binary predictions
-    binary_preds = np.where(predictions > THRESHOLD, 1, 0)
+    predictions = predictions.detach().numpy()
 
-    return binary_preds
+    return predictions
 
-
-def predict_spec_sliding_window(spectrogram, model, chunk_size=256, threshold=0.5):
+def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, threshold=0.5):
     """
         Generate the prediction sequence for a full audio sequence
         using a sliding window. Slide the window by one spectrogram frame
@@ -492,49 +651,135 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, threshold=0.
         over overlapping window predictions to get the final prediction.
     """
     # Get the number of frames in the full audio clip
-    #raw_audio = raw_audio[:324596]
-    spectrogram = spectrogram.T
-    print (spectrogram.shape)
     predictions = np.zeros(spectrogram.shape[0])
+    overlap_counts = np.zeros(spectrogram.shape[0])
+
+    spectrogram = torch.from_numpy(spectrogram).float()
+    # Add a batch dim for the model!
+    spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
 
     # For the sliding window we slide the window by one spectrogram
     # frame, determined by the hop size.
     spect_idx = 0 # The frame idx of the beginning of the current window
-    while  spect_idx + chunk_size < spectrogram.shape[0]:
-        # Make predictions on the current chunk ??? Check what the expected input shape
-        # is!
-        #visualize(spectrum, labels=np.arange(spect_idx, spect_idx + window))
-        #temp_predictions = model(spectrum.T)
-        # Look at shape!! Probably need to compress dimension / squeeze
+    i = 0
+    # How can I parralelize this shit??????
+    while  spect_idx + chunk_size <= spectrogram.shape[1]:
+        if (i % 10 == 0):
+            print ("Chunk number " + str(i))
 
-        #predictions[spect_idx: window] += temp_predictions
-        overlap_counts[spect_idx: spect_idx + window] += 1
+        spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
+        spect_slice = Variable(spect_slice.to(parameters.device))
 
-        # Try generating the next slice
-        raw_audio_idx += hop
-        spect_idx += 1
-        if raw_audio_idx + NFFT >= raw_audio.shape[0]:
-            break
+        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        compressed_out = outputs.view(-1, 1)
+        compressed_out = outputs.squeeze()
 
-        # For end of the file pad with zeros if necessary!
-        #if (raw_audio.shape[0] - raw_audio_idx < window):
-            #print ('here')
-            #raw_audio = np.concatenate((raw_audio, np.zeros(window - (raw_audio.shape[0] - raw_audio_idx + 1))))
-        # Generate a single spectrogram slice
-        new_slice, freqs, _ = ml.specgram(raw_audio[raw_audio_idx: min(raw_audio_idx + NFFT, raw_audio.shape[0])], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
-        new_slice = new_slice[(freqs <= max_freq)]
-        # Check this shape, should be 1 dim in the time axis
+        overlap_counts[spect_idx: spect_idx + chunk_size] += 1
+        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.detach().numpy()
 
-        # Add the new time slice
-        spectrum = np.concatenate((spectrum, new_slice), axis = 1)
-        # Get rid of old slice
-        spectrum = spectrum[:, 1:]
+        spect_idx += jump
+        i += 1
 
-    print (spect_idx - 1)
-    print (len_audio)
+    # Do the last one if it was not covered
+    if (spect_idx - jump + chunk_size != spectrogram.shape[1]):
+        print ('One final chunk!')
+        spect_slice = spectrogram[:, spect_idx: , :]
+        spect_slice = Variable(spect_slice.to(parameters.device))
+
+        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        compressed_out = outputs.view(-1, 1)
+        compressed_out = outputs.squeeze()
+
+        overlap_counts[spect_idx: ] += 1
+        predictions[spect_idx: ] += compressed_out.detach().numpy() 
 
 
+    # Average the predictions on overlapping frames
+    predictions = predictions / overlap_counts
+
+    # Get squashed [0, 1] predictions
+    predictions = sigmoid(predictions)
+
+    return predictions
+
+
+def test_full_spectrograms(dataset, model, model_id, sliding_window=True, 
+            pred_threshold=0.5, overlap_threshold=0.1, chunk_size=256, jump=128, smooth=True, 
+            in_seconds=False, use_call_bounds=False, min_call_lengh=15,
+            visualize=False):
+    """
+        Given a dataset of containing full spectrogram information
+        (i.e. (spectogram, label_vec, ground truth start end time file))
+        compute test time metrics on each full spectrogram. The test time
+        metric is defined to be that of Peter's paper.
+
+        Parameters:
+
+    """
+    results = {} # This will map spectrogram id to dictionary of results for each spect
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print (data_id)
+        
+        # Include something if we have predictions to just load!!
+        '''
+        if sliding_window:
+            predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump, threshold=pred_threshold)
+        else:
+            predictions = predict_spec_full(spectrogram, model, threshold=pred_threshold)
+
+        # Save preditions
+        if not os.path.isdir(predictions_path):
+            os.mkdir(predictions_path)
+        np.save(predictions_path + '/' + data_id + '_' + model_id + '.npy', predictions)
+        '''
+        
+        predictions = np.load(predictions_path + '/' + data_id + '_' + model_id + '.npy')
+
+        binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
+
+
+        # Process the predictions to get predicted elephant calls
+        # Figure out better way to try different combinations of this
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, in_seconds=in_seconds)
+        print ("Num predicted calls", len(predicted_calls))
+        if use_call_bounds:
+            print ("Using CSV file with ground truth call start and end times")
+            gt_calls = process_ground_truth(gt_call_path, in_seconds=in_seconds)
+        else:
+            print ("Using GT spectrogram labeling to generate GT calls")
+            # We should never compute this in seconds
+            # Also let us keep all the calls, i.e. set min_length = 0
+            gt_calls, _ = find_elephant_calls(labels, min_length=0)
+
+        print (len(gt_calls))
+        # Visualize the predictions around the gt calls
+        if visualize:
+            visual_full_recall(spectrogram, smoothed_predictions, labels, processed_preds)       
+        
+        # Look at precision metrics
+        true_pos, false_pos = call_prec_recall(predicted_calls, gt_calls, threshold=overlap_threshold, is_truth=False)
+        # Look at recall metrics
+        # Note true_pos_r should be the same as true_pos
+        true_pos_r, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
+
+        f_score = get_f_score(binary_preds, labels)
+
+        results[data_id] = {'true_pos': true_pos,
+                            'false_pos': false_pos,
+                            'true_pos_r': true_pos_r,
+                            'false_neg': false_neg,
+                            'f_score': f_score,
+                            'predictions': smoothed_predictions,
+                            'binary_preds': processed_preds}
+    return results
 
 
 def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
@@ -651,15 +896,30 @@ def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
     print (spect_idx - 1)
     print (len_audio)
 
+def sigmoid(x):                                        
+    return 1 / (1 + np.exp(-x))
 
+def get_f_score(binary_preds, labels):
+    return sklearn.metrics.f1_score(labels, binary_preds)
 
 
 def main():
     # Make sure we specify the metric to test and
     # the model to test on!
-    one = np.array([0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1])
-    two = np.array([1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0])
-    print (test_event_metric(two, one, threshold=0.5, is_truth=True))
+    '''
+    Test metric for comparing gt to predictions on full spectrogram data
+    gt = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1])
+    pr = np.array([0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1])
+
+    pred_calls = find_elephant_calls(pr, min_length=2, in_seconds=True)
+    gt_calls = find_elephant_calls(gt, min_length=2, in_seconds=True)
+
+    true, neg = call_prec_recall(gt_calls, pred_calls, threshold=0.5, is_truth=True)
+    print ("True Pos:", true)
+    print ("False Pos:", neg)
+    #print (test_event_metric(gt, pr, threshold=0, is_truth=True))
+    '''
+    
     '''
     assert(len(sys.argv) > 2)
 
@@ -681,6 +941,254 @@ def main():
     else:
         print ("Enter options: (prc, identify)")
     '''
+    '''
+    model = loadModel("14")
+    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
+    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
+    spectrogram = np.load(spectrogram_path).transpose()
+    labels = np.load(label_path)
+    predictions, binary_preds = predict_spec_sliding_window(spectrogram, model)
+
+    # Save this shit
+    np.save('predictions.npy', predictions)
+
+    print ("f_score:", get_f_score(binary_preds, labels))
+    '''
+    '''
+    model = loadModel("14")
+    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
+    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
+    spectrogram = np.load(spectrogram_path).transpose()
+    labels = np.load(label_path)
+
+    full_dataset = ElephantDatasetFull([spectrogram_path], [label_path])
+    spectrogram, labels = full_dataset[0]
+    #predictions, binary_preds = predict_spec_sliding_window(spectrogram, model)
+    # Save this shit
+    #np.save('predictions.npy', predictions)
+    #print ("f_score:", get_f_score(binary_preds, labels))
+
+    predictions = np.load('predictions.npy')
+    # Try smoothing
+    predictions = gaussian_filter1d(predictions, 6)
+    binary_preds = np.where(predictions > parameters.THRESHOLD, 1, 0)
+    #visual_full_test(spectrogram, predictions, labels, chunk_size=256)
+    visual_full_recall(spectrogram, predictions, labels)
+    print ("testing call recall")
+    print (test_event_metric(labels, binary_preds, threshold=0, is_truth=True))
+    print ("testing precision")
+    print (test_event_metric(binary_preds, labels, threshold=0, is_truth=False, spectrogram=spectrogram))
+    '''
+    model = loadModel("14")
+    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
+    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
+    gt_path = '../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_gt.txt'
+    full_dataset = ElephantDatasetFull([spectrogram_path], [label_path], [gt_path])
+    results = test_full_spectrograms(full_dataset, model, '14', visualize=True, jump=256)
+    # Let us try to visualize some of the results
+    # Let us visualize the true positive recall
+    # What we really care about is recall for now!!
+    data = full_dataset[0]
+    spectrogram = data[0]
+    labels = data[1]
+    gt_call_path = data[2]
+
+    # Get the spec id
+    tags = gt_call_path.split('/')
+    tags = tags[-1].split('_')
+    data_id = tags[0] + '_' + tags[1]
+
+    visualize_predictions(results['nn10b_20180604']['false_neg'], spectrogram, results['nn10b_20180604']['binary_preds'], labels)
+    #print (results)
+
+
+
+
+################################################################
+######################### OLD CODE #############################
+################################################################
+
+# Old method, purely based on segmentation
+def call_overlaps(start, end, source, compare, threshold=.1, is_truth=False):
+    """
+        Given a call in the "source" stream (start, end)
+        see if there is a call in the "compare" stream that overlaps.
+        The measure of overlap changes depending on the value of is_truth.
+
+        1) is_truth == True: the source sequence is the ground truth
+        labeling and we want to see if there is a call that overlaps at least
+        10% of the source call
+
+        2) is_truth == False: the source sequence is the prediction and
+        we want to see if we overlap a ground truth call by at least 10%
+    """
+    # Find the bounds of overlaping calls in the compare stream
+    start_comp = start
+    while start_comp >= 0 and compare[start_comp] == 1:
+        start_comp -= 1
+    # Need to add one back
+    # if we took steps to the left
+    if start_comp != start:
+        start_comp += 1
+
+    end_comp = end - 1
+    while end_comp < compare.shape[0] and compare[end_comp] == 1:
+        end_comp += 1
+
+    # If no call extends past the end 
+    # need to reset end_comp
+    if (end_comp == end - 1):
+        end_comp = end
+
+    print ("Begin of search window", start_comp)
+    print ('End of search window', end_comp)
+    # Now we have defined the new bounded region in compare 
+    # where overlapping calls can exist. Now we want to look 
+    # to see if these calls are either overlapped by 10% or 
+    # overlapp by 10%
+    len_call = end - start 
+
+    start_call = -1
+    in_call = False
+    index = start_comp
+    while index < end_comp:
+        if compare[index] == 1 and not in_call:
+            in_call = True
+            start_call = index
+
+        # Exiting call so check overlap
+        if in_call and compare[index] == 0 or in_call and index == end_comp - 1:
+            # Edge case on right end of the window
+            if (compare[index] != 0):
+                index += 1
+
+            # Should make sure call is large enough!!!!!!!
+            if test_overlap_1(start, end, start_call, index, threshold=threshold, is_truth=is_truth):
+                return True
+    
+            in_call = False
+            start_call = index
+
+        index += 1
+
+    print ("No overlaps")
+    return False # No good overlaps found
+
+# Old method to test overlap
+def test_overlap_1(s1, e1, s2, e2, threshold=0.1, is_truth=False):
+    """
+        Test is the source call defined by [s1: e1] 
+        overlaps (if is_truth = False) or is overlaped
+        (if is_truth = True) by the call defined by
+        [s2: e2] with given threshold.
+    """
+    print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
+    print ("and s2 = {}, e2 = {}".format(s2, e2))
+    len_source = e1 - s1
+    test_call_length = e2 - s2
+    # Overlap check
+    if s2 < s1: # Call starts before the source call
+        # The call is larger than our source call
+        if e2 > e1:
+            if is_truth:
+                return True
+            # The call we are comparing to is larger then the source 
+            # call, but we must make sure that the source covers at least
+            # 10 % of this call. Kind of edge case should watch this
+            elif len_source >= max(threshold * test_call_length, 1): 
+                print ('edge case')
+                return True
+        else:
+            overlap = e2 - s1
+            print ("begin")
+            if is_truth and overlap >= max(threshold * len_source, 1): # Overlap 10% of ourself
+                return True
+            elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap 10% of found call
+                return True
+    elif e2 > e1: # Call ends after the source call
+        overlap = e1 - s2
+        print ('end')
+        if is_truth and overlap >= max(threshold * len_source, 1): # Overlap 10% of ourself
+            return True
+        elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap 10% of found call
+            return True
+    else: # We are completely in the call
+        print ('whole')
+        if not is_truth:
+            return True
+        elif test_call_length >= max(threshold * len_source, 1):
+            return True
+
+    return False
+
+# Old method for comparing pred to test
+def test_event_metric(test, compare, threshold=0.1, is_truth=False, call_length=15, spectrogram=None):
+    """
+        Adapted from Peter's paper.
+        We are comparing the calls in the test sequence to the compare sequence.
+        The is_truth tells us if test is the ground truth set or not. From there
+        we look to for each call in the test set see if it overlaps with a call in
+        the compare set to a "certain" degree determined by if is_truth or not:
+
+        1) is_truth: try to find a call in compare that overlaps 10% for
+        each call in test
+
+        2) not is_truth: try to find a call in compare that each call in test 
+        overlaps at least 10 % of.
+
+
+        Note) Only say call if length >= 2 seconds (calculate this based on the samplerate)
+        which for NFFT = 3208, hop = 641, sr = 8000 is 20 frames / 15 frames is 1.5 seconds
+
+        Note 2) if threshold = 0 then we just want any amount of overlap
+    """
+    #two_sec = 2
+    search = 0
+    true_events = 0
+    false_events = 0
+    while True:
+        begin = search
+        # Look for the start of a predicted calls
+        while begin < test.shape[0] and test[begin] == 0:
+            begin += 1
+
+        if begin >= test.shape[0]:
+            break
+
+        end = begin + 1
+        # Look for the end of the call
+        while end < test.shape[0] and test[end] == 1:
+            end += 1
+
+        # Check to see if the call is of adequete length to be a predicted call
+        # may not need this!
+        if end - begin < call_length: 
+            search = end + 1
+            continue
+
+        # Check if we overlap a call
+        print ("checking call s = {} e = {}".format(begin, end))
+
+        if call_overlaps(begin, end, test, compare, threshold=threshold, is_truth=is_truth):
+            true_events += 1
+            print ("Success")
+        else:
+            print ("Failure")
+            false_events +=1
+
+        if (spectrogram is not None):
+            # Let us position the call in the middle
+            padding = (256 - call_length) // 2
+            window_start = max(begin - padding, 0)
+            window_end = min(end + padding, spectrogram.shape[0])
+            visualize(spectrogram[window_start: window_end], test[window_start: window_end], compare[window_start: window_end])
+
+
+        search = end + 1
+        print()
+
+    return true_events, false_events
+
 
 
 if __name__ == '__main__':

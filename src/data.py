@@ -94,6 +94,8 @@ class ElephantDataset(data.Dataset):
         data = self.features[index]
         label = self.labels[index]
 
+        # Load into numpy arrays here!
+
         data = self.apply_transforms(data)
         if self.transforms:
             data = self.user_transforms(data)
@@ -104,7 +106,6 @@ class ElephantDataset(data.Dataset):
 
         return data, label
 
-
     def apply_transforms(self, data):
         if self.scale:
             data = 10 * np.log10(data)
@@ -113,7 +114,7 @@ class ElephantDataset(data.Dataset):
         if self.preprocess == "norm":
             data = (data - np.mean(data)) / np.std(data)
         elif self.preprocess == "globalnorm":
-            data = (data - 132.228) / 726.319 # Calculated these over the training dataset
+            data = (data - 132.228) / 726.319 # Calculated these over the training dataset # Take mean over log
 
         return data
 
@@ -155,6 +156,86 @@ class ElephantDataset(data.Dataset):
         #     self.features = (self.features - mean_noise) / median_noise
         # elif self.preprocess == "FeatureNorm":
         #     self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
+
+"""
+    Dataset for full test length audio
+"""
+class ElephantDatasetFull(data.Dataset):
+    def __init__(self, spectrogram_files, label_files, gt_calls, preprocess="Norm", scale=True):
+
+        self.specs = spectrogram_files
+        self.labels = label_files
+        self.gt_calls = gt_calls # This is the .txt file that contains start and end times of calls
+        self.preprocess = preprocess
+        self.scale = scale
+        
+        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+
+
+    def __len__(self):
+        return len(self.specs)
+
+
+    def transform(self, spectrogram):
+        # Potentially include other transforms
+        if self.scale:
+            spectrogram = 10 * np.log10(spectrogram)
+
+        # Normalize Features
+        if self.preprocess == "Norm": # Only have one training example so is essentially chunk norm
+            spectrogram = (spectrogram - np.mean(spectrogram)) / np.std(spectrogram)
+        elif preprocess == "Scale":
+            scaler = MinMaxScaler()
+            # Scale features for each training example
+            # to be within a certain range. Preserves the
+            # relative distribution of each feature. Here
+            # each feature is the different frequency band
+            spectrogram = scaler.fit_transform(spectrogram.astype(np.float32))
+        elif self.preprocess == "ChunkNorm":
+            spectrogram = (spectrogram - np.mean(spectrogram)) / np.std(spectrogram)
+        elif self.preprocess == "BackgroundS":
+            # Load in the pre-calculated mean,std,etc.
+            if not scale:
+                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+                std_noise = np.load(Noise_Stats_Directory + "std.npy")
+            else:
+                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+                std_noise = np.load(Noise_Stats_Directory + "std_log.npy")
+
+            spectrogram = (spectrogram - mean_noise) / std_noise
+        elif self.preprocess == "BackgroundM":
+            # Load in the pre-calculated mean,std,etc.
+            if not scale:
+                mean_noise = np.load(Noise_Stats_Directory + "mean.npy")
+                median_noise = np.load(Noise_Stats_Directory + "median.npy")
+            else:
+                mean_noise = np.load(Noise_Stats_Directory + "mean_log.npy")
+                median_noise = np.load(Noise_Stats_Directory + "median_log.npy")
+
+            spectrogram = (spectrogram - mean_noise) / median_noise
+        elif self.preprocess == "FeatureNorm":
+            spectrogram = (spectrogram - np.mean(spectrogram, axis=1)) / np.std(spectrogram, axis=1)
+        return spectrogram
+
+    """
+    Return a single element at provided index
+    """
+    def __getitem__(self, index):
+        spectrogram_path = self.specs[index]
+        label_path = self.labels[index]
+        gt_call_path = self.gt_calls[index]
+
+        spectrogram = np.load(spectrogram_path).transpose()
+        label = np.load(label_path)
+
+        spectrogram = self.transform(spectrogram)
+        #spectrogram = np.expand_dims(spectrogram, axis=0) # Add the batch dimension so we can apply our lstm!
+            
+        # Honestly may be worth pre-process this
+        #spectrogram = torch.from_numpy(spectrogram)
+        #label = torch.from_numpy(label)
+
+        return spectrogram, label, gt_call_path
 
 class WhaleDataset(data.Dataset):
   # 'Characterizes a dataset for PyTorch'

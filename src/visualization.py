@@ -20,7 +20,7 @@ parser.add_argument('--hop', type=int, default=641, help='Hop size used for crea
 parser.add_argument('--window', type=int, default=10, help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
-def visualize(features, outputs=None, labels=None):
+def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):
     """
     Visualizes the spectogram and associated predictions/labels
 
@@ -30,8 +30,11 @@ def visualize(features, outputs=None, labels=None):
 
     Inputs are numpy arrays
     """
-    fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-    # new_features = np.flipud(10*np.log10(features).T)
+    if binary_preds is not None:
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1)
+    else:
+        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+    #new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
     new_features = features.T
     min_dbfs = new_features.flatten().mean()
@@ -45,16 +48,71 @@ def visualize(features, outputs=None, labels=None):
         ax2.plot(np.arange(outputs.shape[0]), outputs)
         ax2.set_ylim([0,1])
         ax2.axhline(y=0.5, color='r', linestyle='-')
+        # Include vertical lines if we want to show what
+        # call we are focusing on
+        if vert_lines is not None:
+            ax2.axvline(x=vert_lines[0], color='r', linestyle=':')
+            ax2.axvline(x=vert_lines[1], color='r', linestyle=':')
+
+    if binary_preds is not None:
+        ax3.plot(np.arange(binary_preds.shape[0]), binary_preds)
+        ax3.set_ylim([0,1])
+        ax3.axhline(y=0.5, color='r', linestyle='-')
+        # Include vertical lines if we want to show what
+        # call we are focusing on
+        if vert_lines is not None:
+            ax3.axvline(x=vert_lines[0], color='r', linestyle=':')
+            ax3.axvline(x=vert_lines[1], color='r', linestyle=':')
 
     if labels is not None:
-        ax3.plot(np.arange(labels.shape[0]), labels)
+        gt_ax = ax3 if binary_preds is None else ax4
+        gt_ax.plot(np.arange(labels.shape[0]), labels)
+        if vert_lines is not None:
+            gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
+            gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
     
     # Make the plot appear in a specified location on the screen
     mngr = plt.get_current_fig_manager()
     geom = mngr.window.geometry()  
     mngr.window.wm_geometry("+400+150")
 
+    if title is not None:
+        ax1.set_title(title)
+
     plt.show()
+
+
+def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chunk_size=256, label='True_Pos'):
+    '''
+        Visualize the predicted labels and gt labels for the calls provided.
+        This is used to visualize the results of predictions on for example
+        the full spectrogram. 
+
+        Parameters:
+        - calls: Assumed to be list of tuples of (start, end, len) where start
+        and end are for now in spect frames
+        - label: gives what the calls represent (i.e. true_pos, false pos, false_neg) 
+
+
+        Down the road maybe we should include the % overlap
+    '''
+    for call in calls:
+        start = call[0]
+        end = call[1]
+        length = call[2]
+
+        # Let us position the call in the middle
+        # Then visualize
+        padding = (chunk_size - length) // 2
+        window_start = max(start - padding, 0)
+        window_end = min(end + padding, spectrogram.shape[0])
+        visualize(spectrogram[window_start: window_end], 
+            prediction_labels[window_start: window_end], gt_labels[window_start: window_end],
+            title=label, vert_lines=(start - window_start, end - window_start))
+
+
+
+
 
 def visualize_wav(wav, labels, spectrogram_info):
     """
