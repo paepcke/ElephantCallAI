@@ -347,12 +347,12 @@ if __name__ == '__main__':
 
     # Some inherant issues even with this!
     split_index = math.ceil(len(file_pairs) * (1 - test_size))
-    #train_data_files = file_pairs[:split_index]
-    #test_data_files = file_pairs[split_index:]
+    train_data_files = file_pairs[:split_index]
+    test_data_files = file_pairs[split_index:]
 
     ## JUST TO TEST RIGHT NOW
-    train_data_files = file_pairs[:1]
-    test_data_files = file_pairs[1:]
+    #train_data_files = file_pairs[:1]
+    #test_data_files = file_pairs[1:]
 
 
     def wrapper_processData(directory, data_pair):
