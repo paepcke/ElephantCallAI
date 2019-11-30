@@ -110,6 +110,7 @@ def processData(dataDir,currentDir,outputDir,audioFileName,labelFileName,outputD
 
     # Save output files, spectrum (contains all frequency data) and labelMatrix
     # For now save as .csv so we can inspect to make sure it is right! Later consider using .npy
+
     np.savetxt(outputDir + outputDataName+'.csv', spectrum, delimiter=",")
     np.savetxt(outputDir + outputLabelName+'.csv', labelMatrix, delimiter=",")
 
