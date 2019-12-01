@@ -35,12 +35,35 @@ import sklearn
 from scipy.ndimage import gaussian_filter1d
 import csv
 import os
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
+    help = 'Path to the folder where we output the full test predictions')
+parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x1/files.txt')
+# For quatro
+#parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
+parser.add_argument('--spect_path', type=str, default="../elephant_dataset/New_Data/Spectrograms", 
+    help='Path to the processed spectrogram files')
+# For quatro
+#parser.add_argument('--spect_path', type=str, default="../elephant_dataset/New_Data/Spectrograms", 
+#    help='Path to the processed spectrogram files')
+parser.add_argument('--make_full_preds', action='store_true', 
+    help = 'Generate predictions for the full test spectrograms')
+parser.add_argument('--full_stats', action='store_true',
+    help = 'Compute statistics on the full test spectrograms')
+parser.add_argument('--pred_calls', action='store_true', 
+    help = 'Generate the predicted (start, end) calls for test spectrograms')
+parser.add_argument('--model_id', type=str, default='16',
+    help = 'ID of the model to test on')
+
 
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 predictions_path = '../Predictions'
+spectrogram_path = '../elephant_dataset/New_Data/Spectrograms'
 
 def loadModel(model_id):
     model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=device)
@@ -606,7 +629,7 @@ def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
     return binary_preds, predictions
 
 
-def predict_spec_full(spectrogram, model, threshold=0.5):
+def predict_spec_full(spectrogram, model):
     """
         Generate the frame level predictions for a full spectrogram.
         Here we assume that the model does not use convolutions across
@@ -614,8 +637,7 @@ def predict_spec_full(spectrogram, model, threshold=0.5):
         audio sequence with lstm model. 
 
         Return:
-        Output segmentation where we use threshold to convert
-        the models output to 0/1 predictions 
+        Sigmoid predictions for each timestep of the spectrogram 
 
         Note: Even a convolutional model could be run over the entire
         sequence, if the convolutions are only used to create feature
@@ -643,7 +665,7 @@ def predict_spec_full(spectrogram, model, threshold=0.5):
 
     return predictions
 
-def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, threshold=0.5):
+def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     """
         Generate the prediction sequence for a full audio sequence
         using a sliding window. Slide the window by one spectrogram frame
@@ -702,6 +724,393 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, th
 
     return predictions
 
+def generate_predictions_full_spectrograms(dataset, model, model_id, predictions_path, 
+    sliding_window=True, chunk_size=256, jump=128):
+    """
+        For each full test spectrogram, run a trained model to get the model
+        prediction and save these predictions to the predictions folder. Namely,
+        for each model we create a sub-folder with predictions for that model. Note,
+        in the future we will not only save models as there number but also save
+        them based on the negative factor that they were trained on. This will
+        come based on the negative factor being included in the model_id
+
+        Status:
+        - works without saving with negative factor
+    """
+    for data in dataset:
+        spectrogram = data[0]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Generating Prediction for:", data_id)
+
+        if sliding_window:
+            predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump)
+        else:
+            predictions = predict_spec_full(spectrogram, model)
+
+        # Save preditions
+        # Save for now to a folder determined by the model id
+        path = predictions_path + '/' + model_id
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        # The data id associates predictions with a particular spectrogram
+        np.save(path + '/' + data_id  + '.npy', predictions)
+
+
+def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
+            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False):
+    """
+
+        After saving predictions for the test set of full spectrograms, we
+        now want to calculate evaluation metrics on each of these spectrograms. 
+        First we load in the sigmoid (0, 1) predictions and use the defined
+        threshold and smoothing flag to convert the predictions into binary
+        0/1 predcitions for each time slice. Then, we convert time slice
+        predictions to full call (start, end) time predictions so that
+        we can calculate elephant call specific evaluation metrics. Bellow
+        we discuss the metrics that are calculated individually for each
+        full spectrogram, as well as accross all the test spectrograms
+        
+        Metrics:
+        - Call Prediction True Positives
+        - Call Prediction False Positives
+        - Call Recall True Positives
+        - Call Recall False Negatives
+        - F-score
+        - Accuracy
+        - Old Call Precision --- To be implemented
+        - Old Call Recall --- To be implemented
+
+    """
+    # Maps spectrogram ids to dictionary of results for each spect
+    # Additionally includes a key "summary" that computes aggregated
+    # statistics over the entire test set of spectrograms
+    results = {} 
+    results['summary'] = {'true_pos': 0,
+                            'false_pos': 0,
+                            'true_pos_recall': 0,
+                            'false_neg': 0,
+                            'f_score': 0,
+                            'accuracy': 0
+                            }
+    # Used to track the number of total calls for averaging
+    # aggregated statistics
+    num_preds = 0
+    num_gt = 0
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Generating Prediction for:", data_id)
+        
+        predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
+
+        binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
+
+        # Process the predictions to get predicted elephant calls
+        # Figure out better way to try different combinations of this
+        # Note that processed_preds zeros out predictions that are not long
+        # enough to be an elephant call
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, in_seconds=in_seconds)
+        print ("Num predicted calls", len(predicted_calls))
+
+        # Use the calls as defined in the orginal hand labeled file.
+        # This looks to avoid issues of overlapping calls seeming like
+        # single very large calls in the gt labeling 
+        if use_call_bounds:
+            print ("Using CSV file with ground truth call start and end times")
+            gt_calls = process_ground_truth(gt_call_path, in_seconds=in_seconds)
+        else:
+            print ("Using GT spectrogram labeling to generate GT calls")
+            # We should never compute this in seconds
+            # Also let us keep all the calls, i.e. set min_length = 0
+            gt_calls, _ = find_elephant_calls(labels, min_length=0)
+
+        print ("Number of ground truth calls", len(gt_calls))
+
+        # Visualize the predictions around the gt calls
+        if visualize: # This is not super important
+            visual_full_recall(spectrogram, smoothed_predictions, labels, processed_preds)       
+        
+        # Look at precision metrics
+        # Call Prediction True Positives
+        # Call Prediction False Positives
+        true_pos, false_pos = call_prec_recall(predicted_calls, gt_calls, threshold=overlap_threshold, is_truth=False)
+
+        # Look at recall metrics
+        # Call Recall True Positives
+        # Call Recall False Negatives
+        true_pos_recall, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
+
+        f_score = get_f_score(binary_preds, labels) # just for the postive class
+        accuracy = calc_accuracy(binary_preds, labels)
+
+        results[data_id] = {'true_pos': true_pos,
+                            'false_pos': false_pos,
+                            'true_pos_recall': true_pos_recall,
+                            'false_neg': false_neg,
+                            'f_score': f_score,
+                            'predictions': smoothed_predictions,
+                            'binary_preds': processed_preds,
+                            'accuracy': accuracy
+                            }
+        # Update summary stats
+        results['summary']['true_pos'] += len(true_pos)
+        results['summary']['false_pos'] += len(false_pos)
+        results['summary']['true_pos_recall'] += len(true_pos_recall)
+        results['summary']['false_neg'] += len(false_neg)
+        results['summary']['f_score'] += f_score
+        results['summary']['accuracy'] += accuracy
+
+    # Calculate averaged statistics
+    results['summary']['true_pos'] 
+    results['summary']['false_pos']
+    results['summary']['true_pos_recall'] 
+    results['summary']['false_neg'] 
+    results['summary']['f_score'] /= len(dataset)
+    results['summary']['accuracy'] /= len(dataset)
+
+    return results
+
+
+def get_spectrogram_paths(test_files_path, spectrogram_path):
+    """
+        In the test set folder, there is a file that includes
+        all of the recording files used for the test set. Based
+        on these files we want to get the spectrograms and gt
+        labeling files that correspond
+    """
+    # Holds the paths to the:
+    # - spectrograms
+    # - labels for each spectrogram slice
+    # - gt (start, end) times for calls
+    paths = {'specs': [],
+            'labels': [],
+            'gts': []}
+
+    with open(test_files_path, 'r') as f:
+        lines = f.readlines()
+
+    files = [x.strip() for x in lines]
+
+    for file in files:
+        # Create the spectrogram path by concatenating
+        # the test file with the path to the folder
+        # containing the spectrogram files
+        paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
+        paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+        paths['gts'].append(spectrogram_path + '/' + file + '_gt.npy')
+
+    return paths
+    
+
+def sigmoid(x):                                        
+    return 1 / (1 + np.exp(-x))
+
+def get_f_score(binary_preds, labels):
+    return sklearn.metrics.f1_score(labels, binary_preds)
+
+def calc_accuracy(binary_preds, labels):
+    accuracy = (binary_preds == labels).sum() / labels.shape[0]
+    return accuracy
+
+
+def main():
+    
+    args = parser.parse_args()
+    
+    model = loadModel(args.model_id)
+    
+    full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
+    full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
+                 full_test_spect_paths['labels'], full_test_spect_paths['gts'])    
+
+    if args.make_full_preds:
+        generate_predictions_full_spectrograms(full_dataset, model, args.model_id, args.predictions_path,
+             sliding_window=True, chunk_size=256, jump=128)         # Add in these arguments
+    elif args.full_stats:
+        # Now we have to decide what to do with these stats
+        results = eval_full_spectrograms(full_dataset, args.model_id, args.predictions_path)
+
+        # Display the output of results as peter did
+        TP_truth = results['summary']['true_pos_recall']
+        FN = results['summary']['false_neg']
+        TP_test = results['summary']['true_pos']
+        FP = results['summary']['false_pos']
+
+        recall = TP_truth / (TP_truth + FN)
+        precision = TP_test / (TP_test + FP)
+        f1_call = 2 * (precision * recall) / (precision + recall)
+        # Do false pos rate later!!!!
+        total_duration = 24. * len(full_test_spect_paths['specs'])
+        false_pos_per_hour = FP / total_duration
+
+        print ("Summary results")
+        print("Call precision:", precision)
+        print("Call recall:", recall)
+        print("f1 score calls:", f1_call)
+        print("False positve rate (FP / hr):", false_pos_per_hour)
+        print("Segmentation f1-score:", results['summary']['f_score'])
+        print("Average accuracy:", results['summary']['accuracy'])
+
+
+    '''
+    assert(len(sys.argv) > 2)
+
+    run_type = sys.argv[1]
+    model_id = sys.argv[2]
+
+    model = loadModel(model_id)
+
+    # Load val dataset to test on metrics 
+    validation_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+
+    if run_type == "prc":
+        pcr(validation_loader, model)
+    elif run_type == "identify":
+        call_identification(validation_loader, model)
+    elif run_type == "Full_Test":
+        full_data_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Full_test/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+        pcr(full_data_loader, model, False)
+    else:
+        print ("Enter options: (prc, identify)")
+    '''
+    
+    
+
+    #visualize_predictions(results['nn10b_20180604']['false_neg'], spectrogram, results['nn10b_20180604']['binary_preds'], labels)
+    #print (results)
+
+
+################################################################
+##################### TO BE DEVELOPED ##########################
+################################################################
+
+def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
+    """
+        Generate the prediction sequence for a full audio sequence
+        that may be very long (such as a 24 hours day). Because of
+        the audio size it is inefficient to generate
+        and store the entire spectrogram at once. Therefore, we 
+        pass in chunks of the spectrogram at a time. Since the real
+        time model does not use temporal convolutions, we can essentially
+        feed in each spectrogram slice indepentently while not re-setting the
+        hidden state. Here we will do a psuedo real time version where
+        we given chunks of a certain size rather than one spectrogram slice at a time.
+    """
+    prediction = np.zeros(1)
+    
+    NFFT = spectrogram_info['NFFT']
+    samplerate = spectrogram_info['samplerate']
+    hop = spectrogram_info['hop']
+    max_freq = spectrogram_info['max_freq']
+    chunk_size = int(spectrogram_info['window'] * spectrogram_info['hop'] + spectrogram_info['NFFT']) - 1
+
+    start_idx = 0 # Index within the 1d audio
+    inital_hidden = None
+    while start_idx < raw_audio.shape[0]:
+        # Extract the spectrogram chunk
+        chunk_end = start_idx + chunk_size
+        [spectrum, freqs, t] = ml.specgram(raw_audio[start_idx: chunk_end], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
+
+        spectrum = spectrum[(freqs <= max_freq)]
+
+        # If the start index = 0 
+        # zero out the hidden state of the model
+        # DO HERE ****
+        if (start_idx == 0):
+            print("zero out initial hidden state")
+        else:
+            # Use the hidden state from the end of the
+            # last chunk (i.e. when we call forward in the LSTM
+            # block we need to save the value of the returned final
+            # hidden state
+            # In the forward function we should define the
+            # ability to pass in a starting hidden state
+            print ("run model on chunk with old hidden state")
+            print ("save the last hidden state for next time")
+
+        start_idx += chunk_size
+
+def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
+    """
+        Generate the prediction sequence for a full audio sequence
+        using a sliding window. Slide the window by one spectrogram frame
+        and pass each window through the given model. Compute the average
+        over overlapping window predictions to get the final prediction.
+    """
+    # Get the number of frames in the full audio clip
+    #raw_audio = raw_audio[:324596]
+    len_audio = math.floor((raw_audio.shape[0] - spectrogram_info['NFFT']) / spectrogram_info['hop'] + 1)
+    print (len_audio)
+    prediction = np.zeros(len_audio)
+    # Keep a count of how many terms to average buy
+    # for each index
+    overlap_counts = np.zeros(len_audio)
+
+    NFFT = spectrogram_info['NFFT']
+    samplerate = spectrogram_info['samplerate']
+    hop = spectrogram_info['hop']
+    max_freq = spectrogram_info['max_freq']
+    window = spectrogram_info['window'] # In spectrogram frames
+    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] # In raw audio frames
+
+    # Create the first chunk
+    spectrum, freqs, _ = ml.specgram(raw_audio[0: chunk_size], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
+    spectrum = spectrum[(freqs <= max_freq)]
+
+    # For the sliding window we slide the window by one spectrogram
+    # frame, determined by the hop size.
+    raw_audio_idx = chunk_size - NFFT # The beginning of the last fft window computed
+    spect_idx = 0 # The frame idx of the beginning of the current window
+    while  True:
+        # Make predictions on the current chunk ??? Check what the expected input shape
+        # is!
+        #visualize(spectrum, labels=np.arange(spect_idx, spect_idx + window))
+        #temp_predictions = model(spectrum.T)
+        # Look at shape!! Probably need to compress dimension / squeeze
+
+        #predictions[spect_idx: window] += temp_predictions
+        overlap_counts[spect_idx: spect_idx + window] += 1
+
+        # Try generating the next slice
+        raw_audio_idx += hop
+        spect_idx += 1
+        if raw_audio_idx + NFFT >= raw_audio.shape[0]:
+            break
+
+        # For end of the file pad with zeros if necessary!
+        #if (raw_audio.shape[0] - raw_audio_idx < window):
+            #print ('here')
+            #raw_audio = np.concatenate((raw_audio, np.zeros(window - (raw_audio.shape[0] - raw_audio_idx + 1))))
+        # Generate a single spectrogram slice
+        new_slice, freqs, _ = ml.specgram(raw_audio[raw_audio_idx: min(raw_audio_idx + NFFT, raw_audio.shape[0])], 
+                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
+        new_slice = new_slice[(freqs <= max_freq)]
+        # Check this shape, should be 1 dim in the time axis
+
+        # Add the new time slice
+        spectrum = np.concatenate((spectrum, new_slice), axis = 1)
+        # Get rid of old slice
+        spectrum = spectrum[:, 1:]
+
+    print (spect_idx - 1)
+    print (len_audio)
+
+################################################################
+######################### OLD CODE #############################
+################################################################
 
 def test_full_spectrograms(dataset, model, model_id, sliding_window=True, 
             pred_threshold=0.5, overlap_threshold=0.1, chunk_size=256, jump=128, smooth=True, 
@@ -782,231 +1191,7 @@ def test_full_spectrograms(dataset, model, model_id, sliding_window=True,
     return results
 
 
-def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
-    """
-        Generate the prediction sequence for a full audio sequence
-        that may be very long (such as a 24 hours day). Because of
-        the audio size it is inefficient to generate
-        and store the entire spectrogram at once. Therefore, we 
-        pass in chunks of the spectrogram at a time. Since the real
-        time model does not use temporal convolutions, we can essentially
-        feed in each spectrogram slice indepentently while not re-setting the
-        hidden state. Here we will do a psuedo real time version where
-        we given chunks of a certain size rather than one spectrogram slice at a time.
-    """
-    prediction = np.zeros(1)
-    
-    NFFT = spectrogram_info['NFFT']
-    samplerate = spectrogram_info['samplerate']
-    hop = spectrogram_info['hop']
-    max_freq = spectrogram_info['max_freq']
-    chunk_size = int(spectrogram_info['window'] * spectrogram_info['hop'] + spectrogram_info['NFFT']) - 1
 
-    start_idx = 0 # Index within the 1d audio
-    inital_hidden = None
-    while start_idx < raw_audio.shape[0]:
-        # Extract the spectrogram chunk
-        chunk_end = start_idx + chunk_size
-        [spectrum, freqs, t] = ml.specgram(raw_audio[start_idx: chunk_end], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
-
-        spectrum = spectrum[(freqs <= max_freq)]
-
-        # If the start index = 0 
-        # zero out the hidden state of the model
-        # DO HERE ****
-        if (start_idx == 0):
-            print("zero out initial hidden state")
-        else:
-            # Use the hidden state from the end of the
-            # last chunk (i.e. when we call forward in the LSTM
-            # block we need to save the value of the returned final
-            # hidden state
-            # In the forward function we should define the
-            # ability to pass in a starting hidden state
-            print ("run model on chunk with old hidden state")
-            print ("save the last hidden state for next time")
-
-        start_idx += chunk_size
-
-
-def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
-    """
-        Generate the prediction sequence for a full audio sequence
-        using a sliding window. Slide the window by one spectrogram frame
-        and pass each window through the given model. Compute the average
-        over overlapping window predictions to get the final prediction.
-    """
-    # Get the number of frames in the full audio clip
-    #raw_audio = raw_audio[:324596]
-    len_audio = math.floor((raw_audio.shape[0] - spectrogram_info['NFFT']) / spectrogram_info['hop'] + 1)
-    print (len_audio)
-    prediction = np.zeros(len_audio)
-    # Keep a count of how many terms to average buy
-    # for each index
-    overlap_counts = np.zeros(len_audio)
-
-    NFFT = spectrogram_info['NFFT']
-    samplerate = spectrogram_info['samplerate']
-    hop = spectrogram_info['hop']
-    max_freq = spectrogram_info['max_freq']
-    window = spectrogram_info['window'] # In spectrogram frames
-    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] # In raw audio frames
-
-    # Create the first chunk
-    spectrum, freqs, _ = ml.specgram(raw_audio[0: chunk_size], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
-    spectrum = spectrum[(freqs <= max_freq)]
-
-    # For the sliding window we slide the window by one spectrogram
-    # frame, determined by the hop size.
-    raw_audio_idx = chunk_size - NFFT # The beginning of the last fft window computed
-    spect_idx = 0 # The frame idx of the beginning of the current window
-    while  True:
-        # Make predictions on the current chunk ??? Check what the expected input shape
-        # is!
-        #visualize(spectrum, labels=np.arange(spect_idx, spect_idx + window))
-        #temp_predictions = model(spectrum.T)
-        # Look at shape!! Probably need to compress dimension / squeeze
-
-        #predictions[spect_idx: window] += temp_predictions
-        overlap_counts[spect_idx: spect_idx + window] += 1
-
-        # Try generating the next slice
-        raw_audio_idx += hop
-        spect_idx += 1
-        if raw_audio_idx + NFFT >= raw_audio.shape[0]:
-            break
-
-        # For end of the file pad with zeros if necessary!
-        #if (raw_audio.shape[0] - raw_audio_idx < window):
-            #print ('here')
-            #raw_audio = np.concatenate((raw_audio, np.zeros(window - (raw_audio.shape[0] - raw_audio_idx + 1))))
-        # Generate a single spectrogram slice
-        new_slice, freqs, _ = ml.specgram(raw_audio[raw_audio_idx: min(raw_audio_idx + NFFT, raw_audio.shape[0])], 
-                NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning) 
-        new_slice = new_slice[(freqs <= max_freq)]
-        # Check this shape, should be 1 dim in the time axis
-
-        # Add the new time slice
-        spectrum = np.concatenate((spectrum, new_slice), axis = 1)
-        # Get rid of old slice
-        spectrum = spectrum[:, 1:]
-
-    print (spect_idx - 1)
-    print (len_audio)
-
-def sigmoid(x):                                        
-    return 1 / (1 + np.exp(-x))
-
-def get_f_score(binary_preds, labels):
-    return sklearn.metrics.f1_score(labels, binary_preds)
-
-
-def main():
-    # Make sure we specify the metric to test and
-    # the model to test on!
-    '''
-    Test metric for comparing gt to predictions on full spectrogram data
-    gt = np.array([1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1])
-    pr = np.array([0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1])
-
-    pred_calls = find_elephant_calls(pr, min_length=2, in_seconds=True)
-    gt_calls = find_elephant_calls(gt, min_length=2, in_seconds=True)
-
-    true, neg = call_prec_recall(gt_calls, pred_calls, threshold=0.5, is_truth=True)
-    print ("True Pos:", true)
-    print ("False Pos:", neg)
-    #print (test_event_metric(gt, pr, threshold=0, is_truth=True))
-    '''
-    
-    '''
-    assert(len(sys.argv) > 2)
-
-    run_type = sys.argv[1]
-    model_id = sys.argv[2]
-
-    model = loadModel(model_id)
-
-    # Load val dataset to test on metrics 
-    validation_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Label/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-
-    if run_type == "prc":
-        pcr(validation_loader, model)
-    elif run_type == "identify":
-        call_identification(validation_loader, model)
-    elif run_type == "Full_Test":
-        full_data_loader = get_loader("../elephant_dataset/Test_Atlas/" + parameters.DATASET + '_Full_test/', parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-        pcr(full_data_loader, model, False)
-    else:
-        print ("Enter options: (prc, identify)")
-    '''
-    '''
-    model = loadModel("14")
-    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
-    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
-    spectrogram = np.load(spectrogram_path).transpose()
-    labels = np.load(label_path)
-    predictions, binary_preds = predict_spec_sliding_window(spectrogram, model)
-
-    # Save this shit
-    np.save('predictions.npy', predictions)
-
-    print ("f_score:", get_f_score(binary_preds, labels))
-    '''
-    '''
-    model = loadModel("14")
-    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
-    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
-    spectrogram = np.load(spectrogram_path).transpose()
-    labels = np.load(label_path)
-
-    full_dataset = ElephantDatasetFull([spectrogram_path], [label_path])
-    spectrogram, labels = full_dataset[0]
-    #predictions, binary_preds = predict_spec_sliding_window(spectrogram, model)
-    # Save this shit
-    #np.save('predictions.npy', predictions)
-    #print ("f_score:", get_f_score(binary_preds, labels))
-
-    predictions = np.load('predictions.npy')
-    # Try smoothing
-    predictions = gaussian_filter1d(predictions, 6)
-    binary_preds = np.where(predictions > parameters.THRESHOLD, 1, 0)
-    #visual_full_test(spectrogram, predictions, labels, chunk_size=256)
-    visual_full_recall(spectrogram, predictions, labels)
-    print ("testing call recall")
-    print (test_event_metric(labels, binary_preds, threshold=0, is_truth=True))
-    print ("testing precision")
-    print (test_event_metric(binary_preds, labels, threshold=0, is_truth=False, spectrogram=spectrogram))
-    '''
-    model = loadModel("14")
-    spectrogram_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_spec.npy"
-    label_path = "../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_label.npy"
-    gt_path = '../elephant_dataset/New_Data/Spectrograms/nn_201801_jan/nn10b_20180604_gt.txt'
-    full_dataset = ElephantDatasetFull([spectrogram_path], [label_path], [gt_path])
-    results = test_full_spectrograms(full_dataset, model, '14', visualize=True, jump=256)
-    # Let us try to visualize some of the results
-    # Let us visualize the true positive recall
-    # What we really care about is recall for now!!
-    data = full_dataset[0]
-    spectrogram = data[0]
-    labels = data[1]
-    gt_call_path = data[2]
-
-    # Get the spec id
-    tags = gt_call_path.split('/')
-    tags = tags[-1].split('_')
-    data_id = tags[0] + '_' + tags[1]
-
-    visualize_predictions(results['nn10b_20180604']['false_neg'], spectrogram, results['nn10b_20180604']['binary_preds'], labels)
-    #print (results)
-
-
-
-
-################################################################
-######################### OLD CODE #############################
-################################################################
 
 # Old method, purely based on segmentation
 def call_overlaps(start, end, source, compare, threshold=.1, is_truth=False):
