@@ -175,7 +175,7 @@ class ElephantDatasetFull(data.Dataset):
         return len(self.specs)
 
 
-    def transform(self, spectrogram):
+    def transform(self, spectrogram): # We need to fix this probably!
         # Potentially include other transforms
         if self.scale:
             spectrogram = 10 * np.log10(spectrogram)
