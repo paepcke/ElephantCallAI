@@ -803,8 +803,12 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 running_trig_word_precision = 0.0
                 running_trig_word_count = 0
 
-
+                i = 0
+                print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels in dataloders[phase]:
+                    i += 1
+                    if (i % 1000 == 0):
+                        print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
                     
@@ -885,6 +889,9 @@ def main():
     ## Build Dataset
     train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     validation_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    # Quatro
+    #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
     dloaders = {'train':train_loader, 'valid':validation_loader}
 

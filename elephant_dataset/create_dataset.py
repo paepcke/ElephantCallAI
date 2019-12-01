@@ -28,6 +28,8 @@ from functools import partial
 
 MFCC_Data = './Processed_data_MFCC/'
 Spect_Data = './Processed_data/'
+# Quatro
+#Spect_Data = '/home/ndemir/ElephantCallAI/elephant_dataset/Processed_data/'
 full_call_directory = 'call/'
 activate_directory = 'activate/'
 
