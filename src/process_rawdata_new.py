@@ -10,6 +10,7 @@ from visualization import visualize
 import math
 import argparse
 from random import shuffle
+import random
 from functools import partial
 
 
@@ -40,6 +41,7 @@ parser.add_argument('--neg_fact', type=int, default=1,
 
 
 np.random.seed(8)
+random.seed(8) # Add this!
 VERBOSE = False
 
 def generate_labels(labels, spectrogram_info, len_wav):
@@ -350,7 +352,7 @@ if __name__ == '__main__':
     train_data_files = file_pairs[:split_index]
     test_data_files = file_pairs[split_index:]
 
-    ## JUST TO TEST RIGHT NOW
+    ## JUST TO TEST LOCALLY
     #train_data_files = file_pairs[:1]
     #test_data_files = file_pairs[1:]
 
@@ -407,14 +409,34 @@ if __name__ == '__main__':
 
     # Also save which files were used for each of the datasets
     with open(train_dir + '/files.txt', 'w') as f:
-        for file in train_data_files:
-            # write just the id of each file pair (wav/txt)
-            f.write(file[2])
+        for i in range(len(train_data_files)):
+            file = train_data_files[i]
+            # write the id of each file pair (wav/txt)
+            # along with which time period it came from
+            # e.g. jan/id
+            dirs = file[3].split('/')
+            time_tag = dirs[-1]
+
+            path = time_tag + '/' + file[2]
+            if i != len(train_data_files) - 1:
+                path += '\n'
+
+            f.write(path)
     
     with open(test_dir + '/files.txt', 'w') as f:
-        for file in test_data_files:
-            # write just the id of each file pair (wav/txt)
-            f.write(file[2])
+        for i in range(len(test_data_files)):
+            file = test_data_files[i]
+            # write the id of each file pair (wav/txt)
+            # along with which time period it came from
+            # e.g. jan/id
+            dirs = file[3].split('/')
+            time_tag = dirs[-1]
+
+            path = time_tag + '/' + file[2]
+            if i != len(test_data_files) - 1:
+                path += '\n'
+
+            f.write(path)
     
 
     
