@@ -40,14 +40,17 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
-parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x1/files.txt')
+
+parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x2/files.txt')
 # For quatro
 #parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
+
 parser.add_argument('--spect_path', type=str, default="../elephant_dataset/New_Data/Spectrograms", 
     help='Path to the processed spectrogram files')
 # For quatro
-#parser.add_argument('--spect_path', type=str, default="../elephant_dataset/New_Data/Spectrograms", 
+#parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/", 
 #    help='Path to the processed spectrogram files')
+
 parser.add_argument('--make_full_preds', action='store_true', 
     help = 'Generate predictions for the full test spectrograms')
 parser.add_argument('--full_stats', action='store_true',
@@ -994,6 +997,7 @@ def main():
 ################################################################
 ##################### TO BE DEVELOPED ##########################
 ################################################################
+'''
 
 def predict_full_audio_semi_real_time(raw_audio, model, spectrogram_info):
     """
@@ -1138,7 +1142,7 @@ def test_full_spectrograms(dataset, model, model_id, sliding_window=True,
         print (data_id)
         
         # Include something if we have predictions to just load!!
-        '''
+        """
         if sliding_window:
             predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump, threshold=pred_threshold)
         else:
@@ -1148,7 +1152,7 @@ def test_full_spectrograms(dataset, model, model_id, sliding_window=True,
         if not os.path.isdir(predictions_path):
             os.mkdir(predictions_path)
         np.save(predictions_path + '/' + data_id + '_' + model_id + '.npy', predictions)
-        '''
+        """
         
         predictions = np.load(predictions_path + '/' + data_id + '_' + model_id + '.npy')
 
@@ -1373,7 +1377,7 @@ def test_event_metric(test, compare, threshold=0.1, is_truth=False, call_length=
         print()
 
     return true_events, false_events
-
+'''
 
 
 if __name__ == '__main__':
