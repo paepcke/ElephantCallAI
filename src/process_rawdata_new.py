@@ -83,7 +83,7 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         time sections with no elephant calls present
     """
     # Step through the labels vector and collect the indeces from
-    # which we can define a window with now elephant call
+    # which we can define a window with no elephant call
     # i.e. all start indeces such that the window (start, start + window_sz)
     # does not contain an elephant call
     valid_starts = []
@@ -370,6 +370,8 @@ if __name__ == '__main__':
         #quit()
         feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
                                         curren_dir + '/' + label_file, spectrogram_info)
+
+        # Save the individual files seperately for each location!
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])

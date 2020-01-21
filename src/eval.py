@@ -24,7 +24,7 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
-from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14
+from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14, Model16, Model17
 from process_rawdata_new import generate_labels
 from visualization import visualize, visualize_predictions
 from scipy.io import wavfile
@@ -41,7 +41,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
 
-parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x2/files.txt')
+parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x1/files.txt')
 # For quatro
 #parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
 
@@ -62,14 +62,14 @@ parser.add_argument('--model_id', type=str, default='16',
 
 
 
-
+# We are using parameters device now!!!!!
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 predictions_path = '../Predictions'
 spectrogram_path = '../elephant_dataset/New_Data/Spectrograms'
 
 def loadModel(model_id):
-    model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=device)
+    model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=parameters.device)
     print (model)
     return model
 
@@ -655,7 +655,7 @@ def predict_spec_full(spectrogram, model):
     spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
     print (spectrogram.shape)
 
-    spectrogram = Variable(spectrogram.to(device))
+    spectrogram = Variable(spectrogram.to(parameters.device))
 
     outputs = model(spectrogram) # Shape - (1, seq_len, 1)
     compressed_out = outputs.view(-1, 1)
@@ -664,7 +664,7 @@ def predict_spec_full(spectrogram, model):
     sig = nn.Sigmoid()
     predictions = sig(compressed_out)
     # Generate the binary predictions
-    predictions = predictions.detach().numpy()
+    predictions = predictions.cpu().detach().numpy()
 
     return predictions
 
@@ -689,7 +689,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     i = 0
     # How can I parralelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
-        if (i % 10 == 0):
+        if (i % 1000 == 0):
             print ("Chunk number " + str(i))
 
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
@@ -700,7 +700,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         compressed_out = outputs.squeeze()
 
         overlap_counts[spect_idx: spect_idx + chunk_size] += 1
-        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.detach().numpy()
+        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.cpu().detach().numpy()
 
         spect_idx += jump
         i += 1
@@ -716,7 +716,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         compressed_out = outputs.squeeze()
 
         overlap_counts[spect_idx: ] += 1
-        predictions[spect_idx: ] += compressed_out.detach().numpy() 
+        predictions[spect_idx: ] += compressed_out.cpu().detach().numpy() 
 
 
     # Average the predictions on overlapping frames
@@ -765,7 +765,7 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
 
 
 def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
-            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False):
+            in_seconds=False, use_call_bounds=True, min_call_lengh=15, visualize=False):
     """
 
         After saving predictions for the test set of full spectrograms, we

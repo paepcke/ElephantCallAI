@@ -158,6 +158,7 @@ class ElephantDataset(data.Dataset):
 
 """
     Dataset for full test length audio
+    NEED TO FIX THIS!!
 """
 class ElephantDatasetFull(data.Dataset):
     def __init__(self, spectrogram_files, label_files, gt_calls, preprocess="Norm", scale=True):

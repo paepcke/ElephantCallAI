@@ -21,8 +21,8 @@ parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_
 #    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 #parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
      #help='The output directory')
-parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms') 
-parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
+parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') 
+parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
     help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     # Iterate through all data directories
     allDirs = [];
     # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir):
+    for (dirpath, dirnames, filenames) in os.walk(dataDir): 
         allDirs.extend(dirnames);
         break
 
@@ -200,7 +200,7 @@ if __name__ == '__main__':
                 np.save(dir + '/' + data_id + "_label.npy", labels)
                 print ("processed " + data_id)
 
-            
+            '''
             pool = multiprocessing.Pool()
             print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
             start_time = time.time()
@@ -208,6 +208,13 @@ if __name__ == '__main__':
             print('Multiprocessed took {}'.format(time.time()-start_time))
             pool.close()
             print('Multiprocessed took {}'.format(time.time()-start_time))
+            '''
+            # Let us not multip process this!!!
+            for file_pair in file_pairs:
+                start_time = time.time()
+                wrapper_processData(file_pair)
+                
+
 
 
 

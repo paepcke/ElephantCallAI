@@ -22,18 +22,19 @@ parser.add_argument('--window', type=int, default=10, help='Deterimes the window
 
 def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):
     """
-    Visualizes the spectogram and associated predictions/labels
+    Visualizes the spectogram and associated predictions/labels. 
+    features is the entire spectrogram that will be visualized
 
     For now this just has placeholder plots for outputs and labels
-    when they're not passed in. In the future maybe we should create
-    a different plot or something.
+    when they're not passed in. 
 
     Inputs are numpy arrays
     """
-    if binary_preds is not None:
+    if binary_preds is not None: # Add a forth plot that shows the binarized predictions
         fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1)
     else:
         fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+        
     #new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
     new_features = features.T
@@ -109,8 +110,6 @@ def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chun
         visualize(spectrogram[window_start: window_end], 
             prediction_labels[window_start: window_end], gt_labels[window_start: window_end],
             title=label, vert_lines=(start - window_start, end - window_start))
-
-
 
 
 
