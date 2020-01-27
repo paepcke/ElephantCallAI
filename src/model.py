@@ -751,8 +751,7 @@ class Model17(nn.Module):
 
 ##### END OF MODELS
 
-
-n
+def num_correct(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)

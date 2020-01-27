@@ -11,7 +11,7 @@ import math
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
+parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Test_Data_file/', 
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
      help='The output directory')
@@ -21,6 +21,7 @@ parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_
 #    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 #parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
      #help='The output directory')
+
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') 
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
@@ -190,14 +191,14 @@ if __name__ == '__main__':
                 
                 # Save these to spectrogram output folder with
                 # name dictated by the data_id
-                dir = os.path.join(outputDir,dirName)
-                if not os.path.exists(dir):
-                    os.mkdir(dir)
+                spect_dir = os.path.join(outputDir,dirName)
+                if not os.path.exists(spect_dir):
+                    os.mkdir(spect_dir)
 
                 # Want to save the corresponding label_file with the spectrogram!!
-                copy_csv_file(currentDir + '/' + label_file, dir + '/' + data_id + "_gt.txt")
-                np.save(dir + '/' + data_id + "_spec.npy", spectrogram)
-                np.save(dir + '/' + data_id + "_label.npy", labels)
+                copy_csv_file(currentDir + '/' + label_file, spect_dir + '/' + data_id + "_gt.txt")
+                np.save(spect_dir + '/' + data_id + "_spec.npy", spectrogram)
+                np.save(spect_dir + '/' + data_id + "_label.npy", labels)
                 print ("processed " + data_id)
 
             '''
@@ -213,10 +214,6 @@ if __name__ == '__main__':
             for file_pair in file_pairs:
                 start_time = time.time()
                 wrapper_processData(file_pair)
-                
-
-
-
 
 
 
