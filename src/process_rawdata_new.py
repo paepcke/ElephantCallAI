@@ -202,7 +202,7 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     # Note divide by sr to get sound file length in seconds
     if (chunk_end >= raw_audio.shape[0]):
         chunk_end = raw_audio.shape[0]
-        chunk_start = sound_file.shape[0] - chunk_size
+        chunk_start = raw_audio.shape[0] - chunk_size
 
     assert(chunk_end - chunk_start == chunk_size)
     # Make sure the call is fully in the region
