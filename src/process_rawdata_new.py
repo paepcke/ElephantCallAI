@@ -347,7 +347,8 @@ if __name__ == '__main__':
     # Let us create a list of these pairs to randomly split into
     # train/val if the flag is set
    
-    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items()]
+    # Exclude strange pairs where there is not a wav or gt file
+    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items() if 'wav' in pair and 'txt' in pair]
 
     data_files = file_pairs
     # May remain unused
