@@ -11,7 +11,7 @@ import math
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs/', 
+parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Test_Data_file/', 
     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
      help='The output directory')
@@ -21,8 +21,9 @@ parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_
 #    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 #parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
      #help='The output directory')
-parser.add_argument('--NFFT', type=int, default=3208, help='Window size used for creating spectrograms') 
-parser.add_argument('--hop', type=int, default=641, help='Hop size used for creating spectrograms')
+
+parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') 
+parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=256, 
     help='Deterimes the window size in frames of the resulting spectrogram') # Default corresponds to 21s
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
@@ -145,7 +146,7 @@ if __name__ == '__main__':
     # Iterate through all data directories
     allDirs = [];
     # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir):
+    for (dirpath, dirnames, filenames) in os.walk(dataDir): 
         allDirs.extend(dirnames);
         break
 
@@ -190,17 +191,17 @@ if __name__ == '__main__':
                 
                 # Save these to spectrogram output folder with
                 # name dictated by the data_id
-                dir = os.path.join(outputDir,dirName)
-                if not os.path.exists(dir):
-                    os.mkdir(dir)
+                spect_dir = os.path.join(outputDir,dirName)
+                if not os.path.exists(spect_dir):
+                    os.mkdir(spect_dir)
 
                 # Want to save the corresponding label_file with the spectrogram!!
-                copy_csv_file(currentDir + '/' + label_file, dir + '/' + data_id + "_gt.txt")
-                np.save(dir + '/' + data_id + "_spec.npy", spectrogram)
-                np.save(dir + '/' + data_id + "_label.npy", labels)
+                copy_csv_file(currentDir + '/' + label_file, spect_dir + '/' + data_id + "_gt.txt")
+                np.save(spect_dir + '/' + data_id + "_spec.npy", spectrogram)
+                np.save(spect_dir + '/' + data_id + "_label.npy", labels)
                 print ("processed " + data_id)
 
-            
+            '''
             pool = multiprocessing.Pool()
             print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
             start_time = time.time()
@@ -208,8 +209,11 @@ if __name__ == '__main__':
             print('Multiprocessed took {}'.format(time.time()-start_time))
             pool.close()
             print('Multiprocessed took {}'.format(time.time()-start_time))
-
-
+            '''
+            # Let us not multip process this!!!
+            for file_pair in file_pairs:
+                start_time = time.time()
+                wrapper_processData(file_pair)
 
 
 

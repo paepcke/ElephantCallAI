@@ -24,7 +24,7 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
-from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14
+from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14, Model16, Model17
 from process_rawdata_new import generate_labels
 from visualization import visualize, visualize_predictions
 from scipy.io import wavfile
@@ -41,7 +41,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
 
-parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x2/files.txt')
+parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x1/files.txt')
 # For quatro
 #parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
 
@@ -57,19 +57,23 @@ parser.add_argument('--full_stats', action='store_true',
     help = 'Compute statistics on the full test spectrograms')
 parser.add_argument('--pred_calls', action='store_true', 
     help = 'Generate the predicted (start, end) calls for test spectrograms')
+parser.add_argument('--pr_curve', type=int, default=0,
+    help='If != 0 then generate a pr_curve with that many sampled threshold points')
+
 parser.add_argument('--model_id', type=str, default='16',
     help = 'ID of the model to test on')
 
 
+TEST = True
 
-
+# We are using parameters device now!!!!!
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 predictions_path = '../Predictions'
 spectrogram_path = '../elephant_dataset/New_Data/Spectrograms'
 
 def loadModel(model_id):
-    model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=device)
+    model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=parameters.device)
     print (model)
     return model
 
@@ -397,7 +401,9 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
     print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
     print ("and s2 = {}, e2 = {}".format(s2, e2))
     len_source = e1 - s1 + 1
+    print ("Len Test Call: {}".format(len_source))
     test_call_length = e2 - s2 + 1
+    print ("Len Compare Call: {}".format(test_call_length))
     # Overlap check
     if s2 < s1: # Test call starts before the source call
         # The call is larger than our source call
@@ -409,6 +415,9 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
             # overlap xs this call. Kind of edge case should watch this
             elif len_source >= max(threshold * test_call_length, 1): 
                 print ('Prediction = portion of GT')
+                return True
+            else:
+                print ("Prediction = Smaller than threshold portion of GT")
                 return True
         else:
             overlap = e2 - s1 + 1
@@ -433,7 +442,7 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
 
     return False
 
-def call_prec_recall(test, compare, threshold=0.1, is_truth=False, spectrogram=None):
+def call_prec_recall(test, compare, threshold=0.1, is_truth=False, spectrogram=None, preds=None, gt_labels=None):
     """
         Adapted from Peter's paper.
         Given calls defined by their start and end time (in sorted order by occurence)
@@ -513,10 +522,12 @@ def call_prec_recall(test, compare, threshold=0.1, is_truth=False, spectrogram=N
             # May need to rewind!
             index_compare += 1
 
+
         if found:
             true_events.append(call)
         else:
             false_events.append(call)
+            #visualize_predictions([call], spectrogram, preds, gt_labels, label="False Pos")
 
     return true_events, false_events
 
@@ -655,7 +666,7 @@ def predict_spec_full(spectrogram, model):
     spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
     print (spectrogram.shape)
 
-    spectrogram = Variable(spectrogram.to(device))
+    spectrogram = Variable(spectrogram.to(parameters.device))
 
     outputs = model(spectrogram) # Shape - (1, seq_len, 1)
     compressed_out = outputs.view(-1, 1)
@@ -664,7 +675,7 @@ def predict_spec_full(spectrogram, model):
     sig = nn.Sigmoid()
     predictions = sig(compressed_out)
     # Generate the binary predictions
-    predictions = predictions.detach().numpy()
+    predictions = predictions.cpu().detach().numpy()
 
     return predictions
 
@@ -689,7 +700,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     i = 0
     # How can I parralelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
-        if (i % 10 == 0):
+        if (i % 1000 == 0):
             print ("Chunk number " + str(i))
 
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
@@ -700,7 +711,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         compressed_out = outputs.squeeze()
 
         overlap_counts[spect_idx: spect_idx + chunk_size] += 1
-        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.detach().numpy()
+        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.cpu().detach().numpy()
 
         spect_idx += jump
         i += 1
@@ -716,7 +727,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         compressed_out = outputs.squeeze()
 
         overlap_counts[spect_idx: ] += 1
-        predictions[spect_idx: ] += compressed_out.detach().numpy() 
+        predictions[spect_idx: ] += compressed_out.cpu().detach().numpy() 
 
 
     # Average the predictions on overlapping frames
@@ -833,7 +844,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
             print ("Using CSV file with ground truth call start and end times")
             gt_calls = process_ground_truth(gt_call_path, in_seconds=in_seconds)
         else:
-            print ("Using GT spectrogram labeling to generate GT calls")
+            print ("Using spectrogram labeling to generate GT calls")
             # We should never compute this in seconds
             # Also let us keep all the calls, i.e. set min_length = 0
             gt_calls, _ = find_elephant_calls(labels, min_length=0)
@@ -847,13 +858,16 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         # Look at precision metrics
         # Call Prediction True Positives
         # Call Prediction False Positives
-        true_pos, false_pos = call_prec_recall(predicted_calls, gt_calls, threshold=overlap_threshold, is_truth=False)
+        true_pos, false_pos = call_prec_recall(predicted_calls, gt_calls, threshold=overlap_threshold, is_truth=False,
+                                                spectrogram=spectrogram, preds=binary_preds, gt_labels=labels)
 
         # Look at recall metrics
         # Call Recall True Positives
         # Call Recall False Negatives
         true_pos_recall, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
 
+        print (binary_preds.shape)
+        print (labels.shape)
         f_score = get_f_score(binary_preds, labels) # just for the postive class
         accuracy = calc_accuracy(binary_preds, labels)
 
@@ -875,14 +889,35 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         results['summary']['accuracy'] += accuracy
 
     # Calculate averaged statistics
-    results['summary']['true_pos'] 
-    results['summary']['false_pos']
-    results['summary']['true_pos_recall'] 
-    results['summary']['false_neg'] 
     results['summary']['f_score'] /= len(dataset)
     results['summary']['accuracy'] /= len(dataset)
 
     return results
+
+def test_elephant_call_metric(dataset, results):
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+         # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Testing Metric Results for:", data_id)
+
+        print ("Testing False Negative Results")        
+        visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], labels, label="False Negative")
+
+        print ("Testing False Positive Results")        
+        visualize_predictions(results[data_id]['false_pos'], spectrogram, results[data_id]['binary_preds'], labels, label="False Positive")
+
+        print ("Testing True Positive Predictions Results")        
+        visualize_predictions(results[data_id]['true_pos'], spectrogram, results[data_id]['binary_preds'], labels, label="True Positive Predictions")
+
+        print ("Testing True Positive Recall Results")        
+        visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, results[data_id]['binary_preds'], labels, label="True Positive Recall")
+
 
 
 def get_spectrogram_paths(test_files_path, spectrogram_path):
@@ -911,7 +946,7 @@ def get_spectrogram_paths(test_files_path, spectrogram_path):
         # containing the spectrogram files
         paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
         paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
-        paths['gts'].append(spectrogram_path + '/' + file + '_gt.npy')
+        paths['gts'].append(spectrogram_path + '/' + file + '_gt.txt')
 
     return paths
     
@@ -926,8 +961,50 @@ def calc_accuracy(binary_preds, labels):
     accuracy = (binary_preds == labels).sum() / labels.shape[0]
     return accuracy
 
+def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_points):
+    """
+        Produce the PR Curve based on varying the prediction threshold 
+        used to determine if a time slice contains an elephant call or not
+        (i.e. the threshold for binarizing the sigmoid output).
+    """
+    thresholds = np.linspace(0, 100, num_points + 1) / 100.
+    # Note that we don't want to include threshold = 1 since we get divide by zero
+    # and the threshold = 0 since then precision is messed up, in that it should be around 0
+    thresholds = thresholds[1:-1]
+
+    precisions = [0]
+    recalls = [1]
+    for threshold in thresholds:
+        print ("threshold:", threshold)
+        results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, overlap_threshold=0.1, smooth=True, 
+                in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False)
+
+        TP_truth = results['summary']['true_pos_recall']
+        FN = results['summary']['false_neg']
+        TP_test = results['summary']['true_pos']
+        FP = results['summary']['false_pos']
+
+        recall = TP_truth / (TP_truth + FN)
+        precision = TP_test / (TP_test + FP)
+
+        precisions.append(precision)
+        recalls.append(recall)
+
+    # append what would happen if threshold = 1, precision = 1 and recall = 0
+    precisions.append(1.)
+    recalls.append(0)
+    print (precisions)
+    print (recalls)
+
+    plt.plot(recalls, precisions)
+    plt.show()
+
 
 def main():
+    """
+    Example runs:
+
+    """
     
     args = parser.parse_args()
     
@@ -943,6 +1020,9 @@ def main():
     elif args.full_stats:
         # Now we have to decide what to do with these stats
         results = eval_full_spectrograms(full_dataset, args.model_id, args.predictions_path)
+
+        if TEST: # Visualize the metric results
+            test_elephant_call_metric(full_dataset, results)
 
         # Display the output of results as peter did
         TP_truth = results['summary']['true_pos_recall']
@@ -964,6 +1044,8 @@ def main():
         print("False positve rate (FP / hr):", false_pos_per_hour)
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
+    elif args.pr_curve > 0:
+        precision_recall_curve_pred_threshold(full_dataset, args.model_id, args.predictions_path, args.pr_curve)
 
 
     '''

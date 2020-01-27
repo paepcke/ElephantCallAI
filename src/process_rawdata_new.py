@@ -22,12 +22,14 @@ parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_D
 #parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
 #   type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
-parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/Processed_data_new/',
-     help='The output directory')
+parser.add_argument('--out', dest='out_dir', default='../elephant_dataset/Train',
+     help='The output directory for the processed files. We need to specify this!')
+'''
 parser.add_argument('--train_dir', default='../elephant_dataset/Train_New', 
      help='Directory for the training chunks for the new data')
 parser.add_argument('--test_dir', default='../elephant_dataset/Test_New',
      help='Directory for the test chunks for the new data')
+'''
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') # was 3208!!
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms') # was 641!!
 parser.add_argument('--window', type=int, default=256, 
@@ -35,9 +37,13 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
-parser.add_argument('--test_size', type=float, default=0.1, help='Determines the relative size of the test set')
+parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
+parser.add_argument('--train_val', action='store_true', 
+    help = 'Generate a train and validation split based on the training data')
+parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Val/',
+     help='The output directory for the validation files. Only need this if creating validation files')
 
 
 np.random.seed(8)
@@ -83,7 +89,7 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         time sections with no elephant calls present
     """
     # Step through the labels vector and collect the indeces from
-    # which we can define a window with now elephant call
+    # which we can define a window with no elephant call
     # i.e. all start indeces such that the window (start, start + window_sz)
     # does not contain an elephant call
     valid_starts = []
@@ -287,10 +293,10 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
 if __name__ == '__main__':
     args = parser.parse_args()
     dataDir = args.dataDir
-    outputDir = args.outputDir
-    test_size = args.test_size
-    train_dir = args.train_dir
-    test_dir = args.test_dir
+    val_size = args.val_size
+    out_dir = args.out_dir
+    val_dir = args.val_dir
+    train_val = args.train_val
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
                         'max_freq': args.max_freq,
@@ -300,6 +306,149 @@ if __name__ == '__main__':
 
     print(args)
 
+    # Collect the wav/txt file pairs 
+    # Iterate through all data directories
+    # In case there are multiple folders for 
+    # organization sake.
+    # May want to ditch this
+    allDirs = [];
+    # Get the directories that contain the data files
+    for (dirpath, dirnames, filenames) in os.walk(dataDir):
+        allDirs.extend(dirnames);
+        break
+
+    # Iterate through all files with in data directories
+    data_pairs = {}
+    for dirName in allDirs:
+        #Iterate through each dir and get files within
+        currentDir = dataDir + '/' + dirName;
+        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
+            # Create data/label 
+            # pairs (i.e. (.wav, .txt))
+            for eachFile in filenames:
+                # Strip off the location and time tags
+                tags = eachFile.split('_')
+                data_id = tags[0] + '_' + tags[1]
+                file_type = eachFile.split('.')[1]
+
+                if (file_type not in ['wav', 'txt']):
+                    continue
+
+                # Insert the file name into the dictionary
+                # with the file type tag for a given id
+                if not data_id in data_pairs:
+                    data_pairs[data_id] = {}
+                    data_pairs[data_id]['id'] = data_id
+                    data_pairs[data_id]['dir'] = currentDir
+
+                data_pairs[data_id][file_type] = eachFile
+
+    # data_pairs now contains all of the wav/txt data file pairs.
+    # Let us create a list of these pairs to randomly split into
+    # train/val if the flag is set
+   
+    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items()]
+
+    data_files = file_pairs
+    # May remain unused
+    val_files = None
+    if args.train_val:
+        shuffle(file_pairs)
+
+        split_index = math.ceil(len(file_pairs) * (1 - val_size))
+        data_files = file_pairs[:split_index]
+        val_data_files = file_pairs[split_index:]
+
+    ## JUST TO TEST LOCALLY
+    #train_data_files = file_pairs[:1]
+    #test_data_files = file_pairs[1:]
+
+    def wrapper_processData(directory, data_pair):
+        """
+        This worker function is called on every data sample
+        """
+        audio_file = data_pair[0]
+        label_file = data_pair[1]
+        data_id = data_pair[2]
+        curren_dir = data_pair[3]
+
+        feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
+                                        curren_dir + '/' + label_file, spectrogram_info)
+
+        # Save the individual files seperately for each location!
+        for i in range(len(feature_set)):
+            np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
+            np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
+
+
+    # Process Given Data pairs. If we are not making a validation set
+    # then this is either all of the train data or the test data. Otherwise
+    # this is the portion of the training data for the training set
+    print ("Processing Data")
+    print ("Size: ", len(data_files))
+
+    out_dir += '/Neg_Samples_x' + str(args.neg_fact)
+    if not os.path.isdir(out_dir):
+        os.mkdir(out_dir)
+
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    pool.map(partial(wrapper_processData, out_dir), data_files)
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+    pool.close()
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+
+    # Save which files were used for main data files
+    with open(out_dir + '/files.txt', 'w') as f:
+        for i in range(len(data_files)):
+            file = data_files[i]
+            # write the id of each file pair (wav/txt)
+            # along with which time period it came from
+            # e.g. jan/id
+            dirs = file[3].split('/')
+            time_tag = dirs[-1]
+
+            path = time_tag + '/' + file[2]
+            if i != len(data_files) - 1:
+                path += '\n'
+
+            f.write(path)
+    
+    # Generate validation set
+    if train_val:
+        print ("Making Val Set")
+        print ("Size: ", len(vals_data_files))
+
+        val_dir += '/Neg_Samples_x' + str(args.neg_fact)
+        if not os.path.isdir(val_dir):
+            os.mkdir(val_dir)
+
+        pool = multiprocessing.Pool()
+        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+        start_time = time.time()
+        pool.map(partial(wrapper_processData, val_dir), val_data_files)
+        pool.close()
+        print('Multiprocessed took {}'.format(time.time()-start_time))    
+
+        with open(test_dir + '/files.txt', 'w') as f:
+            for i in range(len(val_data_files)):
+                file = val_data_files[i]
+                # write the id of each file pair (wav/txt)
+                # along with which time period it came from
+                # e.g. jan/id
+                dirs = file[3].split('/')
+                time_tag = dirs[-1]
+
+                path = time_tag + '/' + file[2]
+                if i != len(val_data_files) - 1:
+                    path += '\n'
+
+                f.write(path)
+
+    
+    
+    '''
     # Create Train / Test split
     # Really should also include Val set, but
     # we will worry about this later
@@ -370,6 +519,8 @@ if __name__ == '__main__':
         #quit()
         feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
                                         curren_dir + '/' + label_file, spectrogram_info)
+
+        # Save the individual files seperately for each location!
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
@@ -437,7 +588,7 @@ if __name__ == '__main__':
                 path += '\n'
 
             f.write(path)
-    
+    '''
 
     
 
