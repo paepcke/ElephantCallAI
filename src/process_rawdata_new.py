@@ -5,6 +5,7 @@ import csv
 import os
 import time
 import multiprocessing
+from multiprocessing import Value
 from scipy.io import wavfile
 from visualization import visualize
 import math
@@ -15,8 +16,11 @@ from functools import partial
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs', 
-     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+#parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs', 
+#     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+
+parser.add_argument('--data_dirs', dest='data_dirs', nargs='+', type=str,
+    help='Provide the data_dirs with the files that you want to be processed')
 
 # For use on quatro
 #parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
@@ -37,14 +41,16 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
-parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
+
+'''
+parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
 parser.add_argument('--train_val', action='store_true', 
     help = 'Generate a train and validation split based on the training data')
 parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Val/',
      help='The output directory for the validation files. Only need this if creating validation files')
-
+'''
 
 np.random.seed(8)
 random.seed(8) # Add this!
@@ -60,11 +66,17 @@ def generate_labels(labels, spectrogram_info, len_wav):
         up with the corresponding spectrogram without actually creating
         the spectrogram 
     '''
-    labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
     # Formula is: frames = floor((wav - overlap) / hop)
     len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram_info['hop'])) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
 
+    # In the case where there is actually no GT label file because no elephant
+    # calls occred in the recording, we simply output all zeros
+    if labels is None:
+        return labelMatrix
+
+    labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
+    
     samplerate = spectrogram_info['samplerate']
     # Iterates through labels and marks the segments with elephant calls
     for row in labelFile:
@@ -266,6 +278,32 @@ def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
 
     return feature_set, label_set
 
+def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
+    """
+        Extract either elephant calls from the audio file or
+        negative examples. If num_neg = 0 then extract the 
+        elephant calls, otherwise extract num_neg negative
+        samples from the audio file.
+    """
+    samplerate, raw_audio = wavfile.read(audio_file)
+    # No calls to extract
+    if label_file is None and num_neg == 0:
+        return [], []
+    elif label_file is not None and num_neg == 0: # We have a calls to extract
+        labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
+        
+    # Generate the spectrogram index labelings
+    spectrogram_info['samplerate'] = samplerate
+    label_vec = generate_labels(label_file, spectrogram_info, raw_audio.shape[0])
+
+    if num_neg == 0:
+        print ("Extracting elephant calls from", audio_file)
+        feature_set, label_set = generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info)
+    else:
+        print ("Extracting negative chuncks from", audio_file)
+        feature_set, label_set = generate_empty_chunks(num_neg, raw_audio, label_vec, spectrogram_info)
+
+    return feature_set, label_set
 
 def extract_data_chunks(audio_file, label_file, spectrogram_info):
     """
@@ -275,6 +313,7 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
         elephant call we make a chunk around a given reference
         call and then randomly place that call within the fram
     """
+    print ("Processing", audio_file)
     samplerate, raw_audio = wavfile.read(audio_file)
     labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
     # Generate the spectrogram index labelings
@@ -292,11 +331,8 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    dataDir = args.dataDir
-    val_size = args.val_size
+    data_dirs = args.data_dirs
     out_dir = args.out_dir
-    val_dir = args.val_dir
-    train_val = args.train_val
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
                         'max_freq': args.max_freq,
@@ -307,22 +343,11 @@ if __name__ == '__main__':
     print(args)
 
     # Collect the wav/txt file pairs 
-    # Iterate through all data directories
-    # In case there are multiple folders for 
-    # organization sake.
-    # May want to ditch this
-    allDirs = [];
-    # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir):
-        allDirs.extend(dirnames);
-        break
-
     # Iterate through all files with in data directories
     data_pairs = {}
-    for dirName in allDirs:
+    for currentDir in data_dirs:
         #Iterate through each dir and get files within
-        currentDir = dataDir + '/' + dirName;
-        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
+        for(dirpath, dirnames, filenames) in os.walk(currentDir):
             # Create data/label 
             # pairs (i.e. (.wav, .txt))
             for eachFile in filenames:
@@ -348,23 +373,17 @@ if __name__ == '__main__':
     # train/val if the flag is set
    
     # Exclude strange pairs where there is not a wav or gt file
-    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items() if 'wav' in pair and 'txt' in pair]
+    # Some wav files do not have a gt because there are no calls!
+    file_pairs = []
+    for _, pair in data_pairs.items():
+        # We must be careful in the case where there is no
+        # label file basically there are no calls!
+        gt_labels = None if 'txt' not in pair else pair['txt']
+        file_pairs.append(((pair['wav'], gt_labels, pair['id'], pair['dir'])))
 
-    data_files = file_pairs
-    # May remain unused
-    val_files = None
-    if args.train_val:
-        shuffle(file_pairs)
+    #file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items() if 'wav' in pair and 'txt' in pair]
 
-        split_index = math.ceil(len(file_pairs) * (1 - val_size))
-        data_files = file_pairs[:split_index]
-        val_data_files = file_pairs[split_index:]
-
-    ## JUST TO TEST LOCALLY
-    #train_data_files = file_pairs[:1]
-    #test_data_files = file_pairs[1:]
-
-    def wrapper_processData(directory, data_pair):
+    def wrapper_processPos(directory, data_pair):
         """
         This worker function is called on every data sample
         """
@@ -373,8 +392,11 @@ if __name__ == '__main__':
         data_id = data_pair[2]
         curren_dir = data_pair[3]
 
-        feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
-                                        curren_dir + '/' + label_file, spectrogram_info)
+        # Catch case where no calls exist so the gt file does not
+        label_path = curren_dir + '/' + label_file if label_file is not None else None
+        feature_set, label_set = generate_data_chunks(curren_dir + '/' + audio_file, 
+                                        label_path, spectrogram_info)
+        call_counter.value += len(feature_set)
 
         # Save the individual files seperately for each location!
         for i in range(len(feature_set)):
@@ -382,28 +404,67 @@ if __name__ == '__main__':
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
 
 
-    # Process Given Data pairs. If we are not making a validation set
-    # then this is either all of the train data or the test data. Otherwise
-    # this is the portion of the training data for the training set
-    print ("Processing Data")
-    print ("Size: ", len(data_files))
-
     out_dir += '/Neg_Samples_x' + str(args.neg_fact)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
+    # Process Given Data pairs.
+    print ("Processing Positive examples")
+    print ("Num Files: ", len(file_pairs))
+
+    call_counter = Value("i", 0) # Shared thread variable to count the number of postive call examples
     pool = multiprocessing.Pool()
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     start_time = time.time()
-    pool.map(partial(wrapper_processData, out_dir), data_files)
+    pool.map(partial(wrapper_processPos, out_dir), file_pairs)
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
     print('Multiprocessed took {}'.format(time.time()-start_time))
+    
+    num_calls = call_counter.value
+    num_sound_files = len(file_pairs)
 
+    num_neg_samples = spectrogram_info['neg_fact'] * num_calls
+    samples_per_file = int(math.ceil(num_neg_samples / float(num_sound_files)))
+    print ("Num calls:", num_calls)
+    print("Num neg:", num_neg_samples)
+    print("samples per:", samples_per_file)
+
+    def wrapper_processNeg(directory, num_negative, data_pair):
+        """
+        This worker function is called on every data sample
+        """
+        audio_file = data_pair[0]
+        label_file = data_pair[1]
+        data_id = data_pair[2]
+        curren_dir = data_pair[3]
+
+        # Catch case where no calls exist so the gt file does not
+        label_path = curren_dir + '/' + label_file if label_file is not None else None
+        feature_set, label_set = generate_data_chunks(curren_dir + '/' + audio_file, 
+                                        label_path, spectrogram_info, num_negative)
+
+        # Save the individual files seperately for each location!
+        for i in range(len(feature_set)):
+            np.save(directory + '/' + data_id + "_neg-features_" + str(i), feature_set[i])
+            np.save(directory + '/' + data_id + "_neg-labels_" + str(i), label_set[i])
+
+    # Generate num_neg_samples negative examples where we randomly 
+    # sample "samples_per_file" examples from each file
+    print ("Processing Positive examples")
+    print ("Size: ", len(file_pairs))
+    pool = multiprocessing.Pool()
+    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
+    start_time = time.time()
+    pool.map(partial(wrapper_processNeg, out_dir, samples_per_file), file_pairs)
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+    pool.close()
+    print('Multiprocessed took {}'.format(time.time()-start_time))
+    
     # Save which files were used for main data files
     with open(out_dir + '/files.txt', 'w') as f:
-        for i in range(len(data_files)):
-            file = data_files[i]
+        for i in range(len(file_pairs)):
+            file = file_pairs[i]
             # write the id of each file pair (wav/txt)
             # along with which time period it came from
             # e.g. jan/id
@@ -411,43 +472,13 @@ if __name__ == '__main__':
             time_tag = dirs[-1]
 
             path = time_tag + '/' + file[2]
-            if i != len(data_files) - 1:
+            if i != len(file_pairs) - 1:
                 path += '\n'
 
             f.write(path)
-    
-    # Generate validation set
-    if train_val:
-        print ("Making Val Set")
-        print ("Size: ", len(vals_data_files))
 
-        val_dir += '/Neg_Samples_x' + str(args.neg_fact)
-        if not os.path.isdir(val_dir):
-            os.mkdir(val_dir)
 
-        pool = multiprocessing.Pool()
-        print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-        start_time = time.time()
-        pool.map(partial(wrapper_processData, val_dir), val_data_files)
-        pool.close()
-        print('Multiprocessed took {}'.format(time.time()-start_time))    
-
-        with open(test_dir + '/files.txt', 'w') as f:
-            for i in range(len(val_data_files)):
-                file = val_data_files[i]
-                # write the id of each file pair (wav/txt)
-                # along with which time period it came from
-                # e.g. jan/id
-                dirs = file[3].split('/')
-                time_tag = dirs[-1]
-
-                path = time_tag + '/' + file[2]
-                if i != len(val_data_files) - 1:
-                    path += '\n'
-
-                f.write(path)
-
-    
+    # Old code implementation    
     
     '''
     # Create Train / Test split
