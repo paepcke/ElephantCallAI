@@ -132,6 +132,7 @@ def copy_csv_file(file_path, out_path):
 
 #########################
 ######## Execute ########
+## Gotta fix this to include files with noooooo elephant calls!
 if __name__ == '__main__':
     args = parser.parse_args()
     dataDir = args.dataDir

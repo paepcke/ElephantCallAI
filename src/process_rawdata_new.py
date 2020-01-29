@@ -291,7 +291,7 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         return [], []
     elif label_file is not None and num_neg == 0: # We have a calls to extract
         labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
-        
+
     # Generate the spectrogram index labelings
     spectrogram_info['samplerate'] = samplerate
     label_vec = generate_labels(label_file, spectrogram_info, raw_audio.shape[0])
@@ -378,8 +378,9 @@ if __name__ == '__main__':
     for _, pair in data_pairs.items():
         # We must be careful in the case where there is no
         # label file basically there are no calls!
-        gt_labels = None if 'txt' not in pair else pair['txt']
-        file_pairs.append(((pair['wav'], gt_labels, pair['id'], pair['dir'])))
+        if 'wav' in pair:
+            gt_labels = None if 'txt' not in pair else pair['txt']
+            file_pairs.append(((pair['wav'], gt_labels, pair['id'], pair['dir'])))
 
     #file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items() if 'wav' in pair and 'txt' in pair]
 
