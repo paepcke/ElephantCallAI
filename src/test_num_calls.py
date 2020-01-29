@@ -62,13 +62,24 @@ for _, pair in data_pairs.items():
 
 count = 0
 for file in file_pairs:
+    in_count = 0
     # Count the number of elephant calls!
     if file[1] != None:
         label_file = file[3] + '/' + file[1]
         labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
 
+        last_call_num = 0
         for call in labels:
             count += 1
+            in_count += 1
+            last_call_num = call['Selection']
+
+        if (int(last_call_num) != in_count):
+            print (last_call_num)
+            print (in_count)
+            print ("FUCKKKKKKK")
+
+
 
 print ("number of calls:", count)
 
