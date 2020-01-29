@@ -17,10 +17,12 @@ from functools import partial
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dirs', dest='data_dirs', nargs='+', type=str,
     help='Provide the data_dirs with the files that you want to be processed')
+parser.add_argument('--gt_labels', type=str)
 
 
 args = parser.parse_args()
 data_dirs = args.data_dirs
+
 
 data_pairs = {}
 for currentDir in data_dirs:
@@ -60,6 +62,8 @@ for _, pair in data_pairs.items():
         gt_labels = None if 'txt' not in pair else pair['txt']
         file_pairs.append(((pair['wav'], gt_labels, pair['id'], pair['dir'])))
 
+# Create a dict of counts for each file
+count_d = {}
 count = 0
 for file in file_pairs:
     in_count = 0
@@ -74,14 +78,39 @@ for file in file_pairs:
             in_count += 1
             last_call_num = call['Selection']
 
+        count_d[file[0]] = in_count
+
         if (int(last_call_num) != in_count):
             print (last_call_num)
             print (in_count)
             print ("FUCKKKKKKK")
 
-
-
 print ("number of calls:", count)
+
+# Step through the gt and compare
+# Extract the header for the csv file
+with open(args.gt_labels, 'r') as f:
+    reader = csv.reader(f, delimiter='\t')
+    lines = list(reader)
+
+current_file = None
+curr_counter = 0
+for i in range(1, len(lines)):
+    file = lines[i][9]
+
+    if file != current_file:
+        # Check if what we had equals the gt file
+        if current_file in count_d and count_d[current_file] != curr_counter:
+            print ("GT", curr_counter, "\t Processed", count_d[file])
+            print ("FUCKKKK WHYY")
+        #elif file not in count_d:
+        #    print (file)
+
+        curr_counter = 0
+        current_file = file
+
+    curr_counter += 1
+
 
 
 
