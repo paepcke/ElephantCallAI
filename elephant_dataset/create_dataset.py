@@ -440,11 +440,13 @@ from boxsdk import OAuth2
 
 oauth = OAuth2(
     client_id='zofisutrx5cnbwcap5kmpvoszfc7a26r',
-    client_secret='1nANURXFq4f8TrbNOQ9tsJwlXKYLZJLp',
+    client_secret='wA8KJlRsUOiwpE2pTO1Y3rliH8Z9DK7b',
 )
 
-auth_url, csrf_token = oauth.get_authorization_url('https://nikitademir.com')
-access_token, refresh_token = oauth.authenticate('mUuZ8FtTDpqKIPcfjBTj1Ie0ilhCimId')
+from boxsdk import Client
+client = Client(oauth)
+me = client.user().get()
+print('My user ID is {0}'.format(me.id))
 
 from boxsdk import LoggingClient
 client = LoggingClient(oauth)
@@ -463,7 +465,54 @@ def download(folder, path):
             output_file = open(path + item.name, 'wb')
             client.file(file_id=item.id).download_to(output_file)
 
-download(shared_folder, "")
+download(shared_folder, "/home/data/elephants/rawdata/")
 """
+
+"""
+New approach, and one at a time
+
+from boxsdk import OAuth2
+
+oauth = OAuth2(
+    client_id='zofisutrx5cnbwcap5kmpvoszfc7a26r',
+    client_secret='wA8KJlRsUOiwpE2pTO1Y3rliH8Z9DK7b',
+)
+
+auth_url, csrf_token = oauth.get_authorization_url('https://nikitademir.com')
+
+print(auth_url)
+
+# This then needs to be manually done
+from boxsdk import LoggingClient
+access_token, refresh_token = oauth.authenticate('') # Enter auth code in here from redirect link
+
+# Hoping passing in refresh token here means it gets used
+oauth = OAuth2(
+    client_id='zofisutrx5cnbwcap5kmpvoszfc7a26r',
+    client_secret='wA8KJlRsUOiwpE2pTO1Y3rliH8Z9DK7b',
+    access_token=access_token,
+    refresh_token=refresh_token,
+)
+
+client = LoggingClient(oauth)
+user = client.user().get()
+print('User ID is {0}'.format(user.id))
+import os
+def download(folder, path):
+    # TODO: Make folder locally
+    path += folder.name + '/'
+    os.makedirs(path, exist_ok=True)
+    items = folder.get_items()
+    for item in items:
+        if item.type == 'file':
+            output_file = open(path + item.name, 'wb')
+            client.file(file_id=item.id).download_to(output_file)
+
+
+shared_folder = client.get_shared_item("https://cornell.box.com/s/n0xesdrdrlq4ch96zl6zqwkkigfejrhw")
+
+download(shared_folder, "/home/data/elephants/rawdata/DetectorDevelopment/")
+"""
+
 
 
