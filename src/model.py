@@ -907,7 +907,7 @@ def main():
     else:
         ## Training
         model_id = int(sys.argv[1])
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_x" + parameters.NEG_SAMPLES + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_x" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
         model = get_model(model_id)
 
