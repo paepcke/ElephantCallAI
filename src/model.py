@@ -1,28 +1,7 @@
 """
-Also here is the command for an interactive shell:
+To train a model: 
 
-
-
-srun -p aida -w c0019 -n2 --ntasks-per-core 1 --mem 40G --gres=gpu:1 --time=1800 --pty /bin/bash
-
-
-
-And here is a sample for a script to submit a job 
-
-
-
-the command would be: sbatch your_script_name.sh
-
-
-
-and your_script_name.sh would have this at the top:
-
-#!/bin/bash
-#SBATCH -p aida --time=3600 --gres=gpu:1 -n 8
-
-
-
-python experiment_script.py 
+python model.py <model_number>
 """
 
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -886,8 +865,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x4/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Test_nouab/Neg_Samples_x4/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
