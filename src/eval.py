@@ -61,6 +61,8 @@ parser.add_argument('--pr_curve', type=int, default=0,
     help='If != 0 then generate a pr_curve with that many sampled threshold points')
 parser.add_argument('--overlaps', type=float, nargs='+', default=[.1], 
     help='A list of overlaps that we want to consider for the PR tradeoff curve')
+parser.add_argument('--visualize', action='store_true',
+    help='Visualize full spectrogram results')
 
 parser.add_argument('--model_id', type=str, default='16',
     help = 'ID of the model to test on')
@@ -1045,7 +1047,7 @@ def main():
         # Now we have to decide what to do with these stats
         results = eval_full_spectrograms(full_dataset, args.model_id, args.predictions_path)
 
-        if TEST: # Visualize the metric results
+        if args.visualize: # Visualize the metric results
             test_elephant_call_metric(full_dataset, results)
 
         # Display the output of results as peter did
