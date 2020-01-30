@@ -1,28 +1,11 @@
 """
-Also here is the command for an interactive shell:
+To train a model: 
 
+python model.py <model_number>
 
+For visualization:
 
-srun -p aida -w c0019 -n2 --ntasks-per-core 1 --mem 40G --gres=gpu:1 --time=1800 --pty /bin/bash
-
-
-
-And here is a sample for a script to submit a job 
-
-
-
-the command would be: sbatch your_script_name.sh
-
-
-
-and your_script_name.sh would have this at the top:
-
-#!/bin/bash
-#SBATCH -p aida --time=3600 --gres=gpu:1 -n 8
-
-
-
-python experiment_script.py 
+python model.py visualize <path_to_model>
 """
 
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -782,6 +765,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                      'valid': len(dataloders['valid'].dataset)}
 
     best_valid_acc = 0.0
+    best_valid_fscore = 0.0
     best_model_wts = None
 
     try:
@@ -860,6 +844,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
+                    best_valid_fscore = valid_epoch_fscore
                     best_model_wts = model.state_dict()
 
             print('Epoch [{}/{}] Training loss: {:.6f} acc: {:.4f} ' 
@@ -882,12 +867,13 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
         print("Early stopping due to keyboard intervention")
 
     print('Best val Acc: {:4f}'.format(best_valid_acc))
+    print('Best val F-score: {:4f}'.format(best_valid_fscore))
     return best_model_wts
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
@@ -896,7 +882,8 @@ def main():
 
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
-        model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
+        # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
+        model = torch.load(sys.argv[2], map_location=device)
         print(model)
 
         for inputs, labels in dloaders['valid']:
@@ -920,13 +907,15 @@ def main():
     else:
         ## Training
         model_id = int(sys.argv[1])
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+
         model = get_model(model_id)
 
         model.to(device)
 
         print(model)
 
-        writer = SummaryWriter(parameters.LOGS_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())))
+        writer = SummaryWriter(save_path)
         writer.add_scalar('batch_size', parameters.BATCH_SIZE)
         writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[model_id]['l2_reg'])
 
@@ -941,9 +930,9 @@ def main():
 
         if model_wts:
             model.load_state_dict(model_wts)
-            save_path = parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + ".pt"
-            if not os.path.exists(parameters.MODEL_SAVE_PATH):
-                os.makedirs(parameters.MODEL_SAVE_PATH)
+            save_path = save_path + "/" + "model.pt"
+            if not os.path.exists(parameters.SAVE_PATH):
+                os.makedirs(parameters.SAVE_PATH)
             torch.save(model, save_path)
             print('Saved best val acc model to path {}'.format(save_path))
         else:
