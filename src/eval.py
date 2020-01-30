@@ -41,7 +41,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
 
-parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test_New/Neg_Samples_x1/files.txt')
+parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/Neg_Samples_x1/files.txt')
 # For quatro
 #parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
 
@@ -59,9 +59,21 @@ parser.add_argument('--pred_calls', action='store_true',
     help = 'Generate the predicted (start, end) calls for test spectrograms')
 parser.add_argument('--pr_curve', type=int, default=0,
     help='If != 0 then generate a pr_curve with that many sampled threshold points')
+parser.add_argument('--overlaps', type=float, nargs='+', default=[.1], 
+    help='A list of overlaps that we want to consider for the PR tradeoff curve')
 
 parser.add_argument('--model_id', type=str, default='16',
     help = 'ID of the model to test on')
+
+
+'''
+Example runs
+
+# Make predictions for model 17
+python eval.py --test_files ../elephant_dataset/Test_nouab/Neg_Samples_x4/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model_id 17 --make_full_pred
+
+
+'''
 
 
 TEST = True
@@ -417,7 +429,9 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
                 print ('Prediction = portion of GT')
                 return True
             else:
-                print ("Prediction = Smaller than threshold portion of GT")
+                # NOTE this is an edge case and should be considered. We probably out of consistancy should not
+                # Include this as a good predction because it is too small!
+                print ("Prediction = Smaller than threshold portion of GT") 
                 return True
         else:
             overlap = e2 - s1 + 1
@@ -724,10 +738,11 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
 
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
         compressed_out = outputs.view(-1, 1)
-        compressed_out = outputs.squeeze()
+        # In the case of ResNet the output is forced to the chunk size
+        compressed_out = outputs.squeeze()[:predctions.shape[0]]
 
         overlap_counts[spect_idx: ] += 1
-        predictions[spect_idx: ] += compressed_out.cpu().detach().numpy() 
+        predictions[spect_idx: ] += compressed_out.cpu().detach().numpy()
 
 
     # Average the predictions on overlapping frames
@@ -961,43 +976,52 @@ def calc_accuracy(binary_preds, labels):
     accuracy = (binary_preds == labels).sum() / labels.shape[0]
     return accuracy
 
-def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_points):
+def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_points, overlaps):
     """
-        Produce the PR Curve based on varying the prediction threshold 
-        used to determine if a time slice contains an elephant call or not
-        (i.e. the threshold for binarizing the sigmoid output).
+        Produce a set of PR Curves based on the % overlap needed for a
+        correct prediction. For each PR curve we vary the prediction 
+        threshold used to determine if a time slice contains an elephant call or not
+        (i.e. the threshold for binarizing the sigmoid output) as a 
+        linear scale with num_points sampled.
     """
     thresholds = np.linspace(0, 100, num_points + 1) / 100.
     # Note that we don't want to include threshold = 1 since we get divide by zero
     # and the threshold = 0 since then precision is messed up, in that it should be around 0
     thresholds = thresholds[1:-1]
 
-    precisions = [0]
-    recalls = [1]
-    for threshold in thresholds:
-        print ("threshold:", threshold)
-        results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, overlap_threshold=0.1, smooth=True, 
-                in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False)
+    for overlap in overlaps:
+        precisions = [0]
+        recalls = [1]
+        for threshold in thresholds:
+            print ("threshold:", threshold)
+            results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, overlap_threshold=overlap, smooth=True, 
+                    in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False)
 
-        TP_truth = results['summary']['true_pos_recall']
-        FN = results['summary']['false_neg']
-        TP_test = results['summary']['true_pos']
-        FP = results['summary']['false_pos']
+            TP_truth = results['summary']['true_pos_recall']
+            FN = results['summary']['false_neg']
+            TP_test = results['summary']['true_pos']
+            FP = results['summary']['false_pos']
 
-        recall = TP_truth / (TP_truth + FN)
-        precision = TP_test / (TP_test + FP)
+            recall = TP_truth / (TP_truth + FN)
+            precision = TP_test / (TP_test + FP)
 
-        precisions.append(precision)
-        recalls.append(recall)
+            precisions.append(precision)
+            recalls.append(recall)
 
-    # append what would happen if threshold = 1, precision = 1 and recall = 0
-    precisions.append(1.)
-    recalls.append(0)
-    print (precisions)
-    print (recalls)
+        # append what would happen if threshold = 1, precision = 1 and recall = 0
+        precisions.append(1.)
+        recalls.append(0)
+        print (precisions)
+        print (recalls)
 
-    plt.plot(recalls, precisions)
-    plt.show()
+        plt.plot(recalls, precisions, label='Overlap = ' + str(overlap))
+
+    plt.legend()
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.savefig("../Figures/PR_Curve" + str(model_id))
+
+
 
 
 def main():
@@ -1045,7 +1069,7 @@ def main():
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
     elif args.pr_curve > 0:
-        precision_recall_curve_pred_threshold(full_dataset, args.model_id, args.predictions_path, args.pr_curve)
+        precision_recall_curve_pred_threshold(full_dataset, args.model_id, args.predictions_path, args.pr_curve, args.overlaps)
 
 
     '''
