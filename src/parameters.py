@@ -7,6 +7,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
+NEG_SAMPLES = 4
 NORM = "norm"
 SCALE = True
 
@@ -127,8 +128,7 @@ RANDOM_SEED = 42
 BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
-MODEL_SAVE_PATH = '../weights/'
-LOGS_SAVE_PATH = './runs/'
+SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
