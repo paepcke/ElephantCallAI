@@ -872,8 +872,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
 def main():
     ## Build Dataset
-    train_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + parameters.NEG_SAMPLES + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Test_nouab/Neg_Samples_x" + parameters.NEG_SAMPLES + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    validation_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
@@ -907,7 +907,7 @@ def main():
     else:
         ## Training
         model_id = int(sys.argv[1])
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_x" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
         model = get_model(model_id)
 
