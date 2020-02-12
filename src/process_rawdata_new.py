@@ -413,7 +413,9 @@ if __name__ == '__main__':
             for i in range(len(feature_set)):
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
-
+                print(feature_set[i].shape)
+                print(label_set[i].shape)
+                print("saved")
 
         out_dir += '/Full_24_hrs'
         if not os.path.isdir(out_dir):
