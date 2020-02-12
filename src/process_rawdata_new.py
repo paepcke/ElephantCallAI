@@ -412,7 +412,7 @@ if __name__ == '__main__':
             # Save the individual files seperately for each location!
             for i in range(math.floor(full_24_hr_spectogram.shape[1] / 256)):
                 feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
-                label = labels[:, i * 256:(i + 1) * 256]
+                label = labels[i * 256:(i + 1) * 256]
 
                 print(feature.shape)
                 print(label.shape)
