@@ -403,34 +403,25 @@ if __name__ == '__main__':
 
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
-            print("hi")
             full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
-            print("hey")
             labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[1])
-            print("wow")
-            print(len(full_24_hr_spectogram))
+            print("Shapes of full spectrograms and labels")
             print(full_24_hr_spectogram.shape)
             print(labels.shape)
-            print("okay")
-            feature_set = np.array_split(full_24_hr_spectogram, 256, axis=-1)
-            label_set = np.array_split(labels, 256, axis=-1)
-            print("lol")
-            print(feature_set)
-            print(len(feature_set))
-            print(feature_set[0].shape)
-            print("labels")
-            print(len(label_set))
-            print(label_set[0].shape)
-
-            call_counter.value += len(feature_set)
 
             # Save the individual files seperately for each location!
-            for i in range(len(feature_set)):
-                np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
-                np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
-                print(feature_set[i].shape)
-                print(label_set[i].shape)
+            for i in range(math.floor(full_24_hr_spectogram.shape[1] / 256))
+                feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
+                label = labels[:, i * 256:(i + 1) * 256]
+
+                print(feature.shape)
+                print(label.shape)
+                assert feature.shape[1] == 256
+                assert label.shape[1] == 256
+                np.save(directory + '/' + data_id + "_features_" + str(i), feature)
+                np.save(directory + '/' + data_id + "_labels_" + str(i), label)
                 print("saved")
+                call_counter.value += 1
 
         out_dir += '/Full_24_hrs'
         if not os.path.isdir(out_dir):
