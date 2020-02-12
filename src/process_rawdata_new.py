@@ -410,6 +410,7 @@ if __name__ == '__main__':
             print(labels.shape)
 
             # Save the individual files seperately for each location!
+            num_chunks = 0
             for i in range(math.floor(full_24_hr_spectogram.shape[1] / 256)):
                 feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
                 label = labels[i * 256:(i + 1) * 256]
@@ -418,10 +419,13 @@ if __name__ == '__main__':
                     print("MAJOR PROBLEMSSSS WHY DOESNT MULTIPROCESSING SURFACE ERRORS")
                 assert feature.shape[1] == 256
                 assert label.shape[0] == 256
+
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label)
                 call_counter.value += 1
-                print("Saved successfully")
+                num_chunks += 1
+            
+            print("Saved successfully {} chunks.".format(num_chunks))
 
         out_dir += '/Full_24_hrs'
         if not os.path.isdir(out_dir):
