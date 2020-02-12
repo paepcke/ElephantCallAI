@@ -421,6 +421,7 @@ if __name__ == '__main__':
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label)
                 call_counter.value += 1
+                print("Saved successfully")
 
         out_dir += '/Full_24_hrs'
         if not os.path.isdir(out_dir):
