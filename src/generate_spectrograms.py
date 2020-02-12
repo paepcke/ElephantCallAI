@@ -110,6 +110,7 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
     spectrum = spectrum[(freqs <= max_freq)]
     final_spec = np.concatenate((final_spec, spectrum), axis=1)
 
+    print("Finished making one 24 hour spectogram")
     return final_spec
 
 def copy_csv_file(file_path, out_path):
