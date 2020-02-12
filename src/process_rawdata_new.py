@@ -414,6 +414,8 @@ if __name__ == '__main__':
                 feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
                 label = labels[i * 256:(i + 1) * 256]
 
+                if feature.shape[1] != 256:
+                    print("MAJOR PROBLEMSSSS WHY DOESNT MULTIPROCESSING SURFACE ERRORS")
                 assert feature.shape[1] == 256
                 assert label.shape[0] == 256
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
