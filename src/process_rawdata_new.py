@@ -417,7 +417,7 @@ if __name__ == '__main__':
                 print(feature.shape)
                 print(label.shape)
                 assert feature.shape[1] == 256
-                assert label.shape[1] == 256
+                assert label.shape[0] == 256
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label)
                 print("saved")
