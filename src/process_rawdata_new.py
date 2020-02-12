@@ -414,13 +414,10 @@ if __name__ == '__main__':
                 feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
                 label = labels[i * 256:(i + 1) * 256]
 
-                print(feature.shape)
-                print(label.shape)
                 assert feature.shape[1] == 256
                 assert label.shape[0] == 256
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label)
-                print("saved")
                 call_counter.value += 1
 
         out_dir += '/Full_24_hrs'
@@ -433,8 +430,8 @@ if __name__ == '__main__':
         print ("Num Files: ", len(file_pairs))
 
         call_counter = Value("i", 0) # Shared thread variable to count the number of postive call examples
-        pool = multiprocessing.Pool(1)
-        print('Multiprocessing on 20 CPU cores')
+        pool = multiprocessing.Pool()
+        print('Multiprocessing')
         start_time = time.time()
         pool.map(partial(wrapper_processFull24Hours, out_dir), file_pairs)
         print('Multiprocessed took {}'.format(time.time()-start_time))
