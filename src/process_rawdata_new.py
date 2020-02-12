@@ -390,6 +390,8 @@ if __name__ == '__main__':
     if args.full_24_hr:
         print("Processing all 24 hours and saving chunks from them")
 
+        spectrogram_info['samplerate'] = 8000
+
         def wrapper_processFull24Hours(directory, data_pair):
             """
             This worker function is called on every data sample
