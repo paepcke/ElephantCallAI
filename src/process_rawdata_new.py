@@ -13,7 +13,7 @@ import argparse
 from random import shuffle
 import random
 from functools import partial
-import generate_spectograms
+import generate_spectrograms
 
 
 parser = argparse.ArgumentParser()
