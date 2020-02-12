@@ -433,7 +433,7 @@ if __name__ == '__main__':
         pool.close()
         print('Multiprocessed took {}'.format(time.time()-start_time))
 
-        return
+        quit()
 
     def wrapper_processPos(directory, data_pair):
         """
