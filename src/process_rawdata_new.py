@@ -404,8 +404,15 @@ if __name__ == '__main__':
             full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
             labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[0])
 
-            feature_set = np.array_split(full_24_hr_spectogram, 256)[:-1]
-            label_set = np.array_split(labels, 256)[:-1]
+            feature_set = np.array_split(full_24_hr_spectogram, 256)
+            label_set = np.array_split(labels, 256)
+
+            print(feature_set)
+            print(len(feature_set))
+            print(feature_set[0].shape)
+            print("labels")
+            print(len(label_set))
+            print(label_set[0].shape)
 
             call_counter.value += len(feature_set)
 
