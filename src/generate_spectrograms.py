@@ -42,6 +42,7 @@ def generate_labels(labels, spectrogram_info, len_labels):
         up with the corresponding spectrogram without actually creating
         the spectrogram 
     '''
+    print("making label files")
     labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
 
@@ -61,6 +62,7 @@ def generate_labels(labels, spectrogram_info, len_labels):
         end_spec = min(math.ceil((end_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), labelMatrix.shape[0])
         labelMatrix[start_spec : end_spec] = 1
 
+    print("finished with that")
     return labelMatrix
 
 
