@@ -79,6 +79,16 @@ python eval.py --test_files ../elephant_dataset/Test_nouab/Neg_Samples_x4/files.
 '''
 
 
+'''
+Example runs
+
+# Make predictions for model 17
+python eval.py --test_files ../elephant_dataset/Test_nouab/Neg_Samples_x4/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model_id 17 --make_full_pred
+
+
+'''
+
+
 TEST = True
 
 # We are using parameters device now!!!!!
