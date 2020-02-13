@@ -64,8 +64,9 @@ parser.add_argument('--overlaps', type=float, nargs='+', default=[.1],
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
-parser.add_argument('--model_id', type=str, default='16',
-    help = 'ID of the model to test on')
+parser.add_argument('--model', type=str, default='16',
+    help = 'ID of the model to test on') # Now is path
+parser.add_argument('--model_id', type=str, default='17')
 
 
 '''
@@ -86,8 +87,9 @@ THRESHOLD = 0.5
 predictions_path = '../Predictions'
 spectrogram_path = '../elephant_dataset/New_Data/Spectrograms'
 
-def loadModel(model_id):
-    model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_id + ".pt", map_location=parameters.device)
+def loadModel(model_path):
+    #model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_path + ".pt", map_location=parameters.device)
+    model = torch.load(model_path, map_location=parameters.device)
     print (model)
     return model
 
@@ -1034,7 +1036,7 @@ def main():
     
     args = parser.parse_args()
     
-    model = loadModel(args.model_id)
+    model = loadModel(args.model)
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
