@@ -13,6 +13,7 @@ import argparse
 from random import shuffle
 import random
 from functools import partial
+import generate_spectrograms
 
 
 parser = argparse.ArgumentParser()
@@ -43,6 +44,8 @@ parser.add_argument('--pad', dest='pad_to', type=int, default=4096,
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
+parser.add_argument('--full_24_hr', type=bool, default=False, 
+    help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
 
 '''
 parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
@@ -382,7 +385,67 @@ if __name__ == '__main__':
             gt_labels = None if 'txt' not in pair else pair['txt']
             file_pairs.append(((pair['wav'], gt_labels, pair['id'], pair['dir'])))
 
-    #file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items() if 'wav' in pair and 'txt' in pair]
+
+
+    if args.full_24_hr:
+        print("Processing all 24 hours and saving chunks from them")
+
+        spectrogram_info['samplerate'] = 8000
+
+        def wrapper_processFull24Hours(directory, data_pair):
+            """
+            This worker function is called on every data sample
+            """
+            audio_file = data_pair[0]
+            label_file = data_pair[1]
+            data_id = data_pair[2]
+            curren_dir = data_pair[3]
+
+            # Catch case where no calls exist so the gt file does not
+            label_path = curren_dir + '/' + label_file if label_file is not None else None
+            full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
+            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[1])
+            print("Shapes of full spectrograms and labels")
+            print(full_24_hr_spectogram.shape)
+            print(labels.shape)
+
+            # Save the individual files seperately for each location!
+            num_chunks = 0
+            for i in range(math.floor(full_24_hr_spectogram.shape[1] / 256)):
+                feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
+                label = labels[i * 256:(i + 1) * 256]
+
+                if feature.shape[1] != 256:
+                    print("MAJOR PROBLEMSSSS WHY DOESNT MULTIPROCESSING SURFACE ERRORS")
+                assert feature.shape[1] == 256
+                assert label.shape[0] == 256
+
+                np.save(directory + '/' + data_id + "_features_" + str(i), feature)
+                np.save(directory + '/' + data_id + "_labels_" + str(i), label)
+                call_counter.value += 1
+                num_chunks += 1
+            
+            print("Saved successfully {} chunks.".format(num_chunks))
+
+        out_dir += '/Full_24_hrs'
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
+
+
+        # Process Given Data pairs.
+        print ("Processing full 24 hours examples")
+        print ("Num Files: ", len(file_pairs))
+
+        call_counter = Value("i", 0) # Shared thread variable to count the number of postive call examples
+        pool = multiprocessing.Pool(20)
+        print('Multiprocessing')
+        start_time = time.time()
+        pool.map(partial(wrapper_processFull24Hours, out_dir), file_pairs)
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+        pool.close()
+        print('Multiprocessed took {}'.format(time.time()-start_time))
+
+        quit()
 
     def wrapper_processPos(directory, data_pair):
         """
@@ -477,151 +540,4 @@ if __name__ == '__main__':
                 path += '\n'
 
             f.write(path)
-
-
-    # Old code implementation    
-    
-    '''
-    # Create Train / Test split
-    # Really should also include Val set, but
-    # we will worry about this later
-    # Collect the wav/txt file pairs that
-    # we will then split
-    # Iterate through all data directories
-    allDirs = [];
-    # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir):
-        allDirs.extend(dirnames);
-        break
-
-    # Iterate through all files with in data directories
-    data_pairs = {}
-    for dirName in allDirs:
-        #Iterate through each dir and get files within
-        currentDir = dataDir + '/' + dirName;
-        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
-            # Iterate through the files to create data/label 
-            # pairs (i.e. (.wav, .txt))
-
-            for eachFile in filenames:
-                # Strip off the location and time tags
-                tags = eachFile.split('_')
-                data_id = tags[0] + '_' + tags[1]
-                file_type = eachFile.split('.')[1]
-
-                if (file_type not in ['wav', 'txt']):
-                    continue
-
-                # Insert the file name into the dictionary
-                # with the file type tag for a given id
-                if not data_id in data_pairs:
-                    data_pairs[data_id] = {}
-
-                data_pairs[data_id][file_type] = eachFile
-                data_pairs[data_id]['id'] = data_id
-                data_pairs[data_id]['dir'] = currentDir
-
-    # data_pairs now contains all of the wav/txt data file pairs.
-    # Let us create a list of these pairs to randomly split into
-    # train/test or train/val/test or whatever we want
-   
-    file_pairs = [(pair['wav'], pair['txt'], pair['id'], pair['dir']) for _, pair in data_pairs.items()]
-    # Shuffle the files before train test split
-    shuffle(file_pairs)
-
-    # Some inherant issues even with this!
-    split_index = math.ceil(len(file_pairs) * (1 - test_size))
-    train_data_files = file_pairs[:split_index]
-    test_data_files = file_pairs[split_index:]
-
-    ## JUST TO TEST LOCALLY
-    #train_data_files = file_pairs[:1]
-    #test_data_files = file_pairs[1:]
-
-
-    def wrapper_processData(directory, data_pair):
-        """
-        This worker function is called on every data sample
-        """
-        audio_file = data_pair[0]
-        label_file = data_pair[1]
-        data_id = data_pair[2]
-        curren_dir = data_pair[3]
-
-        #generate_whole_spectogram(currentDir + '/' + audio_file, outputDir, spectrogram_info)
-        #quit()
-        feature_set, label_set = extract_data_chunks(curren_dir + '/' + audio_file, 
-                                        curren_dir + '/' + label_file, spectrogram_info)
-
-        # Save the individual files seperately for each location!
-        for i in range(len(feature_set)):
-            np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
-            np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
-
-
-    # Generate Train Set
-    print ("Making Train Set")
-    print ("Size: ", len(train_data_files))
-
-    train_dir += '/Neg_Samples_x' + str(args.neg_fact)
-    if not os.path.isdir(train_dir):
-        os.mkdir(train_dir)
-
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    start_time = time.time()
-    pool.map(partial(wrapper_processData, train_dir), train_data_files)
-    print('Multiprocessed took {}'.format(time.time()-start_time))
-    pool.close()
-    print('Multiprocessed took {}'.format(time.time()-start_time))
-    
-
-    # Generate Test Set
-    print ("Making Test Set")
-    print ("Size: ", len(test_data_files))
-
-    test_dir += '/Neg_Samples_x' + str(args.neg_fact)
-    if not os.path.isdir(test_dir):
-        os.mkdir(test_dir)
-
-    pool = multiprocessing.Pool()
-    print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    start_time = time.time()
-    pool.map(partial(wrapper_processData, test_dir), test_data_files)
-    pool.close()
-    print('Multiprocessed took {}'.format(time.time()-start_time))    
-
-    # Also save which files were used for each of the datasets
-    with open(train_dir + '/files.txt', 'w') as f:
-        for i in range(len(train_data_files)):
-            file = train_data_files[i]
-            # write the id of each file pair (wav/txt)
-            # along with which time period it came from
-            # e.g. jan/id
-            dirs = file[3].split('/')
-            time_tag = dirs[-1]
-
-            path = time_tag + '/' + file[2]
-            if i != len(train_data_files) - 1:
-                path += '\n'
-
-            f.write(path)
-    
-    with open(test_dir + '/files.txt', 'w') as f:
-        for i in range(len(test_data_files)):
-            file = test_data_files[i]
-            # write the id of each file pair (wav/txt)
-            # along with which time period it came from
-            # e.g. jan/id
-            dirs = file[3].split('/')
-            time_tag = dirs[-1]
-
-            path = time_tag + '/' + file[2]
-            if i != len(test_data_files) - 1:
-                path += '\n'
-
-            f.write(path)
-    '''
-
-    
 

@@ -72,7 +72,7 @@ class ElephantDataset(data.Dataset):
         self.preprocess = preprocess
         self.scale = scale
 
-        self.features = glob.glob(data_path + "*_features_*")
+        self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
         self.labels = []
 
         for feature_path in self.features:
