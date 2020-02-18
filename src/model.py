@@ -748,7 +748,9 @@ class Model18(nn.Module):
            nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
         # Change intitialization of final layer bias term
-        self.model.fc[2].weight.data.fill_(np.log((1 - 0.01) / 0.01))
+        # Want p_t for pos. class to be initially low
+        pi = 0.01
+        self.model.fc[2].weight.data.fill_(np.log((1 - pi) / pi))
 
 
     def forward(self, inputs):
@@ -771,13 +773,17 @@ class FocalLoss(nn.Module):
         # Calculate the standard BCE loss and then 
         # re-weight it by the term (a_t (1 - p_t)^gamma)
         # Let us see how the weighting term would actually apply here later!
+        # Let us compare how this works an added alpha term
         bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have
-        # -log(pt)
+        # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
         pt = torch.exp(-bce_loss)
-        # Other implementations simply multiply by alpha
-        # but we remember that this depends on what class it is
-        alpha_t = (self.alpha * (targets == 1).float() + (1-self.alpha) * (targets == 0).float())
+        print (pt)
+        print(targets)
+        # Value of alpha for class 1 and 1 - alpha for class 0
+        alpha = torch.tensor([1 - self.alpha, self.alpha])
+        # Select the appropriate alpha based on label y
+        alpha_t = alpha[targets.data.view(-1).long()].view_as(targets)
+        
         focal_loss = alpha_t * (1 - pt)**self.gamma * bce_loss
 
         if self.reduce:
