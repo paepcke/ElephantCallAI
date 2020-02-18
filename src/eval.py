@@ -75,9 +75,10 @@ Example runs
 
 # Make predictions 
 # To customize change the model flag!
-python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr --make_full_pred
+python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr/model.pt --make_full_pred
 
-
+# Calculate Stats 
+python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr/model.pt --full_stats
 '''
 
 TEST = True
@@ -94,10 +95,7 @@ def loadModel(model_path):
     print (model)
     # Get the model name from the path
     tokens = model_path.split('/')
-    model_id = tokens[-1]
-    # Strip the .pt off of the end
-    period_idx = model_id.index('.')
-    model_id = model_id[:period_idx]
+    model_id = tokens[-2]
     return model, model_id
  
 
@@ -766,8 +764,6 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         # Call Recall False Negatives
         true_pos_recall, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
 
-        print (binary_preds.shape)
-        print (labels.shape)
         f_score = get_f_score(binary_preds, labels) # just for the postive class
         accuracy = calc_accuracy(binary_preds, labels)
 
@@ -888,7 +884,7 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
             FP = results['summary']['false_pos']
 
             recall = TP_truth / (TP_truth + FN)
-            precision = TP_test / (TP_test + FP)
+            precision = 0 if TP_test + FP == 0 else TP_test / (TP_test + FP) # For edge case where no calls are identified
 
             precisions.append(precision)
             recalls.append(recall)
@@ -942,7 +938,7 @@ def main():
         FP = results['summary']['false_pos']
 
         recall = TP_truth / (TP_truth + FN)
-        precision = TP_test / (TP_test + FP)
+        precision = 0 if TP_test + FP == 0 else TP_test / (TP_test + FP) # For edge 0 case
         f1_call = 2 * (precision * recall) / (precision + recall)
         # Do false pos rate later!!!!
         total_duration = 24. * len(full_test_spect_paths['specs'])

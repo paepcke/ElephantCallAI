@@ -289,6 +289,7 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         samples from the audio file.
     """
     # Just for the bai elephants
+    # Need to loook into this
     try:
         samplerate, raw_audio = wavfile.read(audio_file)
         print ("File size", raw_audio.shape)
