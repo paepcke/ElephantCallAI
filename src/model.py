@@ -870,17 +870,75 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     print('Best val F-score: {:4f}'.format(best_valid_fscore))
     return best_model_wts
 
+def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
+    """
+        Data loop for self supervised adversarial negative sample discovery. 
+        Run the data through the model, and for negative samples (i.e.) that 
+        have no elephant calls in them, flag those in which we identify a false
+        positive call. For each data chunk, run through the model to get the model
+        predictions. To check for a false positive example that we want to add
+        to the training loop see if we make a prediction in a chunk without any
+        ground truth calls. Note, this will identify necessary chunks because
+        the false positives in chunks with elephant calls in them will already
+        exist in the dataset.
+    """
+    # Note there may be edge cases where an adversarial example exists right
+    # near an elephant call and is not included in the training dataset because
+    # of the way that the chunks are created for training. i.e. the chunks in 
+    # the training dataset may not have included the adversarial examples, but
+    # when creating chunks for the 24hrs the chunks may be aligned differently
+    adversarial_examples = []
+    # This dataset includes chunks from the full 24 hours
+    for inputs, labels, data_files in dataloader:
+        inputs = inputs.float()
+                    
+        labels = labels.cpu().detach().numpy()
+
+        inputs = Variable(inputs.to(device))
+
+        # Forward pass
+        logits = model(inputs) # Shape - (batch_size, seq_len, 1)
+        predictions = torch.sigmoid(logits).cpu().detach().numpy()
+
+        # Now for each chunk we want to see whether it should be flagged as 
+        # a hard negative sample. Look over number in batch.
+        # Pre-compute the number of pos. slices in each chunk
+        gt_counts = np.sum(labels, axis=1) # Shape - (batch_size)
+        # Threshold the predictions - May add guassian blur
+        binary_preds = np.where(predictions > threshold, 1, 0)
+        pred_counts = np.sum(binary_preds, axis=1).squeeze() # Shape - (batch_size)
+        for example in range(gt_counts.shape[0]):
+            # Flag chunks with false pos in empy chunks.
+            if gt_counts[example] == 0 and pred_counts[example] > min_length:
+                print ("found an adversarial examples")
+                adversarial_examples.append(data_files[example])
+                # visualize it
+                if VERBOSE:
+                    features = inputs[example].detach().numpy()
+                    output = predictions[example]
+                    label = labels[example]
+
+                    visualize(features, output, label)
+
+
+    return adversarial_examples
+
+
+
+
 def main():
     ## Build Dataset
     # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"
 
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("/home/jgs8/ElephantCallAI/elephant_dataset/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    # The validation loader should be the full 24hr trainind data use for adversarial discovery
+    #validation_loader 
+    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
-    dloaders = {'train':train_loader, 'valid':validation_loader}
+    dloaders = {'train':train_loader, 'valid':test_loader}
 
     if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
@@ -905,6 +963,15 @@ def main():
                 label = labels[i].detach().numpy()
 
                 visualize(features, output, label)
+
+    elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
+        # Load a model that was already trained and run through adversarial 
+        # discovery
+        model = torch.load(sys.argv[2], map_location=device)
+
+        adversarial_examples = adversarial_discovery(test_loader, model, threshold=0.5, min_length=0)
+        print (adversarial_examples)
+        print (len(adversarial_examples))
 
     else:
         ## Training

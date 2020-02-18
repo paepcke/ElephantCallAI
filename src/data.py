@@ -103,7 +103,8 @@ class ElephantDataset(data.Dataset):
         feature = torch.from_numpy(feature).float()
         label = torch.from_numpy(label).float()
 
-        return feature, label
+
+        return feature, label, self.features[index] # Include the data file
 
     def apply_transforms(self, data):
         if self.scale:

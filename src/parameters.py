@@ -7,7 +7,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-NEG_SAMPLES = 4
+NEG_SAMPLES = 1
 NORM = "norm"
 SCALE = True
 

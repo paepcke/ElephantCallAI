@@ -55,8 +55,8 @@ parser.add_argument('--make_full_preds', action='store_true',
     help = 'Generate predictions for the full test spectrograms')
 parser.add_argument('--full_stats', action='store_true',
     help = 'Compute statistics on the full test spectrograms')
-parser.add_argument('--pred_calls', action='store_true', 
-    help = 'Generate the predicted (start, end) calls for test spectrograms')
+#parser.add_argument('--pred_calls', action='store_true', 
+#    help = 'Generate the predicted (start, end) calls for test spectrograms')
 parser.add_argument('--pr_curve', type=int, default=0,
     help='If != 0 then generate a pr_curve with that many sampled threshold points')
 parser.add_argument('--overlaps', type=float, nargs='+', default=[.1], 
@@ -64,30 +64,21 @@ parser.add_argument('--overlaps', type=float, nargs='+', default=[.1],
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
-parser.add_argument('--model', type=str, default='16',
-    help = 'ID of the model to test on') # Now is path
-parser.add_argument('--model_id', type=str, default='17')
+parser.add_argument('--model', type=str,
+    help = 'Path to the model to test on') # Now is path
+#parser.add_argument('--model_id', type=str, default='17')
 
-
-'''
-Example runs
-
-# Make predictions for model 17
-python eval.py --test_files ../elephant_dataset/Test_nouab/Neg_Samples_x4/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model_id 17 --make_full_pred
-
-
-'''
 
 
 '''
 Example runs
 
-# Make predictions for model 17
-python eval.py --test_files ../elephant_dataset/Test_nouab/Neg_Samples_x4/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model_id 17 --make_full_pred
+# Make predictions 
+# To customize change the model flag!
+python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr --make_full_pred
 
 
 '''
-
 
 TEST = True
 
@@ -101,134 +92,14 @@ def loadModel(model_path):
     #model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + model_path + ".pt", map_location=parameters.device)
     model = torch.load(model_path, map_location=parameters.device)
     print (model)
-    return model
-
-  
-def call_recall(dloader, model):
-    """
-        Metric:
-        Calculates of the true calls how many do we find
-        at least to some degree, for example a percantage
-        of the call is identified
-    """
-
-    total_calls = 0
-    total_labeled = 0
-    for inputs, labels in dloader:
-        inputs = inputs.float()
-        labels = labels.float()
-
-        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-        # Forward pass
-        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
-        # Compute the sigmoid over our outputs
-        compressed_out = outputs.squeeze()
-        sig = nn.Sigmoid()
-        predictions = sig(compressed_out)
-        binary_preds = np.where(predictions > THRESHOLD, 1, 0)
-
-        # Travesere the batch
-        for i in range(len(inputs)):
-            example = binary_preds[i]
-            labeling = labels[i]
-
-            num_matched = 0
-
-            #for j in range(len(example)):
-
-
-def call_identification(dloader, model):
-    """
-        Metric:
-        Calculates accuracy based on how many elephant calls
-        we correctly predict some frames of (i.e. identify part of).
-        This metric should give a bit of a sense of how well the 
-        model (lstm) is picking up on the fact that we have seen 
-        an elephant call, ignoring the constraint that we have 
-        to correctly label all of the call. 
-    """  
-    # Specifically:
-    # Of all the calls that we predicted as a string of 1's
-    # how many fall in an elephant call. Obviously if predict 
-    # all ones we get 100%, but that is not our original objective
-    # function so it should be interesting to look into this.
-    total_labeled = 0
-    in_calls = 0
-
-    for inputs, labels in dloader:
-        inputs = inputs.float()
-        labels = labels.float()
-
-        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-        # Forward pass
-        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
-        # Compute the sigmoid over our outputs
-        compressed_out = outputs.squeeze()
-        sig = nn.Sigmoid()
-        predictions = sig(compressed_out)
-        binary_preds = np.where(predictions > THRESHOLD, 1, 0)
-
-        # Traverse the predictions vector for each data example
-        # to see how many predictions overalap a true call
-        for i in range(len(inputs)):
-            example = binary_preds[i]
-            labeling = labels[i]
-
-            # Keeps track of whether we have already
-            # overlapped a call for the given prediction
-            matched = False
-            predictLen = 0
-            inPredict = False
-            MIN_LENGTH = 3
-            # Must predict for at least X time frames
-            for j in range(example.shape[0]):
-                if predictLen > MIN_LENGTH:
-                    if not inPredict:
-                        total_labeled += 1
-                        inPredict = True
-
-                    # Also check if we have matched
-                    if matched:
-                        in_calls += 1
-
-                if example[j] == 1:
-                    predictLen += 1
-                    #inPredict = True
-                    #total_labeled += 1
-                elif example[j] == 0:
-                    inPredict = False
-                    matched = False
-
-                # Check if we hit an elephant call
-                # and we haven't hit one already. 
-                # We do this to avoid double counting
-                if inPredict > 0 and labeling[j] == 1 and not matched:
-                    #in_calls += 1
-                    matched = True
-
-
-    call_identification_acc = float(in_calls) / float(total_labeled)
-    print (call_identification_acc)
-
-
-def trigger_word_accuracy(output, truth):
-    num_triggered = 0
-    num_calls = 0
-    i = 0
-    while i < len(truth):
-        if truth[i] == 1:
-            num_calls += 1
-            call_detected_flag = False
-            while i < len(truth) and truth[i] == 1:
-                if not call_detected_flag:
-                    if output[i] == 1:
-                        call_detected_flag = True
-                        num_triggered += 1
-                i += 1
-        i += 1
-    if num_calls == 0:
-        return 0.0
-    return num_triggered / num_calls
+    # Get the model name from the path
+    tokens = model_path.split('/')
+    model_id = tokens[-1]
+    # Strip the .pt off of the end
+    period_idx = model_id.index('.')
+    model_id = model_id[:period_idx]
+    return model, model_id
+ 
 
 def visual_time_series(spectrum, predicts, labels):
     # Do the timeseries with the most calls
@@ -753,7 +624,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
         compressed_out = outputs.view(-1, 1)
         # In the case of ResNet the output is forced to the chunk size
-        compressed_out = outputs.squeeze()[:predctions.shape[0]]
+        compressed_out = outputs.squeeze()[:predictions[spect_idx: ].shape[0]]
 
         overlap_counts[spect_idx: ] += 1
         predictions[spect_idx: ] += compressed_out.cpu().detach().numpy()
@@ -1046,18 +917,20 @@ def main():
     
     args = parser.parse_args()
     
-    model = loadModel(args.model)
+    model, model_id = loadModel(args.model)
+    print (model_id)
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
+    print (args.spect_path)
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
                  full_test_spect_paths['labels'], full_test_spect_paths['gts'])    
 
     if args.make_full_preds:
-        generate_predictions_full_spectrograms(full_dataset, model, args.model_id, args.predictions_path,
+        generate_predictions_full_spectrograms(full_dataset, model, model_id, args.predictions_path,
              sliding_window=True, chunk_size=256, jump=128)         # Add in these arguments
     elif args.full_stats:
         # Now we have to decide what to do with these stats
-        results = eval_full_spectrograms(full_dataset, args.model_id, args.predictions_path)
+        results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path)
 
         if args.visualize: # Visualize the metric results
             test_elephant_call_metric(full_dataset, results)
@@ -1083,7 +956,7 @@ def main():
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
     elif args.pr_curve > 0:
-        precision_recall_curve_pred_threshold(full_dataset, args.model_id, args.predictions_path, args.pr_curve, args.overlaps)
+        precision_recall_curve_pred_threshold(full_dataset, model_id, args.predictions_path, args.pr_curve, args.overlaps)
 
 
     '''
@@ -1235,6 +1108,130 @@ def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
 ################################################################
 ######################### OLD CODE #############################
 ################################################################
+def call_recall(dloader, model):
+    """
+        Metric:
+        Calculates of the true calls how many do we find
+        at least to some degree, for example a percantage
+        of the call is identified
+    """
+
+    total_calls = 0
+    total_labeled = 0
+    for inputs, labels in dloader:
+        inputs = inputs.float()
+        labels = labels.float()
+
+        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+        # Forward pass
+        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
+        # Compute the sigmoid over our outputs
+        compressed_out = outputs.squeeze()
+        sig = nn.Sigmoid()
+        predictions = sig(compressed_out)
+        binary_preds = np.where(predictions > THRESHOLD, 1, 0)
+
+        # Travesere the batch
+        for i in range(len(inputs)):
+            example = binary_preds[i]
+            labeling = labels[i]
+
+            num_matched = 0
+
+            #for j in range(len(example)):
+
+
+def call_identification(dloader, model):
+    """
+        Metric:
+        Calculates accuracy based on how many elephant calls
+        we correctly predict some frames of (i.e. identify part of).
+        This metric should give a bit of a sense of how well the 
+        model (lstm) is picking up on the fact that we have seen 
+        an elephant call, ignoring the constraint that we have 
+        to correctly label all of the call. 
+    """  
+    # Specifically:
+    # Of all the calls that we predicted as a string of 1's
+    # how many fall in an elephant call. Obviously if predict 
+    # all ones we get 100%, but that is not our original objective
+    # function so it should be interesting to look into this.
+    total_labeled = 0
+    in_calls = 0
+
+    for inputs, labels in dloader:
+        inputs = inputs.float()
+        labels = labels.float()
+
+        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+        # Forward pass
+        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
+        # Compute the sigmoid over our outputs
+        compressed_out = outputs.squeeze()
+        sig = nn.Sigmoid()
+        predictions = sig(compressed_out)
+        binary_preds = np.where(predictions > THRESHOLD, 1, 0)
+
+        # Traverse the predictions vector for each data example
+        # to see how many predictions overalap a true call
+        for i in range(len(inputs)):
+            example = binary_preds[i]
+            labeling = labels[i]
+
+            # Keeps track of whether we have already
+            # overlapped a call for the given prediction
+            matched = False
+            predictLen = 0
+            inPredict = False
+            MIN_LENGTH = 3
+            # Must predict for at least X time frames
+            for j in range(example.shape[0]):
+                if predictLen > MIN_LENGTH:
+                    if not inPredict:
+                        total_labeled += 1
+                        inPredict = True
+
+                    # Also check if we have matched
+                    if matched:
+                        in_calls += 1
+
+                if example[j] == 1:
+                    predictLen += 1
+                    #inPredict = True
+                    #total_labeled += 1
+                elif example[j] == 0:
+                    inPredict = False
+                    matched = False
+
+                # Check if we hit an elephant call
+                # and we haven't hit one already. 
+                # We do this to avoid double counting
+                if inPredict > 0 and labeling[j] == 1 and not matched:
+                    #in_calls += 1
+                    matched = True
+
+
+    call_identification_acc = float(in_calls) / float(total_labeled)
+    print (call_identification_acc)
+
+def trigger_word_accuracy(output, truth):
+    num_triggered = 0
+    num_calls = 0
+    i = 0
+    while i < len(truth):
+        if truth[i] == 1:
+            num_calls += 1
+            call_detected_flag = False
+            while i < len(truth) and truth[i] == 1:
+                if not call_detected_flag:
+                    if output[i] == 1:
+                        call_detected_flag = True
+                        num_triggered += 1
+                i += 1
+        i += 1
+    if num_calls == 0:
+        return 0.0
+    return num_triggered / num_calls
 
 def test_full_spectrograms(dataset, model, model_id, sliding_window=True, 
             pred_threshold=0.5, overlap_threshold=0.1, chunk_size=256, jump=128, smooth=True, 
