@@ -288,7 +288,12 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         elephant calls, otherwise extract num_neg negative
         samples from the audio file.
     """
-    samplerate, raw_audio = wavfile.read(audio_file)
+    # Just for the bai elephants
+    try:
+        samplerate, raw_audio = wavfile.read(audio_file)
+        print ("File size", raw_audio.shape)
+    except:
+        print("FILE Failed", audio_file)
     # No calls to extract
     if label_file is None and num_neg == 0:
         return [], []
