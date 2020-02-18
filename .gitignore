@@ -2,6 +2,7 @@ src/runs/*
 weights/*
 .DS_Store
 data/*
+models/*
 whale-detection-challenge/*
 Elephant_Archive/*
 elephant_dataset/Test_full/
