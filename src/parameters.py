@@ -121,6 +121,12 @@ HYPERPARAMETERS = {
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
         },
+18: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
 }
 
 RANDOM_SEED = 42
@@ -128,7 +134,9 @@ RANDOM_SEED = 42
 BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
-SAVE_PATH = '/home/data/elephants/models/'
+#Local
+SAVE_PATH = '../models/'
+#SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1

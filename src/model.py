@@ -25,6 +25,7 @@ import sklearn
 import sys
 import copy
 import os
+import torch.nn.functional as F
 
 import parameters
 #import Metrics
@@ -74,6 +75,8 @@ def get_model(idx):
         return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
     elif idx == 17:
         return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+    elif idx == 18:
+        return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
 """
 Basically what Brendan was doing
 """
@@ -731,6 +734,58 @@ class Model17(nn.Module):
         out = self.model(inputs)
         return out
 
+# Res net but now try testing with focal loss
+class Model18(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Model18, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
+
+        # Change intitialization of final layer bias term
+        self.model.fc[2].weight.data.fill_(np.log((1 - 0.01) / 0.01))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
+
+
+# For the focal loss we just want to initialize the bias of the final layer to be
+# log((1-pi)/pi) where pi = 0.01 is good
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2, reduce=True):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        # Calculate the standard BCE loss and then 
+        # re-weight it by the term (a_t (1 - p_t)^gamma)
+        # Let us see how the weighting term would actually apply here later!
+        bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+        # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have
+        # -log(pt)
+        pt = torch.exp(-bce_loss)
+        # Other implementations simply multiply by alpha
+        # but we remember that this depends on what class it is
+        alpha_t = (self.alpha * (targets == 1).float() + (1-self.alpha) * (targets == 0).float())
+        focal_loss = alpha_t * (1 - pt)**self.gamma * bce_loss
+
+        if self.reduce:
+            return torch.mean(focal_loss)
+
+        return focal_loss
+
+
 
 ##### END OF MODELS
 
@@ -788,7 +843,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                 i = 0
                 print ("Num batches:", len(dataloders[phase]))
-                for inputs, labels in dataloders[phase]:
+                for inputs, labels, _ in dataloders[phase]:
                     i += 1
                     if (i % 1000 == 0):
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
@@ -988,7 +1043,9 @@ def main():
         writer.add_scalar('batch_size', parameters.BATCH_SIZE)
         writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[model_id]['l2_reg'])
 
-        criterion = torch.nn.BCEWithLogitsLoss()
+        #criterion = torch.nn.BCEWithLogitsLoss()
+        # Try focal loss
+        criterion = FocalLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=parameters.HYPERPARAMETERS[model_id]['lr'], weight_decay=parameters.HYPERPARAMETERS[model_id]['l2_reg'])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
 
