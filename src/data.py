@@ -75,7 +75,7 @@ class ElephantDataset(data.Dataset):
         self.preprocess = preprocess
         self.scale = scale
 
-        if data_files:
+        if data_file_paths:
             print("Got a list of data files to load in, loading")
             self.features = [data_file_paths]
         else:
