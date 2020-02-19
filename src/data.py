@@ -21,7 +21,8 @@ def get_loader(data_dir,
                augment=False,
                shuffle=True,
                num_workers=4,
-               pin_memory=True):
+               pin_memory=True,
+               data_file_paths=None):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -38,6 +39,8 @@ def get_loader(data_dir,
     - num_workers: number of subprocesses to use when loading the dataset.
     - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
       True if using GPU.
+    - data_file_paths: If you know what particular data file names you want to load, 
+      pass them in as a list of strings.
     Returns
     -------
     - train_loader: training set iterator.
@@ -45,7 +48,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale)
+    dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale, data_file_paths=data_file_paths)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -65,14 +68,18 @@ def get_loader(data_dir,
     - Preprocess = Scale range (-1, 1), Scale = True ===> Overfit but huge variance issue
 """
 class ElephantDataset(data.Dataset):
-    def __init__(self, data_path, transform=None, preprocess="norm", scale=False):
+    def __init__(self, data_path, transform=None, preprocess="norm", scale=False, data_file_paths=None):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
         self.preprocess = preprocess
         self.scale = scale
 
-        self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
+        if data_files:
+            print("Got a list of data files to load in, loading")
+            self.features = [data_file_paths]
+        else:
+            self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
         self.labels = []
 
         for feature_path in self.features:
