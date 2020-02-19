@@ -824,6 +824,17 @@ class FocalLoss(nn.Module):
 
 ##### END OF MODELS
 
+def num_non_zero(logits, labels, threshold):
+    sig = nn.Sigmoid()
+    with torch.no_grad():
+        pred = sig(logits)
+        binary_preds = pred > threshold
+        # Cast to proper type!
+        binary_preds = binary_preds.float()
+        num_non_zero = binary_preds.sum()
+
+    return num_non_zero
+
 def num_correct(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
     with torch.no_grad():
@@ -869,6 +880,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 running_loss = 0.0
                 running_corrects = 0
                 running_samples = 0
+                running_non_zero = 0
                 running_fscore = 0.0
                 iterations = 0
 
@@ -911,6 +923,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                     running_loss += loss.item()
                     running_corrects += num_correct(logits, labels)
+                    running_non_zero += running_non_zero(logits, labels)
                     running_samples += logits.shape[0]
                     running_fscore += get_f_score(logits, labels)
                     iterations += 1
@@ -925,18 +938,21 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 if phase == 'train':
                     train_epoch_loss = running_loss / iterations
                     train_epoch_acc = float(running_corrects) / running_samples
+                    train_non_zero = running_non_zero
                 else:
                     valid_epoch_loss = running_loss / iterations
                     valid_epoch_acc = float(running_corrects) / running_samples
                     valid_epoch_fscore = running_fscore / iterations
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
+                    valid_non_zero = running_non_zero
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
                     best_valid_fscore = valid_epoch_fscore
                     best_model_wts = model.state_dict()
 
+            print ('Epoch [{}/{}] Train Non-Zero: {} Val Non-Zero: {}'.format(epoch, num_epochs - 1, train_non_zero, valid_non_zero))
             print('Epoch [{}/{}] Training loss: {:.6f} acc: {:.4f} ' 
                   'Validation loss: {:.6f} acc: {:.4f} f-score: {:.4f} trig recall: {:.4f} trig precision: {:.4f} time: {:.4f}'.format(
                     epoch, num_epochs - 1,
