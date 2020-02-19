@@ -44,7 +44,7 @@ parser.add_argument('--pad', dest='pad_to', type=int, default=4096,
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
-parser.add_argument('--full_24_hr', type=bool, default=False, 
+parser.add_argument('--full_24_hr', action='store_true', 
     help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
 
 '''

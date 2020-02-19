@@ -40,48 +40,47 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def get_model(idx):
     if idx == 0:
-        return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 1:
-        return Model1(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model1(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 2:
-        return Model2(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model2(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 3:
-        return Model3(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model3(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 4:
-        return Model4(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model4(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 5:
-        return Model5(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model5(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 6:
-        return Model6(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model6(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 7:
-        return Model7(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model7(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 8:
-        return Model8(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model8(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 9:
-        return Model9(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model9(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 10:
-        return Model10(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model10(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 11:
-        return Model11(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model11(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 12:
-        return Model12(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model12(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 13:
-        return Model13(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model13(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 14:
-        return Model14(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model14(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 15:
-        return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model15(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 16:
-        return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 17:
-        return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
-    elif idx == 18:
-        return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE)
+        return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+
 """
 Basically what Brendan was doing
 """
 class Model0(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model0, self).__init__()
 
         self.input_dim = input_size
@@ -94,6 +93,9 @@ class Model0(nn.Module):
         self.lstm = nn.LSTM(input_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         lstm_out, _ = self.lstm(inputs, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
@@ -105,7 +107,7 @@ class Model0(nn.Module):
 Now with a conv1d flavor
 """
 class Model1(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model1, self).__init__()
 
         self.input_size = input_size
@@ -126,6 +128,10 @@ class Model1(nn.Module):
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
 
@@ -142,7 +148,7 @@ class Model1(nn.Module):
 With maxpool as well
 """
 class Model2(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model2, self).__init__()
 
         self.input_size = input_size
@@ -161,6 +167,9 @@ class Model2(nn.Module):
         self.maxpool = nn.MaxPool1d(self.conv_out) # Perform a max pool over the resulting 1d freq. conv.
         self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -182,7 +191,7 @@ class Model2(nn.Module):
 CONV1D_BiLSTM_Maxpool
 """
 class Model3(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model3, self).__init__()
 
         self.input_size = input_size
@@ -200,6 +209,9 @@ class Model3(nn.Module):
         self.maxpool = nn.MaxPool1d(self.input_size) # Perform a max pool over the resulting 1d freq. conv.
         self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -221,7 +233,7 @@ class Model3(nn.Module):
 CONV1D_BiLSTM_NO_POOL
 """
 class Model4(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model4, self).__init__()
 
         self.input_size = input_size
@@ -243,6 +255,9 @@ class Model4(nn.Module):
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
 
@@ -261,7 +276,7 @@ class Model4(nn.Module):
 Adding a hidden layer to beginning of model0
 """
 class Model5(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model5, self).__init__()
 
         self.input_dim = input_size
@@ -275,6 +290,9 @@ class Model5(nn.Module):
         self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         out = self.linear(inputs)
@@ -287,7 +305,7 @@ class Model5(nn.Module):
 Adding two hidden layers to beginning of model0
 """
 class Model6(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model6, self).__init__()
 
         self.input_dim = input_size
@@ -302,6 +320,9 @@ class Model6(nn.Module):
         self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         out = self.linear(inputs)
@@ -315,7 +336,7 @@ class Model6(nn.Module):
 With linear layer pool after conv1d as well
 """
 class Model7(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model7, self).__init__()
 
         self.input_size = input_size
@@ -334,6 +355,9 @@ class Model7(nn.Module):
         self.linear_pool = nn.Linear(self.conv_out, 1) 
         self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -355,7 +379,7 @@ class Model7(nn.Module):
 With avg-pool after conv1d as well
 """
 class Model8(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model8, self).__init__()
 
         self.input_size = input_size
@@ -374,6 +398,9 @@ class Model8(nn.Module):
         self.avgpool = nn.AvgPool1d(self.conv_out) # Perform a max pool over the resulting 1d freq. conv. 
         self.lstm = nn.LSTM(self.num_filters, self.hidden_size, self.num_layers, batch_first=True) 
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -395,7 +422,7 @@ class Model8(nn.Module):
 Model 4 but with a batchnorm first
 """
 class Model9(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model9, self).__init__()
 
         self.input_size = input_size
@@ -418,6 +445,9 @@ class Model9(nn.Module):
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True, bidirectional=True)
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
 
@@ -437,7 +467,7 @@ class Model9(nn.Module):
 Model0 but with batchnorm
 """
 class Model10(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model10, self).__init__()
 
         self.input_size = input_size
@@ -450,6 +480,9 @@ class Model10(nn.Module):
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.lstm = nn.LSTM(self.input_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -464,7 +497,7 @@ class Model10(nn.Module):
 Model1 with batchnorm
 """
 class Model11(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model11, self).__init__()
 
         self.input_size = input_size
@@ -486,6 +519,9 @@ class Model11(nn.Module):
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
 
@@ -504,7 +540,7 @@ class Model11(nn.Module):
 Basically what Brendan was doing
 """
 class Model12(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model12, self).__init__()
 
         self.input_size = input_size
@@ -520,6 +556,9 @@ class Model12(nn.Module):
         self.linear2 = nn.Linear(self.hidden_size, self.hidden_size)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
@@ -534,7 +573,7 @@ class Model12(nn.Module):
 Now with a conv1d flavor
 """
 class Model13(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model13, self).__init__()
 
         self.input_size = input_size
@@ -556,6 +595,9 @@ class Model13(nn.Module):
         self.lstm = nn.LSTM(self.lstm_input, self.hidden_size, self.num_layers, batch_first=True) # added 2 layer lstm capabilities
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
 
@@ -573,7 +615,7 @@ class Model13(nn.Module):
 Basically what Brendan was doing
 """
 class Model14(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model14, self).__init__()
 
         self.input_size = input_size
@@ -591,6 +633,9 @@ class Model14(nn.Module):
         self.linear3 = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
+
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -610,7 +655,7 @@ class Model14(nn.Module):
 Try new convolutional model (not based on 1D convolutions)
 """
 class Model15(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model15, self).__init__()
 
         self.input_size = input_size
@@ -648,6 +693,9 @@ class Model15(nn.Module):
         self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
 
     def make_layers(cfg, batch_norm=False):
         layers = []
@@ -680,7 +728,7 @@ class Model15(nn.Module):
 Go bigger with lstm
 """
 class Model16(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model16, self).__init__()
 
         self.input_size = input_size
@@ -700,6 +748,9 @@ class Model16(nn.Module):
         self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
+        if loss.lower() == "focal":
+            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
         batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
@@ -716,7 +767,7 @@ class Model16(nn.Module):
 
 
 class Model17(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model17, self).__init__()
 
         self.input_size = input_size
@@ -727,30 +778,8 @@ class Model17(nn.Module):
            nn.ReLU(inplace=True),
            nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
-
-    def forward(self, inputs):
-        inputs = inputs.unsqueeze(1)
-        inputs = inputs.repeat(1, 3, 1, 1)
-        out = self.model(inputs)
-        return out
-
-# Res net but now try testing with focal loss
-class Model18(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(Model18, self).__init__()
-
-        self.input_size = input_size
-
-        self.model = models.resnet18()
-        self.model.fc = nn.Sequential(
-           nn.Linear(512, 128),
-           nn.ReLU(inplace=True),
-           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
-
-        # Change intitialization of final layer bias term
-        # Want p_t for pos. class to be initially low
-        pi = 0.01
-        self.model.fc[2].weight.data.fill_(np.log((1 - pi) / pi))
+        if loss.lower() == "focal":
+            self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
 
     def forward(self, inputs):
@@ -777,10 +806,10 @@ class FocalLoss(nn.Module):
         bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
         # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
         pt = torch.exp(-bce_loss)
-        print (pt)
-        print(targets)
+        #print (pt[targets==1])
+        #print(targets)
         # Value of alpha for class 1 and 1 - alpha for class 0
-        alpha = torch.tensor([1 - self.alpha, self.alpha])
+        alpha = torch.tensor([1 - self.alpha, self.alpha]).to(device)
         # Select the appropriate alpha based on label y
         alpha_t = alpha[targets.data.view(-1).long()].view_as(targets)
         
@@ -851,7 +880,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels, _ in dataloders[phase]:
                     i += 1
-                    if (i % 1000 == 0):
+                    if (i % 10 == 0):
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
@@ -991,17 +1020,26 @@ def main():
     ## Build Dataset
     # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"
 
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    # Quatro
+    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
     #validation_loader 
     test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    # Quatro
+    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
 
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    if len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
+    if sys.argv[1].lower() == 'help':
+        print ("Run types are as follows:")
+        print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
+        print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
+        print ("3) model.py model_id - train a given model")
+    elif len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
         # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
         model = torch.load(sys.argv[2], map_location=device)
@@ -1037,7 +1075,8 @@ def main():
     else:
         ## Training
         model_id = int(sys.argv[1])
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
         model = get_model(model_id)
 
@@ -1051,7 +1090,16 @@ def main():
 
         #criterion = torch.nn.BCEWithLogitsLoss()
         # Try focal loss
-        criterion = FocalLoss()
+        if parameters.LOSS.upper() == "CE":
+            criterion = torch.nn.BCEWithLogitsLoss()
+            print ("Using Binary Cross Entropy Loss")
+        elif parameters.LOSS.upper() == "FOCAL":
+            criterion = FocalLoss(alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
+            print ("Using Focal Loss with parameters alpha: {}, gamma: {}, pi: {}".format(parameters.FOCAL_ALPHA, parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))
+        else:
+            print("Unknown Loss")
+            return
+
         optimizer = torch.optim.Adam(model.parameters(), lr=parameters.HYPERPARAMETERS[model_id]['lr'], weight_decay=parameters.HYPERPARAMETERS[model_id]['l2_reg'])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
 
