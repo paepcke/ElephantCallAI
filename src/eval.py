@@ -24,7 +24,7 @@ import matplotlib.patches as patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 import parameters
 from model import num_correct
-from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14, Model16, Model17, Model18
+from model import Model0, Model1, Model2, Model3, Model4, Model5, Model6, Model7, Model8, Model9, Model10, Model11, Model14, Model16, Model17
 from process_rawdata_new import generate_labels
 from visualization import visualize, visualize_predictions
 from scipy.io import wavfile
