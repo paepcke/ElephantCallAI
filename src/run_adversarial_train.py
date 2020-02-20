@@ -13,9 +13,7 @@ import os
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-def initialize_training(model_id):
-    save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_adversarial_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
-
+def initialize_training(model_id, save_path):
     model = model_file.get_model(model_id).to(device)
     print(model)
     writer = SummaryWriter(save_path)
@@ -41,7 +39,7 @@ def outerLoop(model_id):
         save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
         start_time = time.time()
-        model, criterion, optimizer, scheduler, writer = initialize_training(model_id)
+        model, criterion, optimizer, scheduler, writer = initialize_training(model_id, save_path)
         model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
 
         assert model_wts != None
