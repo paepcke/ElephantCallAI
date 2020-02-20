@@ -824,7 +824,7 @@ class FocalLoss(nn.Module):
 
 ##### END OF MODELS
 
-def num_non_zero(logits, labels, threshold):
+def num_non_zero(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)
