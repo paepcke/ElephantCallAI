@@ -1008,7 +1008,7 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
     for inputs, labels, data_files in dataloader:
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
-        if chunksIdx * parameters.BATCH_SIZE >= num_files_to_return:
+        if len(adversarial_examples) >= num_files_to_return:
             break
         inputs = inputs.float()
         labels = labels.float()
