@@ -41,7 +41,7 @@ def outerLoop(model_id):
 
         start_time = time.time()
         model, criterion, optimizer, scheduler, writer = initialize_training(model_id)
-        model_wts = train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
+        model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
 
         assert model_wts != None
 
