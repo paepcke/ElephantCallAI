@@ -77,14 +77,17 @@ class ElephantDataset(data.Dataset):
         self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
         self.labels = []
 
-        for feature_path in self.features:
-            feature_parts = feature_path.split("_features_")
-            self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
+        self.initialize_labels()
 
         assert len(self.features) == len(self.labels)
 
         print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+
+    def initialize_labels(self):
+        for feature_path in self.features:
+            feature_parts = feature_path.split("_features_")
+            self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
 
 
     def __len__(self):

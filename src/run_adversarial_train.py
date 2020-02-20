@@ -1,11 +1,21 @@
 from data import get_loader
+import model as model_file
 import parameters
+from tensorboardX import SummaryWriter
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import optim
+import sys
+import time
 
+np.random.seed(parameters.RANDOM_SEED)
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def initialize_training(model_id):
     save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_adversarial_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
-    model = get_model(model_id).to(device)
+    model = model_file.get_model(model_id).to(device)
     print(model)
     writer = SummaryWriter(save_path)
     writer.add_scalar('batch_size', parameters.BATCH_SIZE)
@@ -16,32 +26,6 @@ def initialize_training(model_id):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
 
     return model, criterion, optimizer, scheduler, writer
-
-
-def evaluate_model_on_dataset(model, data_loader):
-    model.eval()
-
-    difficult_files = []
-
-    i = 0
-    print ("Num batches:", len(data_loader))
-    for inputs, labels, feature_file_paths in data_loader:
-        i += 1
-        if (i % 1000 == 0):
-            print ("Batch number {} of {}".format(i, len(dataloders[phase])))  
-
-        inputs = inputs.float()
-                    
-        labels = labels.float()
-
-        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-
-        logits = model(inputs)
-
-        # TODO: Figure out the rest here
-
-    ### ????
-
 
 
 def outerLoop(model_id):
@@ -73,6 +57,17 @@ def outerLoop(model_id):
         writer.close()
 
         # Evaluate on entire dataset
+        adversarial_files = model_file.adversarial_discovery(full_train_loader, model)
 
-        # Update training dataset with 
+        # Update training dataset with adversarial files
+        train_loader.dataset.features += adversarial_files
+        train_loader.dataset.initialize_labels()
+
+        assert len(train_loader.dataset.features) == len(train_loader.dataset.labels)
+        print("Length of features is now {} ".format(len(train_loader.dataset.features)))
+
+
+if __name__ == "__main__":
+    outerLoop(sys.argv[1])
+
 
