@@ -923,7 +923,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                     running_loss += loss.item()
                     running_corrects += num_correct(logits, labels)
-                    running_non_zero += running_non_zero(logits, labels)
+                    running_non_zero += num_non_zero(logits, labels)
                     running_samples += logits.shape[0]
                     running_fscore += get_f_score(logits, labels)
                     iterations += 1
