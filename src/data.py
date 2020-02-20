@@ -20,8 +20,8 @@ def get_loader(data_dir,
                scale=False,
                augment=False,
                shuffle=True,
-               num_workers=4,
-               pin_memory=True):
+               num_workers=16,
+               pin_memory=False):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.

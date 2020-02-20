@@ -1000,22 +1000,22 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
         inputs = inputs.float()
-                    
-        labels = labels.cpu().detach().numpy()
+        labels = labels.float()
+        # labels = labels.cpu().detach().numpy()
 
-        inputs = Variable(inputs.to(device))
+        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
 
         # Forward pass
         logits = model(inputs) # Shape - (batch_size, seq_len, 1)
-        predictions = torch.sigmoid(logits).cpu().detach().numpy()
+        predictions = torch.sigmoid(logits)
 
         # Now for each chunk we want to see whether it should be flagged as 
         # a hard negative sample. Look over number in batch.
         # Pre-compute the number of pos. slices in each chunk
-        gt_counts = np.sum(labels, axis=1) # Shape - (batch_size)
+        gt_counts = torch.sum(labels, dim=1) # Shape - (batch_size)
         # Threshold the predictions - May add guassian blur
-        binary_preds = np.where(predictions > threshold, 1, 0)
-        pred_counts = np.sum(binary_preds, axis=1).squeeze() # Shape - (batch_size)
+        binary_preds = torch.where(predictions > threshold, 1, 0)
+        pred_counts = torch.sum(binary_preds, dim=1).squeeze() # Shape - (batch_size)
         for example in range(gt_counts.shape[0]):
             # Flag chunks with false pos in empy chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
