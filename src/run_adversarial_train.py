@@ -58,6 +58,8 @@ def outerLoop(model_id):
         # Evaluate on entire dataset
         adversarial_files = model_file.adversarial_discovery(full_train_loader, model)
 
+        # Select randomly the same number as 
+
         # Update training dataset with adversarial files
         train_loader.dataset.features += adversarial_files
         train_loader.dataset.initialize_labels()

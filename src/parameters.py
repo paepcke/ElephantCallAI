@@ -2,6 +2,7 @@ import torch
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
+VERBOSE = False
 
 DATASET = 'Call'
 #DATASET = 'Activate'

@@ -38,8 +38,6 @@ import matplotlib.pyplot as plt
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-VERBOSE = False
-
 def get_model(idx):
     if idx == 0:
         return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
@@ -997,7 +995,10 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
     # when creating chunks for the 24hrs the chunks may be aligned differently
     adversarial_examples = []
     # This dataset includes chunks from the full 24 hours
+    chunksIdx = 0
     for inputs, labels, data_files in dataloader:
+        if chunksIdx % 100 == 0:
+            print("Adversarial search has gotten through {} chunks".format(chunksIdx))
         inputs = inputs.float()
                     
         labels = labels.cpu().detach().numpy()
@@ -1018,15 +1019,17 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
         for example in range(gt_counts.shape[0]):
             # Flag chunks with false pos in empy chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
-                print ("found an adversarial examples")
                 adversarial_examples.append(data_files[example])
                 # visualize it
-                if VERBOSE:
+                if parameters.VERBOSE:
+                    print ("found an adversarial examples")
                     features = inputs[example].detach().numpy()
                     output = predictions[example]
                     label = labels[example]
 
                     visualize(features, output, label)
+
+        chunksIdx += 1
 
 
     return adversarial_examples
