@@ -36,7 +36,7 @@ def outerLoop(model_id):
     for outer_iteration in range(10):
         dloaders = {'train':train_loader, 'valid':validation_loader}
 
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()) + "adversarial_iteration_" + str(outer_iteration))
 
         start_time = time.time()
         model, criterion, optimizer, scheduler, writer = initialize_training(model_id, save_path)
