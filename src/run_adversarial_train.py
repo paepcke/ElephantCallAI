@@ -45,20 +45,22 @@ def outerLoop(model_id):
         assert model_wts != None
 
         model.load_state_dict(model_wts)
-        save_path = save_path + "/" + "model.pt"
+        model_save_path = save_path + "/" + "model.pt"
         if not os.path.exists(parameters.SAVE_PATH):
             os.makedirs(parameters.SAVE_PATH)
-        torch.save(model, save_path)
-        print('Saved best val acc model to path {}'.format(save_path))
-
+        torch.save(model, model_save_path)
+        print('Saved best val acc model to path {}'.format(model_save_path))
 
         print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
         writer.close()
 
         # Evaluate on entire dataset
         adversarial_files = model_file.adversarial_discovery(full_train_loader, model)
+        np.save(save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt" , adversarial_files)
 
-        # Select randomly the same number as 
+        # Select randomly the same number as current num calls
+        # adversarial_files = np.random.choice()
+        
 
         # Update training dataset with adversarial files
         train_loader.dataset.features += adversarial_files

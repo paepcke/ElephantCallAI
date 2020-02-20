@@ -34,6 +34,7 @@ import torchvision.models as models
 from torchvision import transforms
 import matplotlib
 import matplotlib.pyplot as plt
+from collections import deque
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -869,6 +870,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_fscore = 0.0
     best_model_wts = None
 
+    last_five_validation_accuracies = deque(maxlen=5)
+
     try:
         for epoch in range(num_epochs):
             for phase in ['train', 'valid']:
@@ -946,6 +949,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
                     valid_non_zero = running_non_zero
+                    last_three_validation_accuracies.append(valid_epoch_acc)
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
@@ -968,6 +972,11 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
             scheduler.step()
+
+            # Check whether to early stop due to decreasing validation acc
+            if all([val_accuracy < best_valid_acc for val_accuracy in last_five_validation_accuracies]):
+                print("Early stopping because last five validation accuracies have been {} and less than best val accuracy {}".format(last_five_validation_accuracies, best_valid_acc))
+                break
 
     except KeyboardInterrupt:
         print("Early stopping due to keyboard intervention")

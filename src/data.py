@@ -75,8 +75,6 @@ class ElephantDataset(data.Dataset):
         self.scale = scale
 
         self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
-        self.labels = []
-
         self.initialize_labels()
 
         assert len(self.features) == len(self.labels)
@@ -85,6 +83,7 @@ class ElephantDataset(data.Dataset):
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
 
     def initialize_labels(self):
+        self.labels = []
         for feature_path in self.features:
             feature_parts = feature_path.split("_features_")
             self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
