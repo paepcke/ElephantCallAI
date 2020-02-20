@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch import optim
 import sys
 import time
+import os
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
