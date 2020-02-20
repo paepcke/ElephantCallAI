@@ -21,8 +21,7 @@ def get_loader(data_dir,
                augment=False,
                shuffle=True,
                num_workers=4,
-               pin_memory=True,
-               data_file_paths=None):
+               pin_memory=True):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -48,7 +47,7 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale, data_file_paths=data_file_paths)
+    dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -68,18 +67,14 @@ def get_loader(data_dir,
     - Preprocess = Scale range (-1, 1), Scale = True ===> Overfit but huge variance issue
 """
 class ElephantDataset(data.Dataset):
-    def __init__(self, data_path, transform=None, preprocess="norm", scale=False, data_file_paths=None):
+    def __init__(self, data_path, transform=None, preprocess="norm", scale=False):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
         self.preprocess = preprocess
         self.scale = scale
 
-        if data_file_paths:
-            print("Got a list of data files to load in, loading")
-            self.features = [data_file_paths]
-        else:
-            self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
+        self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
         self.labels = []
 
         for feature_path in self.features:
