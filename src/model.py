@@ -1014,7 +1014,7 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
         # Pre-compute the number of pos. slices in each chunk
         gt_counts = torch.sum(labels, dim=1) # Shape - (batch_size)
         # Threshold the predictions - May add guassian blur
-        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0), torch.tensor(0.0))
+        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(device), torch.tensor(0.0).to(device))
         pred_counts = torch.sum(binary_preds, dim=1).squeeze() # Shape - (batch_size)
         for example in range(gt_counts.shape[0]):
             # Flag chunks with false pos in empy chunks.
