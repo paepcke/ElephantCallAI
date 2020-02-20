@@ -68,6 +68,6 @@ def outerLoop(model_id):
 
 
 if __name__ == "__main__":
-    outerLoop(sys.argv[1])
+    outerLoop(int(sys.argv[1]))
 
 
