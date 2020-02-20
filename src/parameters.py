@@ -8,7 +8,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "Focal"
+LOSS = "CE"
 FOCAL_WEIGHT_INIT = 0.01
 FOCAL_GAMMA = 2
 FOCAL_ALPHA = 0.25
