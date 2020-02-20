@@ -949,7 +949,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
                     valid_non_zero = running_non_zero
-                    last_three_validation_accuracies.append(valid_epoch_acc)
+                    last_five_validation_accuracies.append(valid_epoch_acc)
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
@@ -985,7 +985,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     print('Best val F-score: {:4f}'.format(best_valid_fscore))
     return best_model_wts
 
-def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
+def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5, min_length=0):
     """
         Data loop for self supervised adversarial negative sample discovery. 
         Run the data through the model, and for negative samples (i.e.) that 
@@ -1008,6 +1008,8 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
     for inputs, labels, data_files in dataloader:
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
+        if chunksIdx * parameters.BATCH_SIZE >= num_files_to_return:
+            break
         inputs = inputs.float()
         labels = labels.float()
         # labels = labels.cpu().detach().numpy()

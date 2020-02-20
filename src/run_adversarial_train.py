@@ -55,7 +55,7 @@ def outerLoop(model_id):
         writer.close()
 
         # Evaluate on entire dataset
-        adversarial_files = model_file.adversarial_discovery(full_train_loader, model)
+        adversarial_files = model_file.adversarial_discovery(full_train_loader, model, len(train_loader.dataset))
         np.save(save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt" , adversarial_files)
 
         # Select randomly the same number as current num calls
