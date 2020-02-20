@@ -38,6 +38,8 @@ import matplotlib.pyplot as plt
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+VERBOSE = False
+
 def get_model(idx):
     if idx == 0:
         return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
