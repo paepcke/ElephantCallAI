@@ -824,7 +824,7 @@ class FocalLoss(nn.Module):
 
 ##### END OF MODELS
 
-def num_non_zero(logits, labels, threshold):
+def num_non_zero(logits, labels, threshold=0.5):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)
@@ -923,7 +923,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
                     running_loss += loss.item()
                     running_corrects += num_correct(logits, labels)
-                    running_non_zero += running_non_zero(logits, labels)
+                    running_non_zero += num_non_zero(logits, labels)
                     running_samples += logits.shape[0]
                     running_fscore += get_f_score(logits, labels)
                     iterations += 1
@@ -1030,6 +1030,23 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
     return adversarial_examples
 
 
+def calc_num_chunks_calls(data_loader):
+    num_chunks_calls = 0
+    num_chunks_total = 0
+
+    for inputs, labels, data_files in data_loader:
+
+        num_chunks_total += inputs.shape[0]
+
+        # Calculate how many of the chunks have actual elephant calls
+        labels = labels.cpu().detach().numpy()
+        gt_counts = np.sum(labels, axis=1)
+        gt_counts = np.where(gt_counts > 0, 1, 0)
+        num_chunks_calls += np.sum(gt_counts)
+
+    print ("Number of chunks with calls:", num_chunks_calls)
+    print ("Total chunks:", num_chunks_total)
+    print ("Ratio (call chunk) / chunks seen:", float(num_chunks_calls) / float(num_chunks_total))
 
 
 def main():

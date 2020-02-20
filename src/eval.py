@@ -895,7 +895,7 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
         print (precisions)
         print (recalls)
 
-        plt.plot(recalls, precisions, label='Overlap = ' + str(overlap))
+        plt.plot(recalls, precisions, 'bo-', label='Overlap = ' + str(overlap))
 
     plt.legend()
     plt.xlabel("Recall")
