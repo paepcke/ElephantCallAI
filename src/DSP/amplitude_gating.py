@@ -74,22 +74,7 @@ class AmplitudeGater(object):
         @type framerate: int
         '''
 
-#         (time, amplitude) = self.make_sinewave(freq)
-# 
-#         self.plot(time, 
-#                   amplitude,
-#                   'Sine Wave',
-#                   f"Number of 1/{freq} seconds",
-#                   'Amplitude'
-#                   )
         self.framerate = framerate
-#         (time, amplitude) = self.make_envelope(attack_length=50, 
-#                                                direction=Direction.DOWN)
-#         #****self.plot(time,amplitude, 'Envelope Up', 'time', 'amplitude')
-#         
-#         #release = self.mirror_curve(amplitude)
-#         self.plot(time,amplitude, 'Envelope Up', 'time (msec)', 'amplitude')
-#         return
 
         if not testing:        
             wave_obj = self.wave_fd(wav_file_path)
@@ -146,11 +131,15 @@ class AmplitudeGater(object):
         # >>> np.where(a>0, 1, 0)
         # ==> array([1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0])
 
-        self.signal_index = sample_npa.nonzero()
+        # The [0] is b/c .nonzero() returns a two tuple
+        # with the result in slot 0, and nothing beyond:
+        self.signal_index = sample_npa.nonzero()[0]
 
         # Not yet a 'previous signal burst' object:
         prev_burst = None
         
+        #***************** burst.signal_index_pt gets stuck on last index,
+        #                 instead of returning None.
         while True:
             burst = self.next_burst(prev_burst)
             if burst is None:
@@ -159,12 +148,17 @@ class AmplitudeGater(object):
             # zero samples before burst to do a ramp-up attack
             # envelope:
             if burst.attack_start is None:
-                self.average_the_gap(burst, sample_npa)
+                sample_npa = self.average_the_gap(burst, sample_npa)
             else:
-                self.place_attack(burst, sample_npa)
-                
-        print('foo')
+                sample_npa = self.place_attack(burst, sample_npa)
+            
+            # Is there room for a release?
+            num_zeros_to_next_burst = self.signal_index[burst.signal_index_pt] - burst.stop
+            if num_zeros_to_next_burst >= self.ATTACK_RELEASE_SAMPLES:
+                # Yes, there is room:
+                sample_npa = self.place_release(burst, sample_npa)
 
+        return sample_npa   
     #------------------------------------
     # place_attack 
     #-------------------
@@ -181,6 +175,8 @@ class AmplitudeGater(object):
         @type burst:
         @param sample_npa:
         @type sample_npa:
+        @return: modified sample_npa
+        @rtype: np.array([float])
         '''
         # Target of attack is the first non-zero voltage:
         envelope_asymptode = sample_npa[burst.start]
@@ -188,7 +184,7 @@ class AmplitudeGater(object):
                                       target_amplitude=envelope_asymptode, 
                                       direction=Direction.UP)
         sample_npa[burst.attack_start: burst.attack_start + self.ATTACK_RELEASE_SAMPLES] = envelope
-        return
+        return sample_npa
     
     #------------------------------------
     # place_release 
@@ -206,14 +202,16 @@ class AmplitudeGater(object):
         @type burst:
         @param sample_npa:
         @type sample_npa:
+        @return: modified sample_npa
+        @rtype: np.array([float])
         '''
         envelope = self.make_envelope(attack_length=self.ATTACK_RELEASE_MSECS,
-                                      target_amplitude=0, 
+                                      target_amplitude=0.01, #******??? 
                                       direction=Direction.UP)
         # Turn the attack envelope into a symmetric release:
         envelope = self.mirror_curve(envelope)
-        sample_npa[burst.end : burst.end + self.ATTACK_RELEASE_SAMPLES] = envelope
-        return
+        sample_npa[burst.stop : burst.stop + self.ATTACK_RELEASE_SAMPLES] = envelope
+        return sample_npa
 
     #------------------------------------
     # average_the_gap 
@@ -228,12 +226,17 @@ class AmplitudeGater(object):
         
         @param burst:
         @type burst:
+        @return: modified sample_npa
+        @rtype: np.array([float])
         '''
         
         end_voltage_burst1   = sample_npa[burst.averaging_start]
-        start_voltage_burst2 = sample_npa[burst.averaging_end]
+        start_voltage_burst2 = sample_npa[burst.averaging_stop]
         avg_voltage = round((end_voltage_burst1 + start_voltage_burst2) / 2.)
-        sample_npa[burst.averaging_start : burst.averaging_end] = avg_voltage
+        # The '1 +' below starts filling the average
+        # into the first sample *after* the last non-zero
+        # sample:
+        sample_npa[1 + burst.averaging_start : burst.averaging_stop] = avg_voltage
         return sample_npa
 
     #------------------------------------
@@ -312,8 +315,13 @@ class AmplitudeGater(object):
         @return the index into the sample_npa of the first 0V after
              the burst of non-zeroes. Also returns the pt into the 
              signal_index that holds the start of the first burst.
-        @rtype (int, int) 
+             If no more burst available, returns None
+        @rtype {(int, int) | None} 
         '''
+        
+        # Is there no more burst left?
+        if pt_into_index is None:
+            return None
         
         prev_indx_pt = pt_into_index
         # Examine successive index entries, and
@@ -356,11 +364,12 @@ class AmplitudeGater(object):
                       target_amplitude=None, 
                       direction=Direction.UP):
         '''
-        Return time/amplitude arrays that exponentially
-        approach either 1 or 0, depending on direction. 
-        Options are up from zero towards 1:
+        Return amplitude array that exponentially
+        approaches either target_amplitude or 0, if
+        direction is Direction.DOWN.
+
         
-	1	          -
+	Target        -
 		       -
 		    -
 		  -
@@ -368,7 +377,7 @@ class AmplitudeGater(object):
 		 
 		Or:
 		
-	1			   -                  
+				   -                  
 				      -
 				        -
 				         -
@@ -394,18 +403,21 @@ class AmplitudeGater(object):
               self.mirror_curve() with the result to get the other
               portion.
         
-        @param attack_length: number of msecs to approach 1 from 0,
-             or 0 from 1. Default: see AmplitudeGater.ATTACK_RELEASE_MSECS 
+        @param attack_length: number of msecs to approach an 
+             asymptode: the voltage of the burst being 'approached'
+             by the attack, of 0 on the tail end.
+             Default: AmplitudeGater.ATTACK_RELEASE_MSECS 
         @type attack_length: int
         @param target_amplitude: asymptode that amplitude should approach.
             Default: 1 if curve is Direction.UP, else 0
         @type target_amplitude: float
         @param direction: where the exponential curve should be headed.
             If 1, curve slopes up from 0 to 1.
-        @type direction:
+        @type direction: Direction
+        @return: array of voltage amplitudes. 
+            Length: AmplitudeGater.ATTACK_RELEASE_SAMPLES
+        @type: np.array([float])
         '''
-        #framerate = 8000
-        
         if target_amplitude is None:
             target_amplitude = 1
             
@@ -414,7 +426,7 @@ class AmplitudeGater(object):
             
         T = 1./self.framerate
         
-        curve_width = attack_length
+        curve_width = self.samples_from_msecs(attack_length)
 
         # Constant A controls gentleness: 0.5==>steep, 1==>gentle
         A = 1
@@ -422,7 +434,6 @@ class AmplitudeGater(object):
 
         tau = 0.001
         c = np.e**(-T/tau)
-        #*****amplitude = np.zeros([curve_width])
         amplitude = np.zeros([curve_width])
         for n in time[:-1]:
             amplitude[n] = A*c * amplitude[n-1] + (1 - c) * target_amplitude
@@ -433,7 +444,7 @@ class AmplitudeGater(object):
         if direction == Direction.DOWN:
             amplitude = self.mirror_curve(amplitude)
             
-        return (time, amplitude)
+        return amplitude
 
     #------------------------------------
     # make_sinewave
