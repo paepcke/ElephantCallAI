@@ -598,8 +598,13 @@ class Burst(object):
         @param averaged_value:
         @type averaged_value:
         '''
-        pass
-
+        self._start           = None
+        self._stop            = None
+        self._attack_start    = None
+        self._release_start   = None
+        self._averaging_start = None
+        self._averaging_stop  = None
+        self.signal_index_pt  = None
 
     @property
     def start(self):
@@ -657,6 +662,7 @@ class Burst(object):
 
 if __name__ == '__main__':
     
-    AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav') 
+    AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
+                   plot_result=True) 
 
     print('Done')
