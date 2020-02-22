@@ -29,12 +29,10 @@ Example:
                     the 10V in the sample_npa    
 '''
 
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import wave
-
-#import scypi
-#from scipy import signal
 
 class Direction(enumerate):
     UP = 0
@@ -59,7 +57,8 @@ class AmplitudeGater(object):
     def __init__(self, 
                  wav_file_path=None, 
                  testing=False,
-                 framerate=None
+                 framerate=None,
+                 plot_result=False
                  ):
         '''
         
@@ -95,11 +94,22 @@ class AmplitudeGater(object):
         #  print(f"Frames: {num_frames}")
         #  print(f"Sample width: {sample_width}")
         
-        if not testing:
-            samples = self.read(wave_obj)
-            normed_samples = self.normalize(samples)
-            _gated  = self.amplitude_gate(normed_samples, -20)
-            print('Done')
+        if testing:
+            return
+        
+        samples = self.read(wave_obj)
+        normed_samples = self.normalize(samples)
+        gated_samples  = self.amplitude_gate(normed_samples, -20)
+            
+        if plot_result:
+            self.plot(np.arange(gated_samples.size),
+                      gated_samples, 
+                      title=f"Amplitude-Gated {os.path.basename(wav_file_path)}",
+                      xlabel='Sample Index', 
+                      ylabel='Voltage'
+                      )
+        
+        print('Done')
         
         
     #------------------------------------
@@ -138,8 +148,6 @@ class AmplitudeGater(object):
         # Not yet a 'previous signal burst' object:
         prev_burst = None
         
-        #***************** burst.signal_index_pt gets stuck on last index,
-        #                 instead of returning None.
         while True:
             burst = self.next_burst(prev_burst)
             if burst is None:
@@ -153,11 +161,18 @@ class AmplitudeGater(object):
                 sample_npa = self.place_attack(burst, sample_npa)
             
             # Is there room for a release?
-            num_zeros_to_next_burst = self.signal_index[burst.signal_index_pt] - burst.stop
-            if num_zeros_to_next_burst >= self.ATTACK_RELEASE_SAMPLES:
-                # Yes, there is room:
-                sample_npa = self.place_release(burst, sample_npa)
+            # If sig indx is None, we reached the
+            # end of the signal_index. So there is
+            # definitely no room for a release:
+        
+            if burst.signal_index_pt is not None:
+                num_zeros_to_next_burst = self.signal_index[burst.signal_index_pt] - burst.stop
+                if num_zeros_to_next_burst >= self.ATTACK_RELEASE_SAMPLES:
+                    # Yes, there is room:
+                    sample_npa = self.place_release(burst, sample_npa)
 
+            prev_burst = burst
+            
         return sample_npa   
     #------------------------------------
     # place_attack 
@@ -244,6 +259,28 @@ class AmplitudeGater(object):
     #-------------------
 
     def next_burst(self, curr_burst):
+        '''
+        Given a burst instance, find the next burst
+        of non-zeros. Burst instances contain a pointer
+        (signal_index_pt) into the index array entry.
+        I.e. the signal_index contains at this pointer
+        the first non-zero entry in the samples. We
+        start from there. If no more bursts are left,
+        returns None.
+        
+        @param curr_burst: the previous burst
+        @type curr_burst: Burst
+        @return a new burst instance, which contains all
+            information about the next burst.
+        @rtype { Burst | None }
+        '''
+        
+        # If the index pt of the passed-in burst
+        # is None, we reached the end of the index
+        # array, and there won't be another burst:
+        if curr_burst is not None and curr_burst.signal_index_pt is None:
+            return None
+        
         next_burst = Burst()
         if curr_burst is None:
             # First burst. Enough zeros before to
@@ -275,10 +312,10 @@ class AmplitudeGater(object):
         # First position in sample_npa of non-zero voltage
         # after previous burst:  
         prev_burst_stop  = curr_burst.stop 
-        zeros_before_next_burst = next_burst.start - prev_burst_stop
+        zeros_before_next_burst = 1 + next_burst.start - prev_burst_stop
         if zeros_before_next_burst >= self.ATTACK_RELEASE_SAMPLES:
             # There is room for an attack envelope:
-            next_burst.attack_start = prev_burst_stop
+            next_burst.attack_start = next_burst.start - self.ATTACK_RELEASE_SAMPLES
         else:
             # Not enough room for an attack envelope.
             # We will average between the last non-zero

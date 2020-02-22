@@ -129,19 +129,47 @@ class Test(unittest.TestCase):
         
         self.assertEqual(new_sample_na.all(), 
                          np.array([ 1,  6,  6, 10, 11,  0,  7.86938681, 12.64241118, 15.5373968, 20]).all()
-                         )        
+                         )      
         
     #------------------------------------
     # testAttackAndRelease 
     #-------------------
     
-    #@unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     def testAttackAndRelease(self):
         sample_npa   = self.samples_for_attack_and_release
         self.gater.samples_na   = sample_npa
         
         new_sample_na = self.gater.amplitude_gate(sample_npa, -20)
-        print(new_sample_na)
+        
+        self.assertEqual(new_sample_na.all(),
+                        np.array([0.        , 0.39346934, 0.63212056, 0.77686984, 1.,
+                                  0.8       , 0.0077687 , 0.00632121, 0.00393469, 0.,
+                                  0.        , 0.15738774, 0.25284822, 0.31074794, 0.4]
+                                  ).all()
+                        )
+ 
+    #------------------------------------
+    # testPlotting
+    #-------------------
+
+    #@unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    def testPlotting(self):
+        
+        sample_npa   = self.samples_for_attack_and_release
+        self.gater.samples_na   = sample_npa
+        
+        new_sample_na = self.gater.amplitude_gate(sample_npa, -20)
+
+        self.gater.plot(np.arange(new_sample_na.size),
+                      new_sample_na,
+                      title=f"Amplitude-Gated for {self.samples_for_attack_and_release}",
+                      xlabel='Sample Index', 
+                      ylabel='Voltage'
+                      )
+
+
+# --------------------------- Main ---------------
         
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
