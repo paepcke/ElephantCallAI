@@ -31,16 +31,19 @@ Example:
 '''
 
 import argparse
+import math
 import os
 import sys
+import time
 import wave
 
+from elephant_utils.logging_service import LoggingService
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from elephant_utils.logging_service import LoggingService
 
 class Direction(enumerate):
     UP = 0
@@ -141,7 +144,7 @@ class AmplitudeGater(object):
                 print(f"Cannot read .wav file: {repr(e)}")
                 sys.exit(1)
         
-        # num_frames = wave_obj.getnframes()
+        self.num_samples = wave_obj.getnframes()
         
         # For .wav files the sample width is 2,
         # i.e. 16 bit unsigned voltage readings:
@@ -225,9 +228,8 @@ class AmplitudeGater(object):
         # Not yet a 'previous signal burst' object:
         prev_burst = None
 
-        # Will log progress every x samples:        
-        samples_between_reporting = self.framerate * self.logging_period
-        next_report_due = samples_between_reporting
+        # Will log progress every x seconds:        
+        next_report_due = self.logging_period
         
         self.log.info("Begin envelope creation...")
         
@@ -257,12 +259,12 @@ class AmplitudeGater(object):
 
             prev_burst = burst
             # Time to report progress?
-            if burst.start > next_report_due:
+            curr_time =  math.floor(time.time())
+            if  curr_time > next_report_due:
                 secs_into_recording = round(burst.start / self.framerate)
                 self.log.info(f"Secs into recording: {secs_into_recording}")
-                next_report_due = burst.start + samples_between_reporting
-            
-            
+                next_report_due = curr_time + self.logging_period
+
         return sample_npa   
     #------------------------------------
     # place_attack 
