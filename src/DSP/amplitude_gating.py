@@ -31,6 +31,7 @@ Example:
 '''
 
 import argparse
+import datetime
 import math
 import os
 import sys
@@ -144,14 +145,18 @@ class AmplitudeGater(object):
                 print(f"Cannot read .wav file: {repr(e)}")
                 sys.exit(1)
         
-        self.num_samples = wave_obj.getnframes()
-        
         # For .wav files the sample width is 2,
         # i.e. 16 bit unsigned voltage readings:
         # sample_width = wave_obj.getsampwidth()
 
-        if not testing:
+        if testing:
+            self.recording_length_hhmmss = "<unknown>"
+        else:
             self.framerate = wave_obj.getframerate()
+            num_samples = wave_obj.getnframes()
+            recording_length_secs = round(self.framerate / num_samples)
+            self.recording_length_hhmmss = str(datetime.timedelta(seconds = recording_length_secs))
+
             
         self.samples_per_msec = round(self.framerate/1000.)
         AmplitudeGater.ATTACK_RELEASE_SAMPLES = self.ATTACK_RELEASE_MSECS * self.samples_per_msec
@@ -262,7 +267,8 @@ class AmplitudeGater(object):
             curr_time =  math.floor(time.time())
             if  curr_time > next_report_due:
                 secs_into_recording = round(burst.start / self.framerate)
-                self.log.info(f"Secs into recording: {secs_into_recording}")
+                secs_into_hhmmss = str(datetime.timedelta(seconds = secs_into_recording))
+                self.log.info(f"Secs into recording: {secs_into_hhmmss} of {self.recording_length_hhmmss}")
                 next_report_due = curr_time + self.logging_period
 
         return sample_npa   
