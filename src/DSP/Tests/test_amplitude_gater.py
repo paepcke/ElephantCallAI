@@ -7,6 +7,10 @@ Created on Feb 21, 2020
 import sys, os
 import unittest
 
+sys.path.append(os.path.dirname(__file__))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from DSP.amplitude_gating import AmplitudeGater
 import numpy as np
 from tempfile import NamedTemporaryFile
