@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Created on Feb 18, 2020
 
@@ -29,10 +30,17 @@ Example:
                     the 10V in the sample_npa    
 '''
 
+import argparse
 import os
+import sys
+import wave
+
 import matplotlib.pyplot as plt
 import numpy as np
-import wave
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from elephant_utils.logging_service import LoggingService
 
 class Direction(enumerate):
     UP = 0
@@ -55,28 +63,83 @@ class AmplitudeGater(object):
 
 
     def __init__(self, 
-                 wav_file_path=None, 
-                 testing=False,
+                 wav_file_path,
+                 outfile=None,
+                 amplitude_cutoff=-20,  # dB
+                 attack_release_duration_msecs=None, # default: ATTACK_RELEASE_MSECS 
                  framerate=None,
-                 plot_result=False
+                 log_file=None,
+                 logging_period=10, # seconds
+                 plot_result=False,
+                 testing=False
                  ):
         '''
-        
-        
+
         @param wav_file_path: path to .wav file to be gated
             Can leave at None, if testing is True
         @type wav_file_path: str
-        @param testing: whether or not unittests are being run
-        @type testing: bool
+        
+        @param outfile: where gated, normalized .wav will be written.
+        @type outfile: str
+        
+        @param amplitude_cutoff: dB attenuation from maximum
+            amplitude below which voltage is set to zero
+        @type amplitude_cutoff: int
+        
+        @param attack_release_duration_msecs: duration of the 
+            exponential attack or release envelope that is placed
+            before and after each signal burst (signals above threshold)
+        @type attack_release_duration_msecs: int
+        
         @param framerate: normally extracted from the .wav file.
             Can be set here for testing. Samples/sec
         @type framerate: int
+
+        @param log_file: file where to write logs; Default: stdout
+        @type log_file: str
+
+        @param logging_period: number of seconds between reporting
+            envelope placement progress.
+        @type logging_period: int
+        
+        @param plot_result: whether or not to create a plot of the 
+            new .wav signals.
+        @type plot_result: False
+        
+        @param testing: whether or not unittests are being run. If
+            true, __init__() does not initiate any action, allowing
+            the unittests to call individual methods.
+        @type testing: bool
         '''
 
+        # Make sure the outfile can be opened for writing,
+        # before going into lengthy computations:
+        
+        if outfile is not None:
+            try:
+                with open(outfile, 'wb') as _fd:
+                    pass
+            except Exception as e:
+                print(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
+                sys.exit(1)
+                
+        AmplitudeGater.log = LoggingService(log_file=log_file)
+        self.logging_period = logging_period
+        
+        # Mostly for testing; usually framerate is
+        # read from .wav file:
         self.framerate = framerate
 
-        if not testing:        
-            wave_obj = self.wave_fd(wav_file_path)
+        # Customize width of attack and release?
+        if attack_release_duration_msecs is not None:
+            AmplitudeGater.ATTACK_RELEASE_MSECS = attack_release_duration_msecs
+            
+        if not testing:
+            try:
+                wave_obj = self.wave_fd(wav_file_path)
+            except Exception as e:
+                print(f"Cannot read .wav file: {repr(e)}")
+                sys.exit(1)
         
         # num_frames = wave_obj.getnframes()
         
@@ -96,11 +159,19 @@ class AmplitudeGater(object):
         
         if testing:
             return
-        
+
+        self.log.info("Reading .wav file...")        
         samples = self.read(wave_obj)
+        self.log.info("Done reading .wav file.")        
+        wave_obj.close()
+        
         normed_samples = self.normalize(samples)
-        gated_samples  = self.amplitude_gate(normed_samples, -20)
-            
+        gated_samples  = self.amplitude_gate(normed_samples, amplitude_cutoff)
+        
+        if outfile is not None and not testing:
+            # Write out the result:
+            self.write_wav(gated_samples, outfile)
+        
         if plot_result:
             self.plot(np.arange(gated_samples.size),
                       gated_samples, 
@@ -119,17 +190,21 @@ class AmplitudeGater(object):
     def amplitude_gate(self, sample_npa, threshold_db):
         
         # Compute the threshold below which we
-        # set amplitude to 0. It's -20dB of max
+        # set amplitude to 0. It's threshold_db of max
         # value. Note that for a normalized array
         # that max val == 1.0
         
         max_voltage = np.max(sample_npa)
+        self.log.info(f"Max voltage: {max_voltage}")
         
         # Compute threshold_db of max voltage:
         Vthresh = 10**(threshold_db/20 + 20*np.log(max_voltage))
+        self.log.info(f"Cutoff threshold amplitude: {Vthresh}")
 
         # Zero out all amplitudes below threshold:
+        self.log.info("Zeroing sub-threshold values...")
         sample_npa[sample_npa < Vthresh] = 0
+        self.log.info("Done zeroing sub-threshold values.")
         
         # Get indexes of all non-null samples:
      
@@ -143,14 +218,23 @@ class AmplitudeGater(object):
 
         # The [0] is b/c .nonzero() returns a two tuple
         # with the result in slot 0, and nothing beyond:
+        self.log.info("Building index to non-zero values...")
         self.signal_index = sample_npa.nonzero()[0]
+        self.log.info("Done building index to non-zero values.")
 
         # Not yet a 'previous signal burst' object:
         prev_burst = None
+
+        # Will log progress every x samples:        
+        samples_between_reporting = self.framerate * self.logging_period
+        next_report_due = samples_between_reporting
+        
+        self.log.info("Begin envelope creation...")
         
         while True:
             burst = self.next_burst(prev_burst)
             if burst is None:
+                self.log.info("Last burst processed.")
                 break
             # If attack_start is not None, we have enough
             # zero samples before burst to do a ramp-up attack
@@ -172,6 +256,12 @@ class AmplitudeGater(object):
                     sample_npa = self.place_release(burst, sample_npa)
 
             prev_burst = burst
+            # Time to report progress?
+            if burst.start > next_report_due:
+                secs_into_recording = round(burst.start / self.framerate)
+                self.log.info(f"Secs into recording: {secs_into_recording}")
+                next_report_due = burst.start + samples_between_reporting
+            
             
         return sample_npa   
     #------------------------------------
@@ -388,8 +478,10 @@ class AmplitudeGater(object):
     #-------------------
     
     def normalize(self, samples):
+        self.log.info("Begin normalization...")
         largest_val = np.max(samples)
         normed_samples = samples/largest_val
+        self.log.info("Done normalization.")
         return normed_samples    
     
     #------------------------------------
@@ -542,7 +634,7 @@ class AmplitudeGater(object):
 
     def read(self, wave_read_obj):
         '''
-        Given an wave_read instance, return
+        Given a wave_read instance, return
         a numpy array of 16bit int samples
         of the entire file. Must fit in memory!
         
@@ -565,6 +657,35 @@ class AmplitudeGater(object):
         
     def wave_fd(self, file_path):
         return wave.open(file_path, 'rb')
+
+    #------------------------------------
+    # write_wav 
+    #-------------------
+
+    def write_wav(self, 
+                  sample_npa, 
+                  outfile_path,
+                  sample_width=2,
+                  framerate=None,
+                  num_channels=1,
+                  compress_type="NONE",
+                  compress_name='not compressed'
+                  ):
+        
+        if framerate is None:
+            framerate = self.framerate
+            
+        
+        with wave.open(outfile_path, 'wb') as wav_obj:
+            wav_obj.setparams((num_channels,
+                               sample_width,
+                               framerate,
+                               0,            # set by writeframes() below
+                               compress_type,
+                               compress_name
+                               )
+                              )
+            wav_obj.writeframes(sample_npa)
         
     #------------------------------------
     # plot
@@ -662,7 +783,59 @@ class Burst(object):
 
 if __name__ == '__main__':
     
-    AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
-                   plot_result=True) 
+    parser = argparse.ArgumentParser(prog=os.path.basename(sys.argv[0]),
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     description="Apply amplitude filter to a given .wav file"
+                                     )
 
-    print('Done')
+    parser.add_argument('-l', '--errLogFile',
+                        help='fully qualified log file name to which info and error messages \n' +\
+                             'are directed. Default: stdout.',
+                        dest='errLogFile',
+                        default=None);
+    parser.add_argument('-c', '--cutoff',
+                        help='dB attenuation from max amplitude below which signal \n' +\
+                            'is set to zero; default: -20dB',
+                        dest='cutoff',
+                        default='-20'
+                        )
+    parser.add_argument('-d', '--duration',
+                        help='Number of msecs to take for attack and release envelopes. Default: 50msec',
+                        dest='duration',
+                        default='50'
+                        )
+    parser.add_argument('-p', '--plot',
+                        action='store_true',
+                        default=False,
+                        help="Whether or not to plot result."
+                        )
+    parser.add_argument('wavefile',
+                        help="Input .wav file"
+                        )
+    parser.add_argument('outfile',
+                        help="Path to where result .wav file will be written."
+                        )
+    
+    args = parser.parse_args();
+
+    cutoff = args.cutoff
+    if cutoff >= 0:
+        print(f"Amplitude cutoff must be negative, not {cutoff}")
+        sys.exit(1)
+        
+    duration = args.duration
+    if duration <= 0:
+        print(f"Duration must be msecs for attack and release envolope duration, not {duration}")
+        sys.exit(1)
+        
+
+
+    # AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
+    #                plot_result=True)
+    AmplitudeGater(args.wavefile,
+                   args.outfile,
+                   amplitude_cutoff=cutoff,
+                   attack_release_duration_msecs=duration,
+                   plot_result=args.plot)
+
+    sys.exit(0)
