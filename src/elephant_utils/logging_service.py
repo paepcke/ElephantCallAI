@@ -57,7 +57,7 @@ class LoggingService(metaclass=MetaLoggingSingleton):
 
     def __init__(self, 
                  logging_level=logging.INFO, 
-                 log_file=None,
+                 logfile=None,
                  rotating_logs=True,
                  log_size=1000000,
                  max_num_logs=500):
@@ -72,8 +72,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         @param logging_level: INFO, WARN, ERR, etc as per 
             standard logging module
         @type logging_level: int
-        @param log_file: if provided, file path for the log file(s)
-        @type log_file: str
+        @param logfile: if provided, file path for the log file(s)
+        @type logfile: str
         @param rotating_logs: whether or not to rotate logs. 
         @type rotating_logs: bool
         @param log_size: max size of each log file, if rotating 
@@ -84,7 +84,7 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         '''
 
         self._logging_level = logging_level
-        self._log_file = log_file
+        self._log_file = logfile
         self.setup_logging(self._logging_level, 
                            self._log_file,
                            rotating_logs,

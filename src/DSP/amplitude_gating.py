@@ -68,7 +68,7 @@ class AmplitudeGater(object):
                  amplitude_cutoff=-20,  # dB
                  attack_release_duration_msecs=None, # default: ATTACK_RELEASE_MSECS 
                  framerate=None,
-                 log_file=None,
+                 logfile=None,
                  logging_period=10, # seconds
                  plot_result=False,
                  testing=False
@@ -95,8 +95,8 @@ class AmplitudeGater(object):
             Can be set here for testing. Samples/sec
         @type framerate: int
 
-        @param log_file: file where to write logs; Default: stdout
-        @type log_file: str
+        @param logfile: file where to write logs; Default: stdout
+        @type logfile: str
 
         @param logging_period: number of seconds between reporting
             envelope placement progress.
@@ -123,7 +123,7 @@ class AmplitudeGater(object):
                 print(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
                 sys.exit(1)
                 
-        AmplitudeGater.log = LoggingService(log_file=log_file)
+        AmplitudeGater.log = LoggingService(logfile=logfile)
         self.logging_period = logging_period
         
         # Mostly for testing; usually framerate is
@@ -788,20 +788,29 @@ if __name__ == '__main__':
                                      description="Apply amplitude filter to a given .wav file"
                                      )
 
-    parser.add_argument('-l', '--errLogFile',
+    parser.add_argument('-l', '--logfile',
                         help='fully qualified log file name to which info and error messages \n' +\
                              'are directed. Default: stdout.',
-                        dest='errLogFile',
+                        dest='logfile',
                         default=None);
+
+    parser.add_argument('-t', '--logperiod',
+                        help='Seconds between reporting progress during envelope phase.',
+                        dest='logperiod',
+                        type=int,
+                        default=10);
+                        
     parser.add_argument('-c', '--cutoff',
                         help='dB attenuation from max amplitude below which signal \n' +\
                             'is set to zero; default: -20dB',
                         dest='cutoff',
+                        type=int,
                         default='-20'
                         )
     parser.add_argument('-d', '--duration',
                         help='Number of msecs to take for attack and release envelopes. Default: 50msec',
                         dest='duration',
+                        type=int,
                         default='50'
                         )
     parser.add_argument('-p', '--plot',
@@ -836,6 +845,8 @@ if __name__ == '__main__':
                    args.outfile,
                    amplitude_cutoff=cutoff,
                    attack_release_duration_msecs=duration,
+                   logfile=args.logfile,
+                   logging_period=args.logperiod,
                    plot_result=args.plot)
 
     sys.exit(0)
