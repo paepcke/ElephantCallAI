@@ -38,12 +38,12 @@ import sys
 import time
 import wave
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from elephant_utils.logging_service import LoggingService
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
 class Direction(enumerate):
@@ -154,7 +154,7 @@ class AmplitudeGater(object):
         else:
             self.framerate = wave_obj.getframerate()
             num_samples = wave_obj.getnframes()
-            recording_length_secs = round(self.framerate / num_samples)
+            recording_length_secs = num_samples / self.framerate
             self.recording_length_hhmmss = str(datetime.timedelta(seconds = recording_length_secs))
 
             
