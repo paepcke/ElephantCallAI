@@ -780,6 +780,7 @@ class Model17(nn.Module):
            nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
         if loss.lower() == "focal":
+            print ("Init:", -np.log((1 - weight_init) / weight_init))
             self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
 
@@ -806,7 +807,9 @@ class FocalLoss(nn.Module):
         # Let us compare how this works an added alpha term
         bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
         # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
+        print (inputs)
         pt = torch.exp(-bce_loss)
+
         #print (pt[targets==1])
         #print(targets)
         # Value of alpha for class 1 and 1 - alpha for class 0
@@ -816,11 +819,80 @@ class FocalLoss(nn.Module):
         
         focal_loss = alpha_t * (1 - pt)**self.gamma * bce_loss
 
+        # Let us look a bit into the amount of loss that goes into 
+        # the negative vs. the postive examples
+        """
+        with torch.no_grad():
+            print ("Num pos examples:", torch.sum(targets))
+            print ("Confidence in correct class", pt)
+            print ("Some of weight terms", (1 - pt)**self.gamma)
+            loss_neg = torch.sum(focal_loss[targets == 0])
+            loss_pos = torch.sum(focal_loss[targets==1])
+            print ("Loss from negative examples:", loss_neg.item())
+            print ("Loss from postive examples:", loss_pos.item())
+            print ("Ratio of positive to negative:", torch.sum(targets).item() / targets.shape[0])
+            print()
+        """
+
         if self.reduce:
             return torch.mean(focal_loss)
 
         return focal_loss
 
+class ChunkFocalLoss(nn.Module):
+    def __init__(self, weight_func, alpha=0.25, gamma=2, batch_size=32, reduce=True):
+        super(ChunkFocalLoss, self).__init__()
+        self.weight_func = weight_func
+        self.alpha = alpha
+        self.gamma = gamma
+        self.batch_size = batch_size
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        """
+            Modified focal loss that re-weights at the chunk level
+            rather than the individaul slice level. Namely, re-weight 
+            the loss of each chunk based on its "difficulty" and how
+            much attention we should pay to it in the future
+
+            Parameters:
+            inputs - [batch_size, chunk_length]
+            targets - [batch_size, chunk_length]
+        """
+        bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
+        # Small hack for now!
+        bce_loss = bce_loss.view(self.batch_size, -1)
+
+        pts = torch.exp(-bce_loss)
+
+        # Determine the weighting we should pay to each individual
+        # chunk in the batch
+        chunk_weights = self.weight_func(pts) 
+
+        # Calculate chunk based loss
+        # Should we do mean or not here?
+        # chunk_loss = [batch_size, 1] ??
+        chunk_loss = torch.mean(bce_loss, dim=1)
+        # Re-weight through focal loss scheme!
+        # focal_loss = [batch_size, 1]
+        focal_loss = (1 - chunk_weights)**self.gamma * chunk_loss
+
+        if self.reduce:
+            return torch.mean(focal_loss)
+
+        return focal_loss
+
+def avg_confidence_weighting(pts):
+    """
+        Computes the weighting for each chunk based
+        on the averge over (pts), where pt represents
+        the confidence in the correct class for each slice.
+
+        Parameters:
+        pts - [batch_size, chunk_length]: Gives confidence in prediction
+        of the correct class for each slice
+    """
+    return torch.mean(pts, dim=1)
 
 
 ##### END OF MODELS
@@ -895,7 +967,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels, _ in dataloders[phase]:
                     i += 1
-                    if (i % 10 == 0) && parameters.VERBOSE:
+                    if (i % 10 == 0) and parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
@@ -1050,6 +1122,9 @@ def calc_num_chunks_calls(data_loader):
     num_chunks_calls = 0
     num_chunks_total = 0
 
+    num_call_slices = 0
+    total_slices = 0
+
     for inputs, labels, data_files in data_loader:
 
         num_chunks_total += inputs.shape[0]
@@ -1060,9 +1135,15 @@ def calc_num_chunks_calls(data_loader):
         gt_counts = np.where(gt_counts > 0, 1, 0)
         num_chunks_calls += np.sum(gt_counts)
 
+        total_slices += inputs.shape[0] * inputs.shape[2]
+        num_call_slices += np.sum(labels) # count how many slices are labeled with 1
+
     print ("Number of chunks with calls:", num_chunks_calls)
     print ("Total chunks:", num_chunks_total)
     print ("Ratio (call chunk) / chunks seen:", float(num_chunks_calls) / float(num_chunks_total))
+    print ("Number of total slices:", total_slices)
+    print ("Number of slices with calls:", num_call_slices)
+    print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
 def main():
@@ -1145,6 +1226,14 @@ def main():
         elif parameters.LOSS.upper() == "FOCAL":
             criterion = FocalLoss(alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
             print ("Using Focal Loss with parameters alpha: {}, gamma: {}, pi: {}".format(parameters.FOCAL_ALPHA, parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))
+        elif parameters.LOSS.upper() == "FOCAL_CHUNK":
+            weight_func = None
+            if parameters.CHUNK_WEIGHTING.lower() == "avg":
+                weight_func = avg_confidence_weighting
+            criterion = ChunkFocalLoss(weight_func, alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
+            print ("Using Chunk Based Focal Loss with weighting function: {}, alpha: {}, gamma: {}, pi: {}".format(
+                    parameters.CHUNK_WEIGHTING, parameters.FOCAL_ALPHA, 
+                    parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))
         else:
             print("Unknown Loss")
             return
