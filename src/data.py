@@ -20,8 +20,8 @@ def get_loader(data_dir,
                scale=False,
                augment=False,
                shuffle=True,
-               num_workers=4,
-               pin_memory=True):
+               num_workers=16,
+               pin_memory=False):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -38,6 +38,8 @@ def get_loader(data_dir,
     - num_workers: number of subprocesses to use when loading the dataset.
     - pin_memory: whether to copy tensors into CUDA pinned memory. Set it to
       True if using GPU.
+    - data_file_paths: If you know what particular data file names you want to load, 
+      pass them in as a list of strings.
     Returns
     -------
     - train_loader: training set iterator.
@@ -73,16 +75,18 @@ class ElephantDataset(data.Dataset):
         self.scale = scale
 
         self.features = glob.glob(data_path + "**/" + "*_features_*", recursive=True)
-        self.labels = []
-
-        for feature_path in self.features:
-            feature_parts = feature_path.split("_features_")
-            self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
+        self.initialize_labels()
 
         assert len(self.features) == len(self.labels)
 
         print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+
+    def initialize_labels(self):
+        self.labels = []
+        for feature_path in self.features:
+            feature_parts = feature_path.split("_features_")
+            self.labels.append(glob.glob(feature_parts[0] + "_labels_" + feature_parts[1])[0])
 
 
     def __len__(self):
@@ -226,7 +230,7 @@ class ElephantDatasetFull(data.Dataset):
         label_path = self.labels[index]
         gt_call_path = self.gt_calls[index]
 
-        spectrogram = np.load(spectrogram_path).transpose()
+        spectrogram = np.load(spectrogram_path)
         label = np.load(label_path)
 
         spectrogram = self.transform(spectrogram)

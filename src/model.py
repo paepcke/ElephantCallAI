@@ -34,6 +34,7 @@ import torchvision.models as models
 from torchvision import transforms
 import matplotlib
 import matplotlib.pyplot as plt
+from collections import deque
 
 np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -869,6 +870,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_fscore = 0.0
     best_model_wts = None
 
+    last_validation_accuracies = deque(maxlen=30)
+
     try:
         for epoch in range(num_epochs):
             for phase in ['train', 'valid']:
@@ -892,7 +895,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels, _ in dataloders[phase]:
                     i += 1
-                    if (i % 10 == 0):
+                    if (i % 10 == 0) && parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
@@ -946,6 +949,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
                     valid_non_zero = running_non_zero
+                    last_validation_accuracies.append(valid_epoch_acc)
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
@@ -969,6 +973,11 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
             scheduler.step()
 
+            # Check whether to early stop due to decreasing validation acc
+            if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+                print("Early stopping because last five validation accuracies have been {} and less than best val accuracy {}".format(last_validation_accuracies, best_valid_acc))
+                break
+
     except KeyboardInterrupt:
         print("Early stopping due to keyboard intervention")
 
@@ -976,7 +985,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     print('Best val F-score: {:4f}'.format(best_valid_fscore))
     return best_model_wts
 
-def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
+def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5, min_length=0):
     """
         Data loop for self supervised adversarial negative sample discovery. 
         Run the data through the model, and for negative samples (i.e.) that 
@@ -995,36 +1004,43 @@ def adversarial_discovery(dataloader, model, threshold=0.5, min_length=0):
     # when creating chunks for the 24hrs the chunks may be aligned differently
     adversarial_examples = []
     # This dataset includes chunks from the full 24 hours
+    chunksIdx = 0
     for inputs, labels, data_files in dataloader:
+        if chunksIdx % 100 == 0:
+            print("Adversarial search has gotten through {} chunks".format(chunksIdx))
+        if len(adversarial_examples) >= num_files_to_return:
+            break
         inputs = inputs.float()
-                    
-        labels = labels.cpu().detach().numpy()
+        labels = labels.float()
+        # labels = labels.cpu().detach().numpy()
 
-        inputs = Variable(inputs.to(device))
+        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
 
         # Forward pass
         logits = model(inputs) # Shape - (batch_size, seq_len, 1)
-        predictions = torch.sigmoid(logits).cpu().detach().numpy()
+        predictions = torch.sigmoid(logits)
 
         # Now for each chunk we want to see whether it should be flagged as 
         # a hard negative sample. Look over number in batch.
         # Pre-compute the number of pos. slices in each chunk
-        gt_counts = np.sum(labels, axis=1) # Shape - (batch_size)
+        gt_counts = torch.sum(labels, dim=1) # Shape - (batch_size)
         # Threshold the predictions - May add guassian blur
-        binary_preds = np.where(predictions > threshold, 1, 0)
-        pred_counts = np.sum(binary_preds, axis=1).squeeze() # Shape - (batch_size)
+        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(device), torch.tensor(0.0).to(device))
+        pred_counts = torch.sum(binary_preds, dim=1).squeeze() # Shape - (batch_size)
         for example in range(gt_counts.shape[0]):
             # Flag chunks with false pos in empy chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
-                print ("found an adversarial examples")
                 adversarial_examples.append(data_files[example])
                 # visualize it
-                if VERBOSE:
+                if parameters.VERBOSE:
+                    print ("found an adversarial examples")
                     features = inputs[example].detach().numpy()
                     output = predictions[example]
                     label = labels[example]
 
                     visualize(features, output, label)
+
+        chunksIdx += 1
 
 
     return adversarial_examples

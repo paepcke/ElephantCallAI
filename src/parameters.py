@@ -2,12 +2,13 @@ import torch
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
+VERBOSE = False
 
 DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "Focal"
+LOSS = "CE"
 FOCAL_WEIGHT_INIT = 0.01
 FOCAL_GAMMA = 2
 FOCAL_ALPHA = 0.25
@@ -134,8 +135,8 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
 #Local
-SAVE_PATH = '../models/'
-#SAVE_PATH = '/home/data/elephants/models/'
+# SAVE_PATH = '../models/'
+SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
