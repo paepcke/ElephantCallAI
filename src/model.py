@@ -870,7 +870,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_fscore = 0.0
     best_model_wts = None
 
-    last_five_validation_accuracies = deque(maxlen=5)
+    last_validation_accuracies = deque(maxlen=30)
 
     try:
         for epoch in range(num_epochs):
@@ -895,7 +895,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels, _ in dataloders[phase]:
                     i += 1
-                    if (i % 10 == 0):
+                    if (i % 10 == 0) && parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
@@ -949,7 +949,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     valid_epoch_trig_recall = 0
                     valid_epoch_trig_prec = 0
                     valid_non_zero = running_non_zero
-                    last_five_validation_accuracies.append(valid_epoch_acc)
+                    last_validation_accuracies.append(valid_epoch_acc)
                     
                 if phase == 'valid' and valid_epoch_acc > best_valid_acc:
                     best_valid_acc = valid_epoch_acc
@@ -974,8 +974,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             scheduler.step()
 
             # Check whether to early stop due to decreasing validation acc
-            if all([val_accuracy < best_valid_acc for val_accuracy in last_five_validation_accuracies]):
-                print("Early stopping because last five validation accuracies have been {} and less than best val accuracy {}".format(last_five_validation_accuracies, best_valid_acc))
+            if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+                print("Early stopping because last five validation accuracies have been {} and less than best val accuracy {}".format(last_validation_accuracies, best_valid_acc))
                 break
 
     except KeyboardInterrupt:
