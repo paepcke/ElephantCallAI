@@ -8,7 +8,8 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "CE"
+LOSS = "Focal"
+CHUNK_WEIGHTING = "avg"
 FOCAL_WEIGHT_INIT = 0.01
 FOCAL_GAMMA = 2
 FOCAL_ALPHA = 0.25
@@ -135,8 +136,8 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
 #Local
-# SAVE_PATH = '../models/'
-SAVE_PATH = '/home/data/elephants/models/'
+SAVE_PATH = '../models/'
+#SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1

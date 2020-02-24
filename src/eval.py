@@ -900,7 +900,7 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
     plt.legend()
     plt.xlabel("Recall")
     plt.ylabel("Precision")
-    plt.savefig("../Figures/PR_Curve" + str(model_id))
+    plt.savefig("../Figures/PR_Curve_" + str(model_id))
 
 
 
