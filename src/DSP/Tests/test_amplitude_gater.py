@@ -15,8 +15,7 @@ from DSP.amplitude_gating import AmplitudeGater
 import numpy as np
 from tempfile import NamedTemporaryFile
 
-sys.path.append(os.path.dirname(__file__))
-
+from scipy.io import wavfile
 
 TEST_ALL = True
 #TEST_ALL = False
@@ -162,15 +161,8 @@ class Test(unittest.TestCase):
     def test_wav_read_write(self):
         
         test_sound_path = os.path.join(os.path.dirname(__file__), 'testsound.wav')
-        wave_read_obj = self.gater.wave_fd(test_sound_path)
-        sample_width  = wave_read_obj.getsampwidth()
-        framerate     = wave_read_obj.getframerate()
-        num_channels  = wave_read_obj.getnchannels()
-        num_frames    = wave_read_obj.getnframes()
-        compress_type = wave_read_obj.getcomptype()
-        compress_name = wave_read_obj.getcompname()
         
-        sound_data = self.gater.read(wave_read_obj)
+        (framerate, sound_data) = wavfile.read(test_sound_path)
         
         # Get a tmp file and write the data back out:
         tmp_file_obj = NamedTemporaryFile(mode='w+b',
@@ -179,15 +171,15 @@ class Test(unittest.TestCase):
         tmp_file_obj.close()
         tmp_file_nm = tmp_file_obj.name
         
-        self.gater.write_wav(sound_data, tmp_file_nm, framerate=framerate)
+        wavfile.write(tmp_file_nm, framerate, sound_data) 
         
         # Original file and just-written file equal?
         
         orig_file_len = os.stat(test_sound_path).st_size
         tmp_file_len  = os.stat(tmp_file_nm).st_size
-        #******Fails b/c of the header difference.
+
         try:
-            #*****self.assertEqual(tmp_file_len, orig_file_len)
+            self.assertEqual(tmp_file_len, orig_file_len)
             
             # Check the metadata:
             
