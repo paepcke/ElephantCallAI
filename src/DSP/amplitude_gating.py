@@ -36,7 +36,9 @@ import math
 import os
 import sys
 import time
-import wave
+from scipy.io import wavfile
+#from io import StringIO
+#*****scipy.io.StringIO = io.StringIO
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -140,20 +142,17 @@ class AmplitudeGater(object):
             
         if not testing:
             try:
-                wave_obj = self.wave_fd(wav_file_path)
+                self.log.info("Reading .wav file...")        
+                (self.framerate, samples) = wavfile.read(wav_file_path)
+                self.log.info("Done reading .wav file.")        
             except Exception as e:
                 print(f"Cannot read .wav file: {repr(e)}")
                 sys.exit(1)
         
-        # For .wav files the sample width is 2,
-        # i.e. 16 bit unsigned voltage readings:
-        # sample_width = wave_obj.getsampwidth()
-
         if testing:
             self.recording_length_hhmmss = "<unknown>"
         else:
-            self.framerate = wave_obj.getframerate()
-            num_samples = wave_obj.getnframes()
+            num_samples = samples.size
             recording_length_secs = num_samples / self.framerate
             self.recording_length_hhmmss = str(datetime.timedelta(seconds = recording_length_secs))
 
@@ -161,24 +160,18 @@ class AmplitudeGater(object):
         self.samples_per_msec = round(self.framerate/1000.)
         AmplitudeGater.ATTACK_RELEASE_SAMPLES = self.ATTACK_RELEASE_MSECS * self.samples_per_msec
         
-        #  print(f"Framerate: {self.framerate}")
-        #  print(f"Frames: {num_frames}")
-        #  print(f"Sample width: {sample_width}")
-        
         if testing:
             return
 
-        self.log.info("Reading .wav file...")        
-        samples = self.read(wave_obj)
-        self.log.info("Done reading .wav file.")        
-        wave_obj.close()
-        
-        normed_samples = self.normalize(samples)
+        # Normalize:
+        #*******normed_samples = self.normalize(samples)
+        normed_samples = samples.copy()
+        # Place the envelopes:
         gated_samples  = self.amplitude_gate(normed_samples, amplitude_cutoff)
         
         if outfile is not None and not testing:
             # Write out the result:
-            self.write_wav(gated_samples, outfile)
+            wavfile.write(outfile, self.framerate, gated_samples)
         
         if plot_result:
             self.plot(np.arange(gated_samples.size),
@@ -202,17 +195,21 @@ class AmplitudeGater(object):
         # value. Note that for a normalized array
         # that max val == 1.0
         
-        max_voltage = np.max(sample_npa)
+        max_voltage = np.amax(sample_npa)
         self.log.info(f"Max voltage: {max_voltage}")
         
         # Compute threshold_db of max voltage:
-        Vthresh = 10**(threshold_db/20 + 20*np.log(max_voltage))
+        Vthresh = max_voltage * 10**(threshold_db/20)
         self.log.info(f"Cutoff threshold amplitude: {Vthresh}")
 
         # Zero out all amplitudes below threshold:
         self.log.info("Zeroing sub-threshold values...")
-        sample_npa[sample_npa < Vthresh] = 0
+        sample_npa[abs(sample_npa) < Vthresh] = 0
         self.log.info("Done zeroing sub-threshold values.")
+        
+        #**************
+        return sample_npa
+        #**************
         
         # Get indexes of all non-null samples:
      
@@ -486,9 +483,34 @@ class AmplitudeGater(object):
     #-------------------
     
     def normalize(self, samples):
+        '''
+        Make audio occupy the maximum dynamic range
+        of int16: -2**15 to 2**15 - 1 (-32768 to 32767)
+        Formula to compute new Intensity of each sample:
+        
+           I = ((I-Min) * (newMax - newMin)/Max-Min)) + newMin
+           
+        where Min is minimum value of current samples,
+              Max  is maximum value of current samples,
+              newMax is 32767
+              newMin is -32768
+        
+        @param samples: samples from .wav file
+        @type samples: np.narray('int16')
+        @result: a new np array with normalized values
+        @rtype: np.narray('int16')
+        '''
+        new_max = 2**15 - 1   # 32767
+        new_min = -2**15      #-32768
+        min_val = np.amin(samples)
+        max_val = np.amax(samples)
+
         self.log.info("Begin normalization...")
-        largest_val = np.max(samples)
-        normed_samples = samples/largest_val
+
+        normed_samples = ((samples - min_val) * (new_max - new_min)/(max_val - min_val)) + new_min
+        # Convert back from float to int16:
+        normed_samples = normed_samples.astype('int16')
+        
         self.log.info("Done normalization.")
         return normed_samples    
     
@@ -659,42 +681,6 @@ class AmplitudeGater(object):
         samples = np.copy(samples_readonly)
         return samples
 
-    #------------------------------------
-    # wave_fd
-    #-------------------    
-        
-    def wave_fd(self, file_path):
-        return wave.open(file_path, 'rb')
-
-    #------------------------------------
-    # write_wav 
-    #-------------------
-
-    def write_wav(self, 
-                  sample_npa, 
-                  outfile_path,
-                  sample_width=2,
-                  framerate=None,
-                  num_channels=1,
-                  compress_type="NONE",
-                  compress_name='not compressed'
-                  ):
-        
-        if framerate is None:
-            framerate = self.framerate
-            
-        
-        with wave.open(outfile_path, 'wb') as wav_obj:
-            wav_obj.setparams((num_channels,
-                               sample_width,
-                               framerate,
-                               0,            # set by writeframes() below
-                               compress_type,
-                               compress_name
-                               )
-                              )
-            wav_obj.writeframes(sample_npa)
-        
     #------------------------------------
     # plot
     #------------------- 
