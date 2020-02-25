@@ -807,7 +807,6 @@ class FocalLoss(nn.Module):
         # Let us compare how this works an added alpha term
         bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
         # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
-        print (inputs)
         pt = torch.exp(-bce_loss)
 
         #print (pt[targets==1])
@@ -867,7 +866,7 @@ class ChunkFocalLoss(nn.Module):
 
         # Determine the weighting we should pay to each individual
         # chunk in the batch
-        chunk_weights = self.weight_func(pts) 
+        chunk_weights = self.weight_func(pts, self.gamma) 
 
         # Calculate chunk based loss
         # Should we do mean or not here?
@@ -875,24 +874,44 @@ class ChunkFocalLoss(nn.Module):
         chunk_loss = torch.mean(bce_loss, dim=1)
         # Re-weight through focal loss scheme!
         # focal_loss = [batch_size, 1]
-        focal_loss = (1 - chunk_weights)**self.gamma * chunk_loss
+        focal_loss = chunk_weights * chunk_loss
+        #focal_loss = (1 - chunk_weights)**self.gamma * chunk_loss
 
         if self.reduce:
             return torch.mean(focal_loss)
 
         return focal_loss
 
-def avg_confidence_weighting(pts):
+def avg_confidence_weighting(pts, weight):
     """
         Computes the weighting for each chunk based
         on the averge over (pts), where pt represents
         the confidence in the correct class for each slice.
+        Then as in the focal loss paper re-weights by gamma
 
         Parameters:
         pts - [batch_size, chunk_length]: Gives confidence in prediction
         of the correct class for each slice
+        weight - here weight represents gamma
     """
-    return torch.mean(pts, dim=1)
+    return (1 - torch.mean(pts, dim=1)) ** self.gamma
+
+def incorrect_count_weighting(pts, weight):
+    """
+        Weight the difficulty of a given chunk by how many
+        correct / incorrect slices are predicted (note this does
+        not include confidence in such predictions).
+
+        Parameters:
+        pts - [batch_size, chunk_length]: Gives confidence in prediction
+        of the correct class for each slice
+        weight - here weight represents the denominator used to normalize
+        the incorrect weightings
+    """
+    num_incorrect = torch.sum(pts < 0.5, dim=1).float()
+
+    return (num_incorrect + 1) ** 2 / weight ** 2 # Think about maybe making sure these normalize to scale 0/1
+
 
 
 ##### END OF MODELS
@@ -1149,8 +1168,8 @@ def calc_num_chunks_calls(data_loader):
 def main():
     ## Build Dataset
     # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"
-
-    train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # Quatro
     #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
@@ -1230,6 +1249,9 @@ def main():
             weight_func = None
             if parameters.CHUNK_WEIGHTING.lower() == "avg":
                 weight_func = avg_confidence_weighting
+            elif parameters.CHUNK_WEIGHTING.lower() == "count":
+                weight_func = incorrect_count_weighting
+
             criterion = ChunkFocalLoss(weight_func, alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
             print ("Using Chunk Based Focal Loss with weighting function: {}, alpha: {}, gamma: {}, pi: {}".format(
                     parameters.CHUNK_WEIGHTING, parameters.FOCAL_ALPHA, 
