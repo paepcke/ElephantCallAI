@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Created on Feb 25, 2020
 
@@ -8,8 +9,6 @@ import csv
 import os
 from pathlib import Path
 import sys
-from csv import DictReader
-
 
 class LabelMerger(object):
     '''
