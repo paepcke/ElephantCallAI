@@ -37,8 +37,6 @@ import os
 import sys
 import time
 from scipy.io import wavfile
-#from io import StringIO
-#*****scipy.io.StringIO = io.StringIO
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -164,7 +162,7 @@ class AmplitudeGater(object):
             return
 
         # Normalize:
-        #*******normed_samples = self.normalize(samples)
+        #*****normed_samples = self.normalize(samples)
         normed_samples = samples.copy()
         # Place the envelopes:
         gated_samples  = self.amplitude_gate(normed_samples, amplitude_cutoff)
@@ -513,7 +511,7 @@ class AmplitudeGater(object):
         
         self.log.info("Done normalization.")
         return normed_samples    
-    
+
     #------------------------------------
     # make_envelope
     #-------------------
@@ -659,29 +657,6 @@ class AmplitudeGater(object):
         return max_db
 
     #------------------------------------
-    # read
-    #-------------------    
-
-    def read(self, wave_read_obj):
-        '''
-        Given a wave_read instance, return
-        a numpy array of 16bit int samples
-        of the entire file. Must fit in memory!
-        
-        @param wave_read_obj: result of having opened
-            a file using wave.open()
-        @type wave_read_obj: wave_read instance
-        @return: numpy array of samples
-        @rtype: narray(dtype=int16)
-        '''
-        
-        num_frames          = wave_read_obj.getnframes()
-        byte_arr            = wave_read_obj.readframes(num_frames)
-        samples_readonly    = np.frombuffer(byte_arr, np.uint16)
-        samples = np.copy(samples_readonly)
-        return samples
-
-    #------------------------------------
     # plot
     #------------------- 
     
@@ -801,12 +776,24 @@ if __name__ == '__main__':
                         type=int,
                         default='-20'
                         )
-    parser.add_argument('-d', '--duration',
-                        help='Number of msecs to take for attack and release envelopes. Default: 50msec',
-                        dest='duration',
+    
+    parser.add_argument('-f', '--filter',
+                        help='highest frequency to keep.',
+                        dest='logperiod',
                         type=int,
-                        default='50'
-                        )
+                        default=10);
+    
+    parser.add_argument('-p', '--padding',
+                        help='seconds to keep before/after events; default: 5',
+                        type=int,
+                        default=5);
+
+#     parser.add_argument('-d', '--duration',
+#                         help='Number of msecs to take for attack and release envelopes. Default: 50msec',
+#                         dest='duration',
+#                         type=int,
+#                         default='50'
+#                         )
     parser.add_argument('-p', '--plot',
                         action='store_true',
                         default=False,
@@ -826,10 +813,10 @@ if __name__ == '__main__':
         print(f"Amplitude cutoff must be negative, not {cutoff}")
         sys.exit(1)
         
-    duration = args.duration
-    if duration <= 0:
-        print(f"Duration must be msecs for attack and release envolope duration, not {duration}")
-        sys.exit(1)
+#     duration = args.duration
+#     if duration <= 0:
+#         print(f"Duration must be msecs for attack and release envolope duration, not {duration}")
+#         sys.exit(1)
         
 
 
@@ -838,7 +825,7 @@ if __name__ == '__main__':
     AmplitudeGater(args.wavefile,
                    args.outfile,
                    amplitude_cutoff=cutoff,
-                   attack_release_duration_msecs=duration,
+                   #attack_release_duration_msecs=duration,
                    logfile=args.logfile,
                    logging_period=args.logperiod,
                    plot_result=args.plot)
