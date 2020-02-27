@@ -4,99 +4,132 @@ Created on Feb 23, 2020
 @author: paepcke
 '''
 import argparse
+import math
 import os
 import sys
-import wave
 
-from matplotlib import mlab as ml
+from scipy.io import wavfile
 
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as grd
 import numpy as np
+
 
 class Spectrogrammer(object):
     '''
     classdocs
     '''
-
+    NFFT = 4096 # was 3208 # We want a frequency resolution of 1.95 Hz
+    HOP_LENGTH = 256
+    FREQ_MAX = 100.
+    OVERLAP = 50
+    
     #------------------------------------
     # Constructor 
     #-------------------
 
 
-    def __init__(self, wav_file_path):
+    def __init__(self, 
+                 wav_file_path, 
+                 start_sec=0,
+                 end_sec=None,
+                 normalize=False
+                 ):
         '''
         Constructor
         '''
         try:
-            wave_obj = self.wave_fd(wav_file_path)
+            (framerate, samples) = wavfile.read(wav_file_path)
         except Exception as e:
             print(f"Cannot read .wav file: {repr(e)}")
             sys.exit(1)
     
-        samples_npa = self.read(wave_obj)
-        framerate   = wave_obj.getframerate()
-        (spectrum, freqs, times) = self.make_spectrogram(samples_npa, framerate)
+        # Total time in seconds:
+        audio_secs = math.floor(samples.size / framerate)
         
-        self.plot(times, 
-                  freqs,
-                  spectrum,
-                  title=f"Spectrogram for {os.path.basename(wav_file_path)}" 
-                  )
+        # Seek in to start time, and cut all beyond stop time:
+        if end_sec is None or end_sec > audio_secs:
+            end_sec = audio_secs
+        start_sample = framerate * start_sec
+        stop_sample  = framerate * end_sec
+        
+        if normalize:
+            samples_to_use = self.normalize(samples[start_sample : stop_sample])
+        else:
+            samples_to_use = samples
+        self.plot_spectrogram(samples_to_use, 
+                              framerate,
+                              start_sec,
+                              end_sec
+                              )
         
     #------------------------------------
-    # make_spectrogram 
+    # plot_spectrogram 
     #-------------------
         
-    def make_spectrogram(self, 
-                         raw_audio, 
-                         samplerate,
-                         start=0,    # secs
-                         stop=10,    # secs
-                         NFFT=3208,
-                         hop=641
-                         ):
+    def plot_spectrogram(self, raw_audio, samplerate, start_sec, end_sec):
 
-        start_sample = samplerate * start
-        stop_sample  = samplerate * stop
         # Extract the spectogram
-        [spectrum, freqs, t] = ml.specgram(raw_audio[start_sample: stop_sample], 
-                                           NFFT=NFFT, 
-                                           Fs=samplerate, 
-                                           noverlap=(NFFT - hop), 
-                                           window=ml.window_hanning)
-
-        return (spectrum,freqs,t)
+        t = np.arange(start_sec, end_sec, 1/samplerate)
+        _fig = plt.Figure()
+        grid_spec = grd.GridSpec(nrows=2,
+                                 ncols=1
+                                 ) 
+        ax_audio = plt.subplot(grid_spec[0])
+        plt.xlabel('Time')
+        plt.ylabel('Audio Units')
+        ax_audio.plot(t, raw_audio)
+        
+        ax_spectrum = plt.subplot(grid_spec[1])
+        (spectrum, freqs, t_bins, im) = plt.specgram(raw_audio, 
+                                                      Fs=samplerate,
+                                                      cmap='jet'
+                                            		  )
+        plt.show()
+        return (spectrum,freqs,t_bins,im)
 
     #------------------------------------
-    # read
-    #-------------------    
+    # normalize
+    #-------------------
+    
+    def normalize(self, samples):
+        '''
+        Make audio occupy the maximum dynamic range
+        of int16: -2**15 to 2**15 - 1 (-32768 to 32767)
+        Formula to compute new Intensity of each sample:
+        
+           I = ((I-Min) * (newMax - newMin)/Max-Min)) + newMin
+           
+        where Min is minimum value of current samples,
+              Max  is maximum value of current samples,
+              newMax is 32767
+              newMin is -32768
+        
+        @param samples: samples from .wav file
+        @type samples: np.narray('int16')
+        @result: a new np array with normalized values
+        @rtype: np.narray('int16')
+        '''
+        new_max = 2**15 - 1   # 32767
+        new_min = -2**15      #-32768
+        min_val = np.amin(samples)
+        max_val = np.amax(samples)
 
-    def read(self, wave_read_obj):
-        '''
-        Given a wave_read instance, return
-        a numpy array of 16bit int samples
-        of the entire file. Must fit in memory!
+        # self.log.info("Begin normalization...")
+
+        normed_samples = ((samples - min_val) * (new_max - new_min)/(max_val - min_val)) + new_min
+        # Convert back from float to int16:
+        normed_samples = normed_samples.astype('int16')
         
-        @param wave_read_obj: result of having opened
-            a file using wave.open()
-        @type wave_read_obj: wave_read instance
-        @return: numpy array of samples
-        @rtype: narray(dtype=int16)
-        '''
-        
-        num_frames          = wave_read_obj.getnframes()
-        byte_arr            = wave_read_obj.readframes(num_frames)
-        samples_readonly    = np.frombuffer(byte_arr, np.uint16)
-        samples = np.copy(samples_readonly)
-        return samples
+        #self.log.info("Done normalization.")
+        return normed_samples    
 
     #------------------------------------
-    # wave_fd
+    # plot_simple
     #-------------------    
-        
-    def wave_fd(self, file_path):
-        return wave.open(file_path, 'rb')
-
+    
+    def plot_simple(self, spectrum, time):
+        pass
     #------------------------------------
     # plot
     #------------------- 
@@ -116,13 +149,15 @@ class Spectrogrammer(object):
         fig = plt.figure()
         ax  = fig.add_subplot(1,1,1)
         ax.pcolormesh(times, frequencies, spectrum)
-        ax.imshow(new_features, 
-                  cmap="magma_r", 
-                  vmin=min_dbfs, 
-                  vmax=max_dbfs, 
-                  interpolation='none', 
+        ax.imshow(#new_features,
+                  spectrum, 
+                  #cmap="magma_r", 
+                  cmap="jet", 
+                  #vmin=min_dbfs, 
+                  #vmax=max_dbfs, 
+                  #interpolation='none', 
                   origin="lower", 
-                  aspect="auto"
+                  #***aspect="auto"
                   )
         ax.set_title(title)
         ax.set_xlabel('Time')
@@ -142,25 +177,30 @@ if __name__ == '__main__':
                                      description="Quick Spectrogram from .wav"
                                      )
 
-#     parser.add_argument('-NFFT', 
-#                         type=int, 
-#                         default=3208, 
-#                         help='Window size used for creating spectrograms')
-# 
-#     parser.add_argument('-hop', 
-#                         type=int, 
-#                         default=641, 
-#                         help='Hop size used for creating spectrograms')
-# 
-#     parser.add_argument('-w', '--window', 
-#                         type=int, 
-#                         default=10, 
-#                         help='Determines the window size in seconds of the resulting spectrogram')
+    parser.add_argument('-s', '--start', 
+                        type=int, 
+                        default=0, 
+                        help='Seconds into recording when to start spectrogram')
 
-    parser.add_argument('--wavefile',
+    parser.add_argument('-e', '--end', 
+                        type=int, 
+                        default=None, 
+                        help='Seconds into recording when to stop spectrogram; default: All')
+
+    parser.add_argument('-n', '--normalize', 
+                        default=False,
+                        action='store_true', 
+                        help='Normalize to fill 16-bit -32K to +32K dynamic range'
+                        )
+
+    parser.add_argument('wavefile',
                         help="Input .wav file"
                         )
 
     args = parser.parse_args();
-    Spectrogrammer(args.wavefile)
+    Spectrogrammer(args.wavefile,
+                   args.start,
+                   args.end,
+                   args.normalize
+                   )
     
