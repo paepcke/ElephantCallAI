@@ -166,7 +166,7 @@ class ElephantDataset(data.Dataset):
     NEED TO FIX THIS!!
 """
 class ElephantDatasetFull(data.Dataset):
-    def __init__(self, spectrogram_files, label_files, gt_calls, preprocess="Norm", scale=True):
+    def __init__(self, spectrogram_files, label_files, gt_calls, preprocess="norm", scale=True):
 
         self.specs = spectrogram_files
         self.labels = label_files
@@ -186,8 +186,11 @@ class ElephantDatasetFull(data.Dataset):
         if self.scale:
             spectrogram = 10 * np.log10(spectrogram)
 
+        # Quite janky, but for now we will do the normalization 
+        # seperately!
+        '''
         # Normalize Features
-        if self.preprocess == "Norm": # Only have one training example so is essentially chunk norm
+        if self.preprocess == "norm": # Only have one training example so is essentially chunk norm
             spectrogram = (spectrogram - np.mean(spectrogram)) / np.std(spectrogram)
         elif preprocess == "Scale":
             scaler = MinMaxScaler()
@@ -220,6 +223,7 @@ class ElephantDatasetFull(data.Dataset):
             spectrogram = (spectrogram - mean_noise) / median_noise
         elif self.preprocess == "FeatureNorm":
             spectrogram = (spectrogram - np.mean(spectrogram, axis=1)) / np.std(spectrogram, axis=1)
+        '''
         return spectrogram
 
     """
@@ -230,7 +234,7 @@ class ElephantDatasetFull(data.Dataset):
         label_path = self.labels[index]
         gt_call_path = self.gt_calls[index]
 
-        spectrogram = np.load(spectrogram_path)
+        spectrogram = np.load(spectrogram_path).transpose()
         label = np.load(label_path)
 
         spectrogram = self.transform(spectrogram)

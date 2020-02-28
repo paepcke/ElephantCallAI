@@ -107,6 +107,7 @@ def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chun
         padding = (chunk_size - length) // 2
         window_start = max(start - padding, 0)
         window_end = min(end + padding, spectrogram.shape[0])
+        print (spectrogram.shape)
         visualize(spectrogram[window_start: window_end], 
             prediction_labels[window_start: window_end], gt_labels[window_start: window_end],
             title=label, vert_lines=(start - window_start, end - window_start))
