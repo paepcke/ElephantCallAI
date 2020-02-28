@@ -871,7 +871,8 @@ class ChunkFocalLoss(nn.Module):
         # Calculate chunk based loss
         # Should we do mean or not here?
         # chunk_loss = [batch_size, 1] ??
-        chunk_loss = torch.mean(bce_loss, dim=1)
+        #chunk_loss = torch.mean(bce_loss, dim=1) # Why did I change to sum rather than mean???
+        chunk_loss = torch.sum(bce_loss, dim=1)
         # Re-weight through focal loss scheme!
         # focal_loss = [batch_size, 1]
         focal_loss = chunk_weights * chunk_loss
@@ -1096,6 +1097,8 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
     adversarial_examples = []
     # This dataset includes chunks from the full 24 hours
     chunksIdx = 0
+    # Put in eval mode!!
+    model.eval()
     for inputs, labels, data_files in dataloader:
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
@@ -1135,6 +1138,7 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
 
 
     return adversarial_examples
+
 
 
 def calc_num_chunks_calls(data_loader):

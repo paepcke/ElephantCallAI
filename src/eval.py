@@ -587,9 +587,14 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     predictions = np.zeros(spectrogram.shape[0])
     overlap_counts = np.zeros(spectrogram.shape[0])
 
-    spectrogram = torch.from_numpy(spectrogram).float()
+    # This is a bit janky but we will manually transform
+    # each spectrogram chunk
+    #spectrogram = torch.from_numpy(spectrogram).float()
     # Add a batch dim for the model!
-    spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
+    #spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
+
+    # Added!
+    spectrogram = np.expand_dims(spectrogram,axis=0)
 
     # For the sliding window we slide the window by one spectrogram
     # frame, determined by the hop size.
@@ -601,6 +606,9 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
             print ("Chunk number " + str(i))
 
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
+        # Transform the slice 
+        spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
+        spect_slice = torch.from_numpy(spect_slice).float()
         spect_slice = Variable(spect_slice.to(parameters.device))
 
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
@@ -617,6 +625,9 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     if (spect_idx - jump + chunk_size != spectrogram.shape[1]):
         print ('One final chunk!')
         spect_slice = spectrogram[:, spect_idx: , :]
+        # Transform the slice 
+        spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
+        spect_slice = torch.from_numpy(spect_slice).float()
         spect_slice = Variable(spect_slice.to(parameters.device))
 
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
@@ -802,10 +813,12 @@ def test_elephant_call_metric(dataset, results):
         data_id = tags[0] + '_' + tags[1]
         print ("Testing Metric Results for:", data_id)
 
+
         print ("Testing False Negative Results")        
         visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], labels, label="False Negative")
 
-        print ("Testing False Positive Results")        
+        print ("Testing False Positive Results")  
+        print (len(results[data_id]['false_pos']))      
         visualize_predictions(results[data_id]['false_pos'], spectrogram, results[data_id]['binary_preds'], labels, label="False Positive")
 
         print ("Testing True Positive Predictions Results")        
@@ -914,6 +927,8 @@ def main():
     args = parser.parse_args()
     
     model, model_id = loadModel(args.model)
+    # Put in eval mode!
+    model.eval()
     print (model_id)
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
