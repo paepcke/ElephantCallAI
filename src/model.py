@@ -38,7 +38,7 @@ from collections import deque
 
 # We should now be doing this in a much more standerdized way
 #np.random.seed(parameters.RANDOM_SEED)
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+#parameters.device = torch.parameters.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def set_seed():
@@ -55,7 +55,6 @@ def set_seed():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     np.random.seed(parameters.RANDOM_SEED)
-    random.seed(parameters.RANDOM_SEED)
     os.environ['PYTHONHASHSEED'] = str(parameters.RANDOM_SEED)
 
 
@@ -112,8 +111,8 @@ class Model0(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.lstm = nn.LSTM(input_size, self.hidden_size, batch_first=True)
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
@@ -145,8 +144,8 @@ class Model1(nn.Module):
         self.conv_out = input_size - self.kernel_size + 2 * self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
@@ -184,8 +183,8 @@ class Model2(nn.Module):
         self.output_size = output_size
         self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
@@ -226,8 +225,8 @@ class Model3(nn.Module):
         self.num_layers = 1
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
-        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=2) # keep same dimension
@@ -271,8 +270,8 @@ class Model4(nn.Module):
         self.conv_out = input_size - self.kernel_size + 2*self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
-        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
-        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size, padding=self.padding) # keep same dimension
@@ -308,8 +307,8 @@ class Model5(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.linear = nn.Linear(input_size, self.hidden_size)
         self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, batch_first=True)
@@ -337,8 +336,8 @@ class Model6(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.linear = nn.Linear(input_size, self.hidden_size)
         self.linear2 = nn.Linear(self.hidden_size, self.hidden_size)
@@ -372,8 +371,8 @@ class Model7(nn.Module):
         self.output_size = output_size
         self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
@@ -415,8 +414,8 @@ class Model8(nn.Module):
         self.output_size = output_size
         self.conv_out = input_size - self.kernel_size + 1 # Ouput of the feature vectors after the 1D conv
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.convLayer = nn.Conv1d(1, self.num_filters, self.kernel_size) # Don't use padding
@@ -460,8 +459,8 @@ class Model9(nn.Module):
         self.conv_out = input_size - self.kernel_size + 2*self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
-        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device) # allow for bi-direct
-        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device) # allow for bi-direct
+        self.cell_state = nn.Parameter(torch.rand(2*self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.batchnorm = nn.BatchNorm1d(self.input_size)
@@ -499,8 +498,8 @@ class Model10(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.lstm = nn.LSTM(self.input_size, self.hidden_size, batch_first=True)
@@ -535,8 +534,8 @@ class Model11(nn.Module):
         self.conv_out = input_size - self.kernel_size + 2 * self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.batchnorm = nn.BatchNorm1d(self.input_size)
@@ -572,8 +571,8 @@ class Model12(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.linear = nn.Linear(self.input_size, self.hidden_size)
@@ -611,8 +610,8 @@ class Model13(nn.Module):
         self.conv_out = input_size - self.kernel_size + 2 * self.padding + 1 # Ouput of the feature vectors after the 1D conv
         self.lstm_input = self.conv_out * self.num_filters
 
-        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         # I think that we want input size to be 1
         self.batchnorm = nn.BatchNorm1d(self.input_size)
@@ -648,8 +647,8 @@ class Model14(nn.Module):
         self.hidden_size = 128
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.linear = nn.Linear(self.input_size, self.lin_size)
@@ -707,8 +706,8 @@ class Model15(nn.Module):
             in_channels = self.num_filters[i]
 
 
-        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(1, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.linear = nn.Linear(self.input_size, self.lin_size)
@@ -762,8 +761,8 @@ class Model16(nn.Module):
         self.num_layers = 2 # lstm
         self.output_size = output_size
 
-        self.hidden_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
-        self.cell_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(device)
+        self.hidden_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
 
         self.batchnorm = nn.BatchNorm1d(self.input_size)
         self.linear = nn.Linear(self.input_size, self.lin_size)
@@ -836,7 +835,7 @@ class FocalLoss(nn.Module):
         #print (pt[targets==1])
         #print(targets)
         # Value of alpha for class 1 and 1 - alpha for class 0
-        alpha = torch.tensor([1 - self.alpha, self.alpha]).to(device)
+        alpha = torch.tensor([1 - self.alpha, self.alpha]).to(parameters.device)
         # Select the appropriate alpha based on label y
         alpha_t = alpha[targets.data.view(-1).long()].view_as(targets)
         
@@ -919,7 +918,7 @@ def avg_confidence_weighting(pts, weight):
         of the correct class for each slice
         weight - here weight represents gamma
     """
-    return (1 - torch.mean(pts, dim=1)) ** self.gamma
+    return (1 - torch.mean(pts, dim=1)) ** weight
 
 def incorrect_count_weighting(pts, weight):
     """
@@ -1019,7 +1018,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     
                     labels = labels.float()
 
-                    inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+                    inputs, labels = Variable(inputs.to(parameters.device)), Variable(labels.to(parameters.device))
 
                     optimizer.zero_grad()
 
@@ -1134,7 +1133,7 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
         inputs = inputs.float()
         labels = labels.float()
 
-        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+        inputs, labels = Variable(inputs.to(parameters.device)), Variable(labels.to(parameters.device))
 
         # Forward pass
         logits = model(inputs) # Shape - (batch_size, seq_len, 1)
@@ -1145,7 +1144,7 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
         # Pre-compute the number of pos. slices in each chunk
         gt_counts = torch.sum(labels, dim=1) # Shape - (batch_size)
         # Threshold the predictions - May add guassian blur
-        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(device), torch.tensor(0.0).to(device))
+        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
         pred_counts = torch.sum(binary_preds, dim=1).squeeze() # Shape - (batch_size)
         for example in range(gt_counts.shape[0]):
             # Flag chunks with false pos in empty chunks.
@@ -1217,15 +1216,15 @@ def main():
         print ("3) model.py model_id - train a given model")
     elif len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
         ## Data Visualization
-        # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=device)
-        model = torch.load(sys.argv[2], map_location=device)
+        # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=parameters.device)
+        model = torch.load(sys.argv[2], map_location=parameters.device)
         print(model)
 
         for inputs, labels in dloaders['valid']:
             inputs = inputs.float()
             labels = labels.float()
 
-            inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+            inputs, labels = Variable(inputs.to(parameters.device)), Variable(labels.to(parameters.device))
 
             # Forward pass
             outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
@@ -1242,7 +1241,7 @@ def main():
     elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
         # Load a model that was already trained and run through adversarial 
         # discovery
-        model = torch.load(sys.argv[2], map_location=device)
+        model = torch.load(sys.argv[2], map_location=parameters.device)
 
         adversarial_examples = adversarial_discovery(test_loader, model, threshold=0.5, min_length=0)
         print (adversarial_examples)
@@ -1256,7 +1255,7 @@ def main():
 
         model = get_model(model_id)
 
-        model.to(device)
+        model.to(parameters.device)
 
         print(model)
 
