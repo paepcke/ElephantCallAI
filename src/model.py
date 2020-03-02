@@ -36,10 +36,34 @@ import matplotlib
 import matplotlib.pyplot as plt
 from collections import deque
 
-np.random.seed(parameters.RANDOM_SEED)
+# We should now be doing this in a much more standerdized way
+#np.random.seed(parameters.RANDOM_SEED)
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+
+def set_seed():
+    """
+        Set the seed across all different necessary platforms
+        to allow for comparrsison of different model seeding. 
+        Additionally, in the adversarial discovery, we want to
+        initialize and train each of the models with the same
+        seed.
+    """
+    torch.manual_seed(parameters.RANDOM_SEED)
+    torch.cuda.manual_seed_all(parameters.RANDOM_SEED)
+    # Not totally sure what these two do!
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(parameters.RANDOM_SEED)
+    random.seed(parameters.RANDOM_SEED)
+    os.environ['PYTHONHASHSEED'] = str(parameters.RANDOM_SEED)
+
+
 def get_model(idx):
+    # Make sure to set the numpy and cuda seeds
+    # for the model
+    set_seed()
+
     if idx == 0:
         return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 1:
@@ -962,7 +986,8 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     best_valid_fscore = 0.0
     best_model_wts = None
 
-    last_validation_accuracies = deque(maxlen=30)
+    # Check this
+    last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
 
     try:
         for epoch in range(num_epochs):
@@ -1067,7 +1092,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
 
             # Check whether to early stop due to decreasing validation acc
             if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
-                print("Early stopping because last five validation accuracies have been {} and less than best val accuracy {}".format(last_validation_accuracies, best_valid_acc))
+                print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
                 break
 
     except KeyboardInterrupt:
@@ -1102,11 +1127,12 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
     for inputs, labels, data_files in dataloader:
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
+        # Allows for subsampling of adversarial examples
         if len(adversarial_examples) >= num_files_to_return:
             break
+
         inputs = inputs.float()
         labels = labels.float()
-        # labels = labels.cpu().detach().numpy()
 
         inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
 
@@ -1122,10 +1148,10 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
         binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(device), torch.tensor(0.0).to(device))
         pred_counts = torch.sum(binary_preds, dim=1).squeeze() # Shape - (batch_size)
         for example in range(gt_counts.shape[0]):
-            # Flag chunks with false pos in empy chunks.
+            # Flag chunks with false pos in empty chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
                 adversarial_examples.append(data_files[example])
-                # visualize it
+                # Visualize!
                 if parameters.VERBOSE:
                     print ("found an adversarial examples")
                     features = inputs[example].detach().numpy()
@@ -1169,22 +1195,19 @@ def calc_num_chunks_calls(data_loader):
     print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
-def main():
+def main():    
     ## Build Dataset
     # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
     #validation_loader 
-    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
+    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    # Quatro
-    #train_loader = get_loader("/tmp/jgs8_data/Train/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    #validation_loader = get_loader("/tmp/jgs8_data/Test/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-
+    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    
     dloaders = {'train':train_loader, 'valid':test_loader}
 
     if sys.argv[1].lower() == 'help':

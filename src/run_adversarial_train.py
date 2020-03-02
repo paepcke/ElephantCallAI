@@ -10,11 +10,15 @@ import sys
 import time
 import os
 
-np.random.seed(parameters.RANDOM_SEED)
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+# THis should now be set in model.py
+#np.random.seed(parameters.RANDOM_SEED)
+#device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def initialize_training(model_id, save_path):
-    model = model_file.get_model(model_id).to(device)
+    # The get_model method is in charge of 
+    # setting the same seed for each loaded model.
+    # Thus, for each inner loop we train the same initialized model
+    model = model_file.get_model(model_id).to(parameters.device)
     print(model)
     writer = SummaryWriter(save_path)
     writer.add_scalar('batch_size', parameters.BATCH_SIZE)
@@ -28,12 +32,12 @@ def initialize_training(model_id, save_path):
 
 
 def outerLoop(model_id):
+    # get_loader now handles setting random seed for reproducability
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x2/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x2/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
 
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x2/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-    full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, parameters.NORM, parameters.SCALE)
-
-    for outer_iteration in range(10):
+    for outer_iteration in range(parameters.ADVERSARIAL_LOOPS):
         dloaders = {'train':train_loader, 'valid':validation_loader}
 
         save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()) + "adversarial_iteration_" + str(outer_iteration))
@@ -55,10 +59,13 @@ def outerLoop(model_id):
         writer.close()
 
         # Evaluate on entire dataset
+        # Add 1/4 * (num_data_points) to the training data
+        # We should maybe include a scaling term to the loss function!
         adversarial_files = model_file.adversarial_discovery(full_train_loader, model, len(train_loader.dataset) * 0.25)
         np.save(save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt" , adversarial_files)
 
         # Select randomly the same number as current num calls
+        # This is now done locally
         # adversarial_files = np.random.choice()
         
 
@@ -67,6 +74,7 @@ def outerLoop(model_id):
         train_loader.dataset.initialize_labels()
 
         assert len(train_loader.dataset.features) == len(train_loader.dataset.labels)
+        # Should keep track of ratio of neg-to-pos
         print("Length of features is now {} ".format(len(train_loader.dataset.features)))
 
 
