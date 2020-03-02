@@ -4,6 +4,9 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
+ADVERSARIAL_LOOPS = 3
+TRAIN_STOP_ITERATIONS = 30
+
 DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
@@ -130,7 +133,7 @@ HYPERPARAMETERS = {
         }
 }
 
-RANDOM_SEED = 42
+RANDOM_SEED = 8
 
 BATCH_SIZE = 32
 NUM_EPOCHS = 1000

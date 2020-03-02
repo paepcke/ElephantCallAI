@@ -16,6 +16,7 @@ Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
 
 def get_loader(data_dir,
                batch_size,
+               random_seed=8,
                norm="norm",
                scale=False,
                augment=False,
@@ -51,7 +52,16 @@ def get_loader(data_dir,
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
+    # Set the data_loader random seed for reproducibility.
+    # Should do some checks on this
+    def _init_fn(worker_id):
+        # We probably do not want every worker to have 
+        # the same random seed or else they may do the same 
+        # thing?
+        np.random.seed(int(random_seed) + worker_id)
+
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
+        shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, worker_init_fn=_init_fn)
 
     return data_loader
 

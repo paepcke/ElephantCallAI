@@ -46,6 +46,8 @@ parser.add_argument('--neg_fact', type=int, default=1,
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
 parser.add_argument('--full_24_hr', action='store_true', 
     help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
+parser.add_argument('--seed', type=int, default=8,
+    help="Set the random seed used for creating the datasets. This is primarily important for determining the negative samples")
 
 '''
 parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
@@ -55,8 +57,6 @@ parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Va
      help='The output directory for the validation files. Only need this if creating validation files')
 '''
 
-np.random.seed(8)
-random.seed(8) # Add this!
 VERBOSE = False
 
 def generate_labels(labels, spectrogram_info, len_wav):
@@ -350,6 +350,9 @@ if __name__ == '__main__':
                         'neg_fact': args.neg_fact}
 
     print(args)
+
+    np.random.seed(args.seed)
+    random.seed(args.seed) # Add this!
 
     # Collect the wav/txt file pairs 
     # Iterate through all files with in data directories

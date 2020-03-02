@@ -69,7 +69,6 @@ parser.add_argument('--model', type=str,
 #parser.add_argument('--model_id', type=str, default='17')
 
 
-
 '''
 Example runs
 
@@ -98,89 +97,6 @@ def loadModel(model_path):
     model_id = tokens[-2]
     return model, model_id
  
-
-def visual_time_series(spectrum, predicts, labels):
-    # Do the timeseries with the most calls
-    most_index = 0
-    number_most = 0
-    for i in range(20):
-        num_calls = 0
-        inCall = False
-        for j in range(spectrum.shape[1]):
-            if not inCall and labels[i, j] == 1:
-                inCall = True
-                num_calls += 1
-            if labels[i, j] == 0:
-                inCall = False
-
-        if num_calls > number_most:
-            most_index = i
-            number_most = num_calls
-
-    print (number_most)
-    # Just visualize one time series
-    spect = spectrum[most_index].detach().numpy()
-    label = labels[most_index].detach().numpy()
-    predict = torch.sigmoid(predicts[most_index]).detach().numpy()
-
-    # get num chunks
-    num_chunks = int(spect.shape[0] / 64)
-    for j in range(num_chunks):
-        chunk_start = j * 64
-        chunk = spect[chunk_start: chunk_start + 64, :]
-        lab = label[chunk_start: chunk_start + 64]
-        pred = predict[chunk_start: chunk_start + 64]
-
-        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-        # new_features = np.flipud(10*np.log10(features).T)
-        new_features = np.flipud(chunk.T)
-        min_dbfs = new_features.flatten().mean()
-        max_dbfs = new_features.flatten().mean()
-        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
-        ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
-        ax2.plot(np.arange(pred.shape[0]), pred)
-        # Plot the threshold
-        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
-        ax2.set_ylim([0,1])
-        ax3.plot(np.arange(lab.shape[0]), lab)
-        ax3.set_ylim([0, 1])
-        mngr = plt.get_current_fig_manager()
-        geom = mngr.window.geometry()
-        #x,y,dx,dy = geom.getRect()
-        #mngr.window.Position((400, 500))
-        mngr.window.wm_geometry("+400+250")
-        #plt.draw()
-        #plt.pause(0.001)
-        #plt.clf()
-        plt.show()
-
-def visual_full_test(spectrogram, predictions, labels, chunk_size=256):
-    # get num chunks
-    num_chunks = int(spectrogram.shape[0] / chunk_size)
-    for j in range(num_chunks):
-        chunk_start = j * chunk_size
-        chunk = spectrogram[chunk_start: chunk_start + chunk_size, :]
-        lab = labels[chunk_start: chunk_start + chunk_size]
-        pred = predictions[chunk_start: chunk_start + chunk_size]
-
-        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-        new_features = chunk.T
-        min_dbfs = new_features.flatten().mean()
-        max_dbfs = new_features.flatten().mean()
-        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
-        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
-        ax2.plot(np.arange(pred.shape[0]), pred)
-        # Plot the threshold
-        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
-        ax2.set_ylim([0,1])
-        ax3.plot(np.arange(lab.shape[0]), lab)
-        ax3.set_ylim([0, 1])
-        mngr = plt.get_current_fig_manager()
-        geom = mngr.window.geometry()
-        mngr.window.wm_geometry("+400+250")
-        plt.show()
 
 def visual_full_recall(spectrogram, predictions, labels, binary_preds, chunk_size=256):
     """
@@ -626,6 +542,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         print ('One final chunk!')
         spect_slice = spectrogram[:, spect_idx: , :]
         # Transform the slice 
+        # Should use the function from the dataset!!
         spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
         spect_slice = torch.from_numpy(spect_slice).float()
         spect_slice = Variable(spect_slice.to(parameters.device))
@@ -923,7 +840,6 @@ def main():
     Example runs:
 
     """
-    
     args = parser.parse_args()
     
     model, model_id = loadModel(args.model)
@@ -932,7 +848,7 @@ def main():
     print (model_id)
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
-    print (args.spect_path)
+
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
                  full_test_spect_paths['labels'], full_test_spect_paths['gts'])    
 
@@ -1119,6 +1035,89 @@ def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
 ################################################################
 ######################### OLD CODE #############################
 ################################################################
+def visual_full_test(spectrogram, predictions, labels, chunk_size=256):
+    # get num chunks
+    num_chunks = int(spectrogram.shape[0] / chunk_size)
+    for j in range(num_chunks):
+        chunk_start = j * chunk_size
+        chunk = spectrogram[chunk_start: chunk_start + chunk_size, :]
+        lab = labels[chunk_start: chunk_start + chunk_size]
+        pred = predictions[chunk_start: chunk_start + chunk_size]
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+        new_features = chunk.T
+        min_dbfs = new_features.flatten().mean()
+        max_dbfs = new_features.flatten().mean()
+        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+        ax2.plot(np.arange(pred.shape[0]), pred)
+        # Plot the threshold
+        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
+        ax2.set_ylim([0,1])
+        ax3.plot(np.arange(lab.shape[0]), lab)
+        ax3.set_ylim([0, 1])
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()
+        mngr.window.wm_geometry("+400+250")
+        plt.show()
+
+def visual_time_series(spectrum, predicts, labels):
+    # Do the timeseries with the most calls
+    most_index = 0
+    number_most = 0
+    for i in range(20):
+        num_calls = 0
+        inCall = False
+        for j in range(spectrum.shape[1]):
+            if not inCall and labels[i, j] == 1:
+                inCall = True
+                num_calls += 1
+            if labels[i, j] == 0:
+                inCall = False
+
+        if num_calls > number_most:
+            most_index = i
+            number_most = num_calls
+
+    print (number_most)
+    # Just visualize one time series
+    spect = spectrum[most_index].detach().numpy()
+    label = labels[most_index].detach().numpy()
+    predict = torch.sigmoid(predicts[most_index]).detach().numpy()
+
+    # get num chunks
+    num_chunks = int(spect.shape[0] / 64)
+    for j in range(num_chunks):
+        chunk_start = j * 64
+        chunk = spect[chunk_start: chunk_start + 64, :]
+        lab = label[chunk_start: chunk_start + 64]
+        pred = predict[chunk_start: chunk_start + 64]
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
+        # new_features = np.flipud(10*np.log10(features).T)
+        new_features = np.flipud(chunk.T)
+        min_dbfs = new_features.flatten().mean()
+        max_dbfs = new_features.flatten().mean()
+        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+        ax1.imshow(np.flipud(new_features), cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+        ax2.plot(np.arange(pred.shape[0]), pred)
+        # Plot the threshold
+        ax2.axhline(y=THRESHOLD, color='r', linestyle='-')
+        ax2.set_ylim([0,1])
+        ax3.plot(np.arange(lab.shape[0]), lab)
+        ax3.set_ylim([0, 1])
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()
+        #x,y,dx,dy = geom.getRect()
+        #mngr.window.Position((400, 500))
+        mngr.window.wm_geometry("+400+250")
+        #plt.draw()
+        #plt.pause(0.001)
+        #plt.clf()
+        plt.show()
+
 def call_recall(dloader, model):
     """
         Metric:
