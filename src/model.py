@@ -1011,7 +1011,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 print ("Num batches:", len(dataloders[phase]))
                 for inputs, labels, _ in dataloders[phase]:
                     i += 1
-                    if (i % 10 == 0) and parameters.VERBOSE:
+                    if (i % 1000 == 0) and parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
                     inputs = inputs.float()
