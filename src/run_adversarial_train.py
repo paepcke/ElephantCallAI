@@ -71,7 +71,9 @@ def outerLoop(model_id):
         # Evaluate on entire dataset
         # Add 1/4 * (num_data_points) to the training data
         # We should maybe include a scaling term to the loss function!
-        adversarial_files = model_file.adversarial_discovery(full_train_loader, model, len(train_loader.dataset) * 0.25)
+        num_adversarial = len(train_loader.dataset) * parameters.ADVERSARIAL_SAMPLES if parameters.ADVERSARIAL_SAMPLES != -1 else -1
+        adversarial_files = model_file.adversarial_discovery(full_train_loader, model,
+                                                         num_files_to_return=num_adversarial, min_length=ADVERSARIAL_THRESHOLD)
         adversarial_save_path = iteration_save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt"
         with open(adversarial_save_path, 'w') as f:
             for file in adversarial_files:
