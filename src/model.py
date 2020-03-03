@@ -1154,7 +1154,7 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
                 # Visualize!
                 if parameters.VERBOSE:
                     print ("found an adversarial examples")
-                    features = inputs[example].detach().numpy()
+                    features = inputs[example].cpu().detach().numpy()
                     output = predictions[example]
                     label = labels[example]
 
@@ -1244,9 +1244,15 @@ def main():
         # discovery. Could also just do this
         model = torch.load(sys.argv[2], map_location=parameters.device)
 
-        adversarial_examples = adversarial_discovery(test_loader, model, threshold=0.5, min_length=0)
-        print (adversarial_examples)
-        print (len(adversarial_examples))
+        adversarial_examples = adversarial_discovery(test_loader, model, min_length=parameters.ADVERSARIAL_THRESHOLD)
+        print ("Discovered {} adversaries".format(len(adversarial_examples)))
+        # We want to save these to a given file for testing purposes
+        # Get the model name from the path
+        tokens = model_path.split('/')
+        model_id = tokens[-2]
+        with open(model_id + ".txt", 'w') as f:
+            for file in adversarial_files:
+                f.write('{}\n'.format(file))
 
     else:
         ## Training
