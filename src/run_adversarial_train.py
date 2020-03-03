@@ -52,7 +52,7 @@ def outerLoop(model_id):
             os.makedirs(iteration_save_path)
 
         start_time = time.time()
-        model, criterion, optimizer, scheduler, writer = initialize_training(model_id, outer_iteration)
+        model, criterion, optimizer, scheduler, writer = initialize_training(model_id, iteration_save_path)
         model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
 
         assert model_wts != None
@@ -70,7 +70,7 @@ def outerLoop(model_id):
         # We should maybe include a scaling term to the loss function!
         num_adversarial = len(train_loader.dataset) * parameters.ADVERSARIAL_SAMPLES if parameters.ADVERSARIAL_SAMPLES != -1 else -1
         adversarial_files = model_file.adversarial_discovery(full_train_loader, model,
-                                                         num_files_to_return=num_adversarial, min_length=ADVERSARIAL_THRESHOLD)
+                                                         num_files_to_return=num_adversarial, min_length=parameters.ADVERSARIAL_THRESHOLD)
         adversarial_save_path = iteration_save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt"
         with open(adversarial_save_path, 'w') as f:
             for file in adversarial_files:
