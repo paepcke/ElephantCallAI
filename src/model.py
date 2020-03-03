@@ -1101,7 +1101,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     print('Best val F-score: {:4f}'.format(best_valid_fscore))
     return best_model_wts
 
-def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5, min_length=0):
+def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0.5, min_length=0):
     """
         Data loop for self supervised adversarial negative sample discovery. 
         Run the data through the model, and for negative samples (i.e.) that 
@@ -1126,8 +1126,9 @@ def adversarial_discovery(dataloader, model, num_files_to_return, threshold=0.5,
     for inputs, labels, data_files in dataloader:
         if chunksIdx % 100 == 0:
             print("Adversarial search has gotten through {} chunks".format(chunksIdx))
-        # Allows for subsampling of adversarial examples
-        if len(adversarial_examples) >= num_files_to_return:
+        # Allows for subsampling of adversarial examples.
+        # -1 indicates collect all
+        if num_files_to_return != -1 and len(adversarial_examples) >= num_files_to_return:
             break
 
         inputs = inputs.float()
@@ -1240,7 +1241,7 @@ def main():
 
     elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
         # Load a model that was already trained and run through adversarial 
-        # discovery
+        # discovery. Could also just do this
         model = torch.load(sys.argv[2], map_location=parameters.device)
 
         adversarial_examples = adversarial_discovery(test_loader, model, threshold=0.5, min_length=0)

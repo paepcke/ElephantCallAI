@@ -6,6 +6,15 @@ VERBOSE = False
 
 ADVERSARIAL_LOOPS = 1
 TRAIN_STOP_ITERATIONS = 30
+# Determines number of adversarial samples to discover.
+# This is a number (0, 1] that calculates how
+# many adversarial samples to find based on the size of the
+# current dataset. 
+# Note: -1 means find all adversarial samples!
+ADVERSARIAL_SAMPLES = -1
+# How many incorrect slices for a chunk to be considered
+# an adversarial false positive
+ADVERSARIAL_THRESHOLD = 0
 
 DATASET = 'Call'
 #DATASET = 'Activate'
