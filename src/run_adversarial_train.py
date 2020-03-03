@@ -35,13 +35,10 @@ def outerLoop(model_id):
     # get_loader now handles setting random seed for reproducability
     # Add flexability to start decide what intial neg_sample ratio to 
     # start. Later!!! Include what random seed dataset to sample from
-    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    #validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    #full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
 
-    train_loader = None
-    validation_loader = None
-    full_train_loader = None
     # Create directory to keep the adversarial training iterations
     save_path = parameters.SAVE_PATH + "Adversarial_training_" + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
     if not os.path.exists(save_path):
