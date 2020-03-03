@@ -4,7 +4,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
-ADVERSARIAL_LOOPS = 3
+ADVERSARIAL_LOOPS = 1
 TRAIN_STOP_ITERATIONS = 30
 
 DATASET = 'Call'

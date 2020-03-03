@@ -352,7 +352,7 @@ if __name__ == '__main__':
     print(args)
 
     np.random.seed(args.seed)
-    random.seed(args.seed) # Add this!
+    random.seed(args.seed) 
 
     # Collect the wav/txt file pairs 
     # Iterate through all files with in data directories
@@ -454,7 +454,7 @@ if __name__ == '__main__':
         pool.close()
         print('Multiprocessed took {}'.format(time.time()-start_time))
 
-        quit()
+        return
 
     def wrapper_processPos(directory, data_pair):
         """
@@ -477,7 +477,8 @@ if __name__ == '__main__':
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
 
 
-    out_dir += '/Neg_Samples_x' + str(args.neg_fact)
+    # Add now the random seed used to create it
+    out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' + str(args.seed)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
