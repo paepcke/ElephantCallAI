@@ -1155,8 +1155,8 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
                 if parameters.VERBOSE:
                     print ("found an adversarial examples")
                     features = inputs[example].cpu().detach().numpy()
-                    output = predictions[example]
-                    label = labels[example]
+                    output = predictions[example].cpu().detach().numpy()
+                    label = labels[example].cpu().detach().numpy()
 
                     visualize(features, output, label)
 
@@ -1197,16 +1197,16 @@ def calc_num_chunks_calls(data_loader):
 
 def main():    
     ## Build Dataset
-    # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"a
+    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
     #validation_loader 
-    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.RANDOM_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     
     dloaders = {'train':train_loader, 'valid':test_loader}
 
@@ -1244,13 +1244,14 @@ def main():
         # discovery. Could also just do this
         model = torch.load(sys.argv[2], map_location=parameters.device)
 
-        adversarial_examples = adversarial_discovery(test_loader, model, min_length=parameters.ADVERSARIAL_THRESHOLD)
-        print ("Discovered {} adversaries".format(len(adversarial_examples)))
+        adversarial_files = adversarial_discovery(test_loader, model, min_length=parameters.ADVERSARIAL_THRESHOLD)
+        print ("Discovered {} adversaries".format(len(adversarial_files)))
         # We want to save these to a given file for testing purposes
         # Get the model name from the path
-        tokens = model_path.split('/')
+        # Also include what the threshold was! 
+        tokens = sys.argv[2].split('/')
         model_id = tokens[-2]
-        with open(model_id + ".txt", 'w') as f:
+        with open(model_id + "_threshold_" + str(parameters.ADVERSARIAL_THRESHOLD) + ".txt", 'w') as f:
             for file in adversarial_files:
                 f.write('{}\n'.format(file))
 
