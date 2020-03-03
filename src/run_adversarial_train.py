@@ -47,7 +47,10 @@ def outerLoop(model_id):
     for outer_iteration in range(parameters.ADVERSARIAL_LOOPS):
         dloaders = {'train':train_loader, 'valid':validation_loader}
 
-        iteration_save_path = save_path + '/' + "Adversarial_iteration_" + str(outer_iteration)
+        iteration_save_path = save_path + '/' + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM
+                                     + "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + 
+                                        "_adversarial_iteration_" + str(outer_iteration)+ "_" str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        #iteration_save_path = save_path + '/' + "Adversarial_iteration_" + str(outer_iteration)
         if not os.path.exists(iteration_save_path):
             os.makedirs(iteration_save_path)
 
