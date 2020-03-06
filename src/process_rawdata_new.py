@@ -414,7 +414,7 @@ if __name__ == '__main__':
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
             full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
-            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[1])
+            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[0])
             print("Shapes of full spectrograms and labels")
             print(full_24_hr_spectogram.shape)
             print(labels.shape)
