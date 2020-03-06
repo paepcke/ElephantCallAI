@@ -37,7 +37,8 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
         
     #new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
-    new_features = features
+    # For some reason it requires things in shape freq x timeseries
+    new_features = features.T
     min_dbfs = new_features.flatten().mean()
     max_dbfs = new_features.flatten().mean()
     min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
