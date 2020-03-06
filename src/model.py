@@ -1153,8 +1153,8 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
             # Flag chunks with false pos in empty chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
                 adversarial_examples.append(data_files[example])
-                # Visualize!
-                if parameters.VERBOSE:
+                # Visualize every 100 selected examples
+                if parameters.VERBOSE and example % 100 == 0:
                     print ("found an adversarial examples")
                     features = inputs[example].cpu().detach().numpy()
                     output = predictions[example].cpu().detach().numpy()
@@ -1167,7 +1167,6 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
 
 
     return adversarial_examples
-
 
 
 def calc_num_chunks_calls(data_loader):
