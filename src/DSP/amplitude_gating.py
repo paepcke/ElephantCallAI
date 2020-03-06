@@ -61,8 +61,7 @@ class AmplitudeGater(object):
                  wav_file_path,
                  outfile=None,
                  amplitude_cutoff=-5,   # dB of peak
-                 filter=400,
-                 padding=5,   # sec
+                 cutoff_freq=100,
                  normalize=True,
                  plot_result=False,
                  logfile=None,
@@ -81,11 +80,6 @@ class AmplitudeGater(object):
         @param amplitude_cutoff: dB attenuation from maximum
             amplitude below which voltage is set to zero
         @type amplitude_cutoff: int
-        
-        @param attack_release_duration_msecs: duration of the 
-            exponential attack or release envelope that is placed
-            before and after each signal burst (signals above threshold)
-        @type attack_release_duration_msecs: int
         
         @param framerate: normally extracted from the .wav file.
             Can be set here for testing. Samples/sec
@@ -158,7 +152,9 @@ class AmplitudeGater(object):
             normed_samples = samples_float.copy()
          
         # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
-        gated_samples  = self.amplitude_gate(normed_samples, amplitude_cutoff)
+        gated_samples  = self.amplitude_gate(normed_samples, 
+                                             amplitude_cutoff, 
+                                             cutoff_freq=cutoff_freq)
  
         # Result back to int16:
         gated_samples = gated_samples.astype(np.int16)

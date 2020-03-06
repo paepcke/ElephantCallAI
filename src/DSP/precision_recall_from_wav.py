@@ -46,13 +46,13 @@ class PrecRecComputer(object):
             finally:
                 pass
     
-            performance_result = self.compute_performance(samples, label_reader)
+            self.performance_result = self.compute_performance(samples, label_reader)
             
             if plot:
-                self.plot(performance_result)
+                self.plot(self.performance_result)
                 
             if print_res:
-                performance_result.print()
+                self.performance_result.print()
                 
         else: # Unittesting:
             # Just assume some framerate.
