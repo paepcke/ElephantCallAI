@@ -11,7 +11,7 @@ TRAIN_STOP_ITERATIONS = 30
 # many adversarial samples to find based on the size of the
 # current dataset. 
 # Note: -1 means find all adversarial samples!
-ADVERSARIAL_SAMPLES = -1
+ADVERSARIAL_SAMPLES = 0.1
 # How many incorrect slices for a chunk to be considered
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
