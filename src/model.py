@@ -1157,8 +1157,9 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
                     features = inputs[example].cpu().detach().numpy()
                     output = predictions[example].cpu().detach().numpy()
                     label = labels[example].cpu().detach().numpy()
+                    data_file_name = data_files[example]
 
-                    visualize(features, output, label)
+                    visualize(features, output, label, title=data_file_name)
 
         chunksIdx += 1
 

@@ -149,8 +149,8 @@ BATCH_SIZE = 32
 NUM_EPOCHS = 1000
 
 #Local
-SAVE_PATH = '../models/'
-#SAVE_PATH = '/home/data/elephants/models/'
+# SAVE_PATH = '../models/'
+SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1

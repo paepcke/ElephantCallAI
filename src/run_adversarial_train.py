@@ -31,16 +31,10 @@ def initialize_training(model_id, save_path):
     return model, criterion, optimizer, scheduler, writer
 
 
-def outerLoop(model_id):
+def outerLoop(model, train_loader, validation_loader, full_train_loader, save_path):
     # get_loader now handles setting random seed for reproducability
     # Add flexability to start decide what intial neg_sample ratio to 
     # start. Later!!! Include what random seed dataset to sample from
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-
-    # Create directory to keep the adversarial training iterations
-    save_path = parameters.SAVE_PATH + "Adversarial_training_" + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
@@ -96,6 +90,14 @@ def outerLoop(model_id):
 
 
 if __name__ == "__main__":
-    outerLoop(int(sys.argv[1]))
+    model = int(sys.argv[1])
+
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    validation_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    full_train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+
+    save_path = parameters.SAVE_PATH + "Adversarial_training_" + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+
+    outerLoop(model, train_loader, validation_loader, full_train_loader, save_path)
 
 
