@@ -91,6 +91,7 @@ class ElephantDataset(data.Dataset):
 
         print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+        print("Shape of a feature is {} and a label is {}".format(self[0][0].shape, self[0][1].shape))
 
     def initialize_labels(self):
         self.labels = []

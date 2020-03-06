@@ -17,7 +17,7 @@ parser.add_argument('wav', help='name of wav file to visualize') # may not want 
 parser.add_argument('labelWav', help='The label file for the corresponding wav')
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms')
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
-parser.add_argument('--window', type=int, default=22, help='Deterimes the window size in seconds of the resulting spectrogram')
+parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
 def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):
@@ -37,8 +37,7 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
         
     #new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
-    # For some reason it requires things in shape freq x timeseries
-    new_features = features.T
+    new_features = features
     min_dbfs = new_features.flatten().mean()
     max_dbfs = new_features.flatten().mean()
     min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())

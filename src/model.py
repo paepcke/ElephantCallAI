@@ -810,7 +810,6 @@ class Model17(nn.Module):
 
 
     def forward(self, inputs):
-        print("Model input shape is : {}".format(inputs.shape))
         inputs = inputs.unsqueeze(1)
         inputs = inputs.repeat(1, 3, 1, 1)
         out = self.model(inputs)
