@@ -20,7 +20,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "Focal_Chunk"
+LOSS = "CE"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.5 
 FOCAL_GAMMA = 15

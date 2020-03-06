@@ -773,6 +773,7 @@ class Model16(nn.Module):
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
         if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
             self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
@@ -803,6 +804,7 @@ class Model17(nn.Module):
            nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
         if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
             print ("Init:", -np.log((1 - weight_init) / weight_init))
             self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
