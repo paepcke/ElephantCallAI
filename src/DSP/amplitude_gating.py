@@ -735,7 +735,6 @@ if __name__ == '__main__':
                    padding=args.padding,
                    normalize=not args.raw,
                    plot_result=args.plot,
->>>>>>> andreas_tmp
                    logfile=args.logfile,
                    )
 
