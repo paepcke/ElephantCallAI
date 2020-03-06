@@ -31,7 +31,7 @@ def initialize_training(model_id, save_path):
     return model, criterion, optimizer, scheduler, writer
 
 
-def outerLoop(model, train_loader, validation_loader, full_train_loader, save_path):
+def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save_path):
     # get_loader now handles setting random seed for reproducability
     # Add flexability to start decide what intial neg_sample ratio to 
     # start. Later!!! Include what random seed dataset to sample from
