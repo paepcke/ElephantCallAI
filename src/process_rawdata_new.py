@@ -3,7 +3,6 @@ from matplotlib import mlab as ml
 import numpy as np
 import csv
 import os
-import librosa
 import time
 import multiprocessing
 from scipy.io import wavfile

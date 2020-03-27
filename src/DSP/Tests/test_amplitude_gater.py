@@ -21,8 +21,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 
-TEST_ALL = True
-#TEST_ALL = False
+#****TEST_ALL = True
+TEST_ALL = False
 
 class Test(unittest.TestCase):
 
@@ -42,6 +42,7 @@ class Test(unittest.TestCase):
         # Attacks and releases take 2msecs, rather than the default 50msec:
         AmplitudeGater.ATTACK_RELEASE_MSECS = 2
         self.gater = AmplitudeGater(None, # No .wav file 
+                                    spectrogram_freq_cap=0,
                                     testing=True,
                                     framerate=2 # frames per second
                                     )
@@ -129,13 +130,97 @@ class Test(unittest.TestCase):
         self.assertEqual(new_volts.all(), 
                          np.array([ 0,0,13,14]).all()
                          )
+
+    #------------------------------------
+    # test_filter_spectrogram_simple
+    #-------------------
     
+    @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    def test_filter_spectrogram_simple(self):
+        
+        freq_labels = np.array([10,20,30,40])
+        # Make:
+        #    array([[ 0,  1,  2],
+        #           [ 3,  4,  5],
+        #           [ 6,  7,  8],
+        #           [ 9, 10, 11]])
+
+        freq_time   = self.make_matrix()
+        # Retain only [[3,4,5,]]:
+        # Keep frequency rows greater than 20, less than 30:
+        freq_bands   = [(20, 30)]
+        
+        (new_freq_labels, new_freq_time) = self.gater.filter_spectrogram(freq_labels, 
+                                                                         freq_time, 
+                                                                         freq_bands)
+        self.assertEqual(new_freq_labels, np.array([20]))
+        self.assertEqual(new_freq_time.all(), np.array([[3,4,5]]).all())
+       
+    #------------------------------------
+    # test_filter_spectrogram_open_low_freq
+    #-------------------
+    
+    @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    def test_filter_spectrogram_open_low_freq(self):
+        
+        freq_labels = np.array([10,20,30,40])
+        # Make:
+        #    array([[ 0,  1,  2],
+        #           [ 3,  4,  5],
+        #           [ 6,  7,  8],
+        #           [ 9, 10, 11]])
+
+        freq_time   = self.make_matrix()
+        # Retain only [[0,1,2], 
+        #              [3,4,5]]:
+        # Keep rows for frequencies under 30Hz:
+        freq_bands   = [(None, 30)]
+        
+        (new_freq_labels, new_freq_time) = self.gater.filter_spectrogram(freq_labels, 
+                                                                         freq_time, 
+                                                                         freq_bands)
+        self.assertEqual(new_freq_labels.all(), np.array([10,20]).all())
+        self.assertEqual(new_freq_time.all(), np.array([[0,1,2],
+                                                        [3,4,5]]).all())
+
+    #------------------------------------
+    # test_filter_spectrogram_two_simples
+    #-------------------
+    
+    #@unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    def test_filter_spectrogram_two_simples(self):
+        
+        freq_labels = np.array([10,20,30,40])
+        # Make:
+        #    array([[ 0,  1,  2],
+        #           [ 3,  4,  5],
+        #           [ 6,  7,  8],
+        #           [ 9, 10, 11]])
+
+        freq_time   = self.make_matrix()
+        # Retain only rows 1, 2, and 3:
+        #             [[3,4,5],
+        #              [6,7,8],
+        #              [9,10,11]]:
+
+        # The first constraint chokes off
+        # what the second would allow:
+        freq_bands   = [(11, 30), (31, 50)]
+        
+        (new_freq_labels, new_freq_time) = self.gater.filter_spectrogram(freq_labels, 
+                                                                         freq_time, 
+                                                                         freq_bands)
+        self.assertEqual(new_freq_labels.all(), np.array([20,40]).all())
+        self.assertEqual(new_freq_time.all(), np.array([[3,4,5],
+                                                        [9,10,11]
+                                                        ]).all())
+
        
     #------------------------------------
     # test_wav_read_write
     #-------------------
 
-    #@unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     @unittest.skip('Header numbers are slightly different')
     def test_wav_read_write(self):
         
@@ -188,6 +273,23 @@ class Test(unittest.TestCase):
 
         finally:
             os.remove(tmp_file_obj.name)
+
+# --------------------------- Utils ---------------
+ 
+    #------------------------------------
+    # make_matrix
+    #-------------------
+    
+    def make_matrix(self):
+        '''
+        Return:
+            array([[ 0,  1,  2],
+                   [ 3,  4,  5],
+                   [ 6,  7,  8],
+                   [ 9, 10, 11]])
+        
+        '''
+        return np.array(np.arange(12)).reshape(4,3)
 
  
 # --------------------------- Main ---------------

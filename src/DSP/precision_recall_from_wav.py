@@ -3,29 +3,55 @@ Created on Mar 2, 2020
 
 @author: paepcke
 '''
+
+from collections import OrderedDict
 import csv
+import re
 import sys
 
 from scipy.io import wavfile
+
+from elephant_utils.logging_service import LoggingService
 import numpy as np
-from collections import deque
+import numpy.ma as ma
+from plotting.plotter import PlotterTasks
+
 
 class PrecRecComputer(object):
     '''
-    Given a noise-gated .wav file, find all its non-zero
-    places. Load a Raven label file, and compute precision/recall
-    based on which manually labeled audio segments have at least
-    10% overlap with a .wav sequence of non-zero voltages. The
-    overlap is a parameter.
+    Given a noise-gated .wav file and a Raven elephant
+    labels file, compute precision/recall, and confusion matrix. 
+    These computations are performed separately for both 'events'
+    (clusters of non-zero wav file signals), and individual samples.
+    
+    Confusion matrices are of the form:
+                
+                            Labels
+                         true     false
+                   true   2         0
+            Audio false   1         6
+    
+    Clients of this class can specify how much overlap between the
+    audio non-zero samples and the corresponding elephant labels are
+    is required to count the audio as having discovered the burst.
+
     '''
 
     SAMPLE_RATE_FOR_TESTING = 4000
 
-    def __init__(self, wavefile, labelfile, print_res=True, plot=False, testing=False):
+    def __init__(self, 
+                 wavefile, 
+                 labelfile, 
+                 overlap_perc=10, 
+                 print_res=True, 
+                 testing=False):
         '''
         Constructor
         '''
+        PrecRecComputer.log = LoggingService(logfile='/tmp/precrec_computer.log')
+        self.log = PrecRecComputer.log
 
+        self.print_res = print_res
         # Read the samples:
         if not testing:
             try:
@@ -33,25 +59,15 @@ class PrecRecComputer(object):
                 (self.framerate, samples) = wavfile.read(wavefile)
                 self.log.info("Done reading .wav file.")        
             except Exception as e:
-                print(f"Cannot read .wav file: {repr(e)}")
+                print(f"Cannot read .wav file {wavefile}: {repr(e)}")
                 sys.exit(1)
 
-            # Read the label file:
-            try:
-                with open(labelfile, 'r') as label_fd:
-                    label_reader = csv.reader(label_fd, delimiter='\t')
-            except Exception as e:
-                print(f"Could not match waves and labels: {repr(e)}")
-                sys.exit(1)
-            finally:
-                pass
-    
-            self.performance_result = self.compute_performance(samples, label_reader)
+            self.performance_result = self.compute_performance(samples, labelfile, overlap_perc)
             
-            if plot:
+            if PlotterTasks.has_task('performance_results'):
                 self.plot(self.performance_result)
                 
-            if print_res:
+            if self.print_res:
                 self.performance_result.print()
                 
         else: # Unittesting:
@@ -62,19 +78,18 @@ class PrecRecComputer(object):
     # compute_performance
     #-------------------
     
-    def compute_performance(self, samples, label_csv_reader, overlap_perc_requirement):
+    def compute_performance(self, samples, label_file_path, overlap_perc_requirement):
         '''
         Workhorse. Takes audio sample array, and a csv reader
         pointed at a label file. The percentage number is the
         overlap between audio-derived events and the corresponding
-        labeled event that is minimally required to cound an
+        labeled event that is minimally required to count an
         audio-detected event as a true event.
         
         @param samples: the voltages
         @type samples: np.array({float | int})
-        @param label_csv_reader: csv.reader ready to read lines from 
-            labels file.
-        @type label_csv_reader: csv.reader
+        @param label_file_path: path to Raven label file 
+        @type label_file_path: str
         @param overlap_perc_requirement: amount of overlap required between
             audio event and labeled event for the audio event to be counted
             correct.
@@ -83,174 +98,269 @@ class PrecRecComputer(object):
         @rtype: PerformanceResult
         '''
         
-        # Get array of ElephantEvent instances as a deque
-        # (double-ended queue):
+        # Phase 1: which *samples* are part of a true,
+        #          labeled call?
         
-        elephant_events = self.label_file_reader(label_csv_reader)
-        audio_events    = self.collect_audio_events(samples)
-        num_el_events   = len(elephant_events)
-        num_aud_events  = len(audio_events)
+        # Put start/ends of labeled events into the form:
+        #     [[start_first_label_samples, end_first_label_samples],
+        #      [start_second_label_samples, end_second_label_samples],
+        #      ...
+        #     ]
+ 
+        (elephant_burst_indices, el_samples_mask) = self.label_file_reader(label_file_path)
+ 
+        # For the audio bursts: get 
+        #     [[start_first_burst, end_first_burst],
+        #      [start_second_burst, end_second_burst],
+        #      ...
+        #     ]
+        (audio_burst_indices, aud_samples_mask)  = self.collect_audio_events(samples)
         
-        # Number of samples labeled as elephant calls:
-        # For simplicity copy the deques into np arrays
-        # b/c we have ready ops there:
-        elephant_events_np = np.array(elephant_events.copy())
+        # Get the 'non-events' for both the labels and
+        # the audio guesses. A non-event is the distance
+        # between two event intervals. Using above ex.:
+        #   [[end_first_burst, start_second_burst],
+        #    [end_second_burst, start_third_burst],
+        #    ...
+        #   ]
         
-        # Get two vectors of 1s/0s. Each has length samples.size.
-        # Each has a 1 if an elephant presence is predicted:
-        (samples_mask, elephant_label_mask) = self.get_el_and_aud_masks(samples,elephant_events_np)
+        elephant_burst_indices_shifted = np.roll(elephant_burst_indices, -1, axis=0)
+        last_sample_index = 100 # mele.size
+        elephant_burst_indices_shifted[-1] = np.array([last_sample_index, -1])
+        starts_and_ends = elephant_burst_indices[:,1], elephant_burst_indices_shifted[:,0]
+        elephant_non_burst_indices = np.column_stack(starts_and_ends)
+        # The first entry should be 0 to start of first interval.
+        # Add that entry:
+        elephant_non_burst_indices = np.vstack((np.array([0,elephant_burst_indices[0,0]]), elephant_non_burst_indices))
+
+        # Same for audio bursts:
+        audio_burst_indices_shifted = np.roll(audio_burst_indices, -1, axis=0)
+        last_sample_index = 100 # mele.size
+        audio_burst_indices_shifted[-1] = np.array([last_sample_index, -1])
+        starts_and_ends = audio_burst_indices[:,1], audio_burst_indices_shifted[:,0]
+        audio_non_burst_indices = np.column_stack(starts_and_ends)
+        # The first entry should be 0 to start of first interval.
+        # Add that entry:
+        audio_non_burst_indices = np.vstack((np.array([0,audio_burst_indices[0,0]]), audio_non_burst_indices))
+        
+        # Pad the shorter of the two masks with zeros to make
+        # them the same lengths:
+        mask_size_diff = aud_samples_mask.size - el_samples_mask.size
+        if mask_size_diff > 0:
+            el_samples_mask = np.pad(el_samples_mask, (0,mask_size_diff), 'constant')
+        elif mask_size_diff < 0:
+            aud_samples_mask = np.pad(aud_samples_mask, (0, -mask_size_diff), 'constant')
         
         # Easy to do the various audio false positive/negative counts
         # at the sample level using the two 1/0 masks:
-        num_true_positive_samples  = np.sum(np.logical_and(elephant_label_mask, samples_mask))
-        num_true_negative_samples  = np.sum(np.logical_not(np.logical_or(elephant_label_mask, samples_mask)))
+        self.log.info('Computing true-pos at sample granularity...')
+        num_true_positive_samples  = np.sum(np.logical_and(el_samples_mask, aud_samples_mask))
+        self.log.info('Done computing true-pos at sample granularity.')
         
-        # More roundabout for false pos/neg: Use the np.ma.masked_array
-        # facility: in samples_mask, blend out elements that are greater/less
-        # then their corresponding label mask elements. Then count those
-        # 'bad' elements. Note notation ambiguity: we have the above 
-        # sample and elephant-label masks: [1,0,0,1,...]. The np.ma facility
-        # speaks of arrays with a built-in mask. Think of the latter mask
-        # as 'blending out' elements of our sample/elephant-label masks:
-         
-        # False positive: blend out all the samples_mask elements
-        #   that are *greater* than their corresponding label mask.
-        masked_as_false_pos = np.ma.masked_greater(samples_mask, elephant_label_mask)
-        # Then grab only the blended elements, and see how many there are:
-        num_false_positive_samples = masked_as_false_pos[masked_as_false_pos.mask].size
+        self.log.info('Computing true-neg at sample granularity...')
+        num_true_negative_samples  = np.sum(np.logical_not(np.logical_or(el_samples_mask, aud_samples_mask)))
+        self.log.info('Done computing true-neg at sample granularity.')
         
-        # False negatives: blend out all in samples_mask elements
-        #   that are *less* than their corresponding labels_mask:
-        masked_as_false_neg = np.ma.masked_less(samples_mask, elephant_label_mask)
-        # Grab only the blended elements, and see how many there are:
-        num_false_negative_samples = masked_as_false_neg[masked_as_false_neg.mask].size
-
-        # Remember number of ele events before
-        # we start popping them off the queue:
-        num_labeled_samples   = self.get_total_labeled_samples(elephant_events)
+        self.log.info('Computing false-neg at sample granularity...')
+        num_false_negative_samples  = np.where(np.logical_and(el_samples_mask == 1, 
+                                                              aud_samples_mask == 0))[0].size
+        self.log.info('Done computing false-neg at sample granularity.')
         
-        # But: have not found a method for using just the masks
-        # to compute percent overlap of each labeled burst. Use
-        # loop over just the label-based ElephantEvent instances.
-        # There aren't that many; maybe 2000 per 24 hours:
+        self.log.info('Computing false-pos at sample granularity...')
+        num_false_positive_samples  = np.where(np.logical_and(el_samples_mask == 0, 
+                                                              aud_samples_mask == 1))[0].size
+        self.log.info('Done computing false-pos at sample granularity.')
+
+        # Recall: samples recognized by audio as part of a call,
+        #         over samples labeled as par of a call:
+        self.log.info('Computing recall/precision/F1 at sample granularity...')
+        recall_samples    = num_true_positive_samples / np.sum(el_samples_mask)
+        # Precision: samples recognized by audio as part of a call,
+        #         over all the samples:
+        precision_samples = num_true_positive_samples / el_samples_mask.size
         
-        # Remember that the audio and el_evnt objects
-        # are in deque structures, not arrays. So we
-        # can use as queues. Init the current audio/label events:
+        f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
+        self.log.info('Done computing recall/precision/F1 at sample granularity.')
 
-        curr_audio_evnt = audio_events.popleft()
-        curr_el_evnt    = elephant_events.popleft()
-
-        # Counters:
-        num_false_pos_events       = 0
-        num_false_neg_events       = 0
+        # Phase 2:
         
-        # Keep all overlap percentages:
-        overlap_perc    = np.array([])
+        (percent_overlaps, matches_aud) = self.compute_overlap_percentage(audio_burst_indices, 
+                                                                          elephant_burst_indices)
+        (percent_overlaps_non_bursts, matches_aud_non_bursts) = self.compute_overlap_percentage(audio_non_burst_indices, 
+                                                                                                elephant_non_burst_indices)
+        # Keep the audio events that overlap insufficiently:
+        #verified_audio_events = audio_burst_indices[np.nonzero(percent_overlaps[percent_overlaps >= overlap_perc_requirement])]
+        verified_audio_non_events = audio_non_burst_indices[np.nonzero(percent_overlaps_non_bursts[percent_overlaps_non_bursts >= overlap_perc_requirement])]
         
-        # All this in samples, not events: 
-        done = False
-        while not done:
-            try:
-                el_start = int(self.framerate * curr_el_evnt.begin_time)
-                el_end   = int(self.framerate * curr_el_evnt.end_time)
-                
-                aud_start = curr_audio_evnt.begin_time
-                aud_end   = curr_audio_evnt.end_time
+        self.log.info('Computing true/false-pos/neg at event granularity...')
+        num_true_pos_events = elephant_burst_indices[:,0].size
+        #num_true_neg_events = elephant_non_burst_indices[:,0].size
+        
+        num_detected_events     = matches_aud[:,0].size
+        num_detected_non_events = matches_aud_non_bursts[:,0].size
+        num_verified_non_events = verified_audio_non_events[:,0].size
 
-                # Is audio event earlier than the el ev?
-                if aud_end < el_start:
-                    # False positive
-                    num_false_pos_events  += 1
-                    curr_audio_evnt = audio_events.popleft()
-                    continue
-                
-                # Is audio event after the el ev?
-                if aud_start > el_end:
-                    # False negative:
-                    num_false_neg_events  += 1
-                    # Missed it; next elephant label:
-                    curr_el_evnt = elephant_events.popleft()
-                    continue
-                
-                # Amount of audio inside label range:
-                overlap_percentage = self.compute_overlap_percentage(aud_start, aud_end, el_start, el_end)
-                overlap_perc = np.append(overlap_perc, overlap_percentage)
+        num_true_pos_detected_events   = verified_audio_non_events[:,0].size
+        num_false_pos_detected_events  = num_detected_events - num_true_pos_detected_events
+        
+        num_true_neg_detected_events  = num_verified_non_events
+        num_false_neg_detected_events  = num_detected_non_events - num_verified_non_events
+        
+#       num_false_pos_detected_non_events = num_detected_non_events - num_verified_audio_non_events 
+        
+        self.log.info('Done computing true/false-pos/neg at event granularity.')
 
-                curr_audio_evnt = audio_events.popleft()
-                curr_el_evnt    = elephant_events.popleft()
-                continue
-                
-            except IndexError:
-                # Either audio or el labels are all exhausted.
-                # So we have all the overlap percentages now:
-                done = True
+        # Recall: samples recognized by audio as part of a call,
+        #         over events labeled as part of a call:
+        self.log.info('Computing recall/precision/F1 at event granularity...')
+        recall_events = num_true_pos_detected_events / num_true_pos_events 
+        
+        # Precision: samples recognized by audio as part of a call,
+        #         over all its predictions:
+        precision_events = num_true_pos_detected_events / (num_true_pos_detected_events + num_false_pos_detected_events)
+        
+        f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
+        self.log.info('Done computing recall/precision/F1 at event granularity.')
 
-            # Results at event level:
-            num_true_found_events     = overlap_perc[overlap_perc >= overlap_perc_requirement].size
-            # Count the events with insufficient overlap as false negatives:
-            num_false_neg_events += num_el_events - num_true_found_events
-            num_false_pos_events += overlap_perc.size - num_true_found_events
-            
-            recall_events     = num_true_found_events / num_el_events
-            precision_events  = num_true_found_events / num_aud_events
-            f1score_events    = 2 * precision_events * recall_events / (precision_events + recall_events)
+        results = {'recall_events' :          recall_events,
+        		   'precision_events' :       precision_events,
+        		   'f1score_events' :         f_score_events,
+        		   'recall_samples' :         recall_samples,
+        		   'precision_samples' :      precision_samples,
+        		   'f1score_samples' :        f_score_samples,
+        		   'overlap_percentages' :    percent_overlaps,
+        		   'true_pos_samples' :       num_true_positive_samples,
+        		   'false_pos_samples' :      num_false_positive_samples,
+        		   'true_neg_samples' :       num_true_negative_samples,
+        		   'false_neg_samples' :      num_false_negative_samples,
+        		   'true_pos_events' :        num_true_pos_detected_events,
+        		   'false_pos_events' :       num_false_pos_detected_events,
+        		   'true_neg_events' :        num_true_neg_detected_events,
+        		   'false_neg_events' :       num_false_neg_detected_events
+                   }
+        
+        performance_result = PerformanceResult(results)
 
-            # Results at sample level:
-            recall_samples    = num_true_positive_samples / num_labeled_samples
-            precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples)
-            f1score_samples   = 2 * precision_samples * recall_samples/ (precision_samples+ recall_samples)            
-            
-            # Use num_true_negative_samples as the true negative
-            # at the event level: think of each 0-sample as 
-            # one negative event (as well as one negative sample):
-            confusion_matrix_events = np.array([num_true_found_events,    num_false_pos_events,
-                                               num_false_neg_events,    num_true_negative_samples 
-                                               ]).reshape(2,2)
-            
-            confusion_matrix_samples = np.array([num_true_positive_samples, num_false_positive_samples,
-                                                num_false_negative_samples, num_true_negative_samples
-                                                ]).reshape(2,2)
-            res = PerformanceResult(recall_events,
-                                    precision_events,
-                                    f1score_events,
-                                    recall_samples,
-                                    precision_samples,
-                                    f1score_samples,
-                                    overlap_perc,
-                                    confusion_matrix_events,
-                                    confusion_matrix_samples)
-
-            return res
+        return performance_result
 
     #------------------------------------
     # compute_overlap_percentage
     #-------------------
     
-    def compute_overlap_percentage(self, 
-                                   aud_begin,
-                                   aud_end,
-                                   el_begin,
-                                   el_end):
-        
-        # Is there overlap at all? If so, 
-        # none of the two regions must be
-        # entirely on the left, or on the 
-        # right of the other:
-        
-        if (aud_end < el_begin) or (el_end < aud_begin):
-            # No overlap at all:
-            return 0
-        
-        el_length = el_end - el_begin
-        if el_begin <= aud_begin:
-            # Audio starts with label, or is partially
-            # shifted right (audio extends beyond label):
-            return 100 * (el_end - aud_begin) / el_length
-        else:
-            #  Audio is shifted left (starts before label)
-            return 100 * (aud_end - el_begin) / el_length
+    def compute_overlap_percentage(self, audio_burst_indices, elephant_burst_indices):
 
+        # At the event level: which are true aud *events*
+        # i.e. not true individual samples.
+        # We take advantage for the audio event indices 
+        # being sorted, and monotonically increasing. The
+        # audio events don't overlap, and they always have
+        # at least one 0 in between:
+        #    [[4,10], 
+        #     [11,30],
+        #      ...
+        # We do loop, but over the labeled events, which 
+        # are few (in the thousands at most for 24 hours):
+
+        # Wouldn't have dreamed up the solution below myself
+        # in a million years. searchsort(sorted_list, element)
+        # finds the index into sorted_list where element would
+        # go if one would insert it.
+        # Result will look like:
+        #    [[0,4],[1,6],[2,7],[2,8]]]
+        # Note that in this ex. audio interval pointer
+        # 7 and 8 are both associated with labeled burst
+        # interval pt 2.
+        
+        # Get start,stop,start,stop indices into the samples
+        # array as flat list:
+        aud_indices_flat = audio_burst_indices.flatten()
+        labeled_with_aud_interval_ptr_matches = []
+        self.log.info('Finding which audio events have overlap with labeled events...')
+        for (el_burst_indices_pt, (lower, upper)) in enumerate(elephant_burst_indices):
+            i = np.searchsorted(aud_indices_flat, lower, side='right')
+            j = np.searchsorted(aud_indices_flat, upper, side='left')
+            audio_burst_indices_pts = np.arange(i // 2, (j + 1) // 2)
+            
+            # Number of audio intervals found for the 
+            # current labeled burst:
+            num_aud_burst_indices = audio_burst_indices_pts.size
+            # If no audio burst event, move on to the 
+            # next bona fide (i.e. labeled) burst:
+            if num_aud_burst_indices > 0:
+                # Handle multiple aud burst associated with one
+                # labeled burst: Replicate the pt into the labeled burst
+                # intervals once for each such multi-match:
+                ele_match_indices = np.array([el_burst_indices_pt] * num_aud_burst_indices)
+                # Now have something like: [[3,5],[3,5]]; add 
+                # to our accumulating result:
+                labeled_with_aud_interval_ptr_matches.extend(np.column_stack((ele_match_indices, 
+                                                                              audio_burst_indices_pts
+                                                                              )))
+        self.log.info('Done finding which audio events have overlap with labeled events.')
+
+        # Now compute the percentage of overlap.
+        # Think of the code as being just like the 
+        # following equivalent loop, except for  
+        # vectorization.
+        
+        # def overlaps(labeled_event, audio_event):
+        #     '''
+        #     Return the amount of overlap for a single
+        #     labeled vs. audio event. An event is a two
+        #     tuple: [lower_sample_bound, upper_sample_bound).
+        #
+        #     If >0, the number of samples of overlap
+        #     If 0,  audio and labeled bursts abut [Won't happen]
+        #     If <0, no overlap.                   [Won't happen]
+        #     '''
+        #     # Earliest ending - latest beginning:
+        #     overlap = min(audio_event[1], labeled_event[1]) - max(audio_event[0], labeled_event[0])
+        #     percent_overlap = max(0, overlap / (labeled_event[1] - labeled_event[0]))
+        #     return percent_overlap
+
+        # Take a some intermediate steps for sanity:
+        
+        # Turn the matches we found above into an np array:
+        matches     = np.array(labeled_with_aud_interval_ptr_matches)
+        
+        # The matches are pts into the elephant_burst_indices,
+        # and audio_burst_indices. De-reference to get the 
+        # actual sample-index-low-bound/sample-index-high-bound
+        # pairs for elephant and audio events:
+        matches_ele = elephant_burst_indices[matches[:,0]]
+        matches_aud = audio_burst_indices[matches[:,1]]
+
+        # Get 1d arrays for low and high bounds for both
+        # audio and eles:
+        low_bounds_ele  = matches_ele[:,0]
+        high_bounds_ele = matches_ele[:,1]
+        low_bounds_aud  = matches_aud[:,0]
+        high_bounds_aud = matches_aud[:,1]
+        
+        # For each ele/aud interval pair, find
+        # the lowest of the two high bounds:
+        lowest_high_bounds = np.select([high_bounds_ele <= high_bounds_aud,
+                                        high_bounds_ele  > high_bounds_aud],
+                                       [high_bounds_ele, high_bounds_aud]
+                                       )
+        
+        # For each ele/aud interval pair, find
+        # the highest of the two low bounds:
+        highest_low_bounds = np.select([low_bounds_ele >= low_bounds_aud,
+                                        low_bounds_ele  < low_bounds_aud],
+                                         [low_bounds_ele, low_bounds_aud]
+                                         )
+        
+        overlaps = lowest_high_bounds - highest_low_bounds
+
+        # For each elephant interval: get its width
+        # in samples:
+        ele_interval_widths = matches_ele[:,1] - matches_ele[:,0]
+        
+        # Finally!!!! The overlaps in percent.
+        percent_overlaps = 100 * overlaps/ele_interval_widths
+
+        return (percent_overlaps, matches_aud) 
     
     #------------------------------------
     # get_total_labeled_samples
@@ -288,53 +398,62 @@ class PrecRecComputer(object):
     # get_el_and_aud_masks
     #-------------------
     
-    def get_el_and_aud_masks(self, samples, elephant_events_np):
+    def get_el_and_aud_masks(self, audio_events, elephant_events):
         '''
-        Given a samples np.array, and an np array of 
-        ElephantEvent instances that each represent a label
-        with its start/end times. Return two np.arrays of 1s 
-        and 0s, indicating where samples show elephant call
-        audio, and labels indicate an el event, respectively.
+        Given a 2d array of audio event indices, and the same
+        for labeled elephant events:
+        
+            [[event1_sample_start, event1_sample_end],
+             [event2_sample_start, event2_sample_end],
+                ...
+            ]
+        
+        Return two np.arrays of 1s and 0s, indicating where 
+        samples show elephant call audio, and labels indicate 
+        an el event, respectively. These masks will each have
+        length of the number of audio samples in the audio. 
         
         I.e. return two masks, one for audio samples, and one
-        for labeled data. The masks 
+        for labeled data. 
         
-        @param samples: audio samples
-        @type samples: np.array({float | int})
-        @param elephant_events_np: np array of ElephantEvent instances
-        @type elephant_events_np: np.array(ElephantEvent)
+        @param audio_events: indices of audio event boundaries
+        @type samples: np.array(1,2)
+        @param elephant_events: indices of elephant event label
+            boundaries.
+        @type elephant_events: np.array(1,2)
+        @return: two 1d np arrays of 1s and 0s indicating where
+            an event is occurring
+        @rtype: ([int], [int])
         '''
         
-        # Audio samples are easy: activity is where
-        # voltage > 0:
+        last_sample_burst_end_index = audio_events[-1,-1]
+        aud_mask = np.zeros(last_sample_burst_end_index, dtype=int)
+
+        # Set the mask position where audio is non-zero
+        # to 1:
+        def set_to_1(mask, from_idx, to_idx):
+            mask[from_idx : to_idx] = 1
+
+        self.log.info(f"Creating audio burst mask of length {last_sample_burst_end_index}...")
+        np.apply_along_axis(lambda from_to_idx: set_to_1(aud_mask, from_to_idx[0], from_to_idx[1]), 
+                            1, 
+                            audio_events
+                            )
+        self.log.info(f"Done creating audio burst mask of length {last_sample_burst_end_index}.")
+
+        # For the manually created elephant labels: start with a 
+        # mask of all 0, length same as sample mask:
         
-        # All zeros to start with:
-        samples_mask = np.zeros(samples.size, dtype=int)
+        el_mask = np.zeros(last_sample_burst_end_index, dtype=int)
         
-        # Get array of indices into samples where
-        # value is non-zero:
-        indx_to_nonzero = np.where(samples > 0)
+        self.log.info(f"Creating elephant label burst mask of length {last_sample_burst_end_index}...")
+        np.apply_along_axis(lambda from_to_idx: set_to_1(el_mask, from_to_idx[0], from_to_idx[1]), 
+                            1, 
+                            elephant_events
+                            )
+        self.log.info(f"Creating elephant label burst mask of length {last_sample_burst_end_index}...")
         
-        # Modify mask to have 1s where samples are non-zero:
-        samples_mask[indx_to_nonzero] = 1
-        
-        # For the labels: start with a mask of all 0,
-        # length same as sample mask:
-        
-        el_mask = np.zeros(samples.size, dtype=int)
-        
-        # For each labeled event, compute where
-        # in the mask the event starts and ends,
-        # and fill that mask portion with ones.
-        
-        for label_event in elephant_events_np:
-            start_sample = self.framerate * np.floor(label_event.begin_time)
-            end_sample   = self.framerate * np.ceil(label_event.end_time)
-            # Ensure we honor the length of the mask:
-            end_sample = min(end_sample, el_mask.size)
-            el_mask[int(start_sample) : int(end_sample)] = 1
-        
-        return (samples_mask, el_mask) 
+        return (aud_mask, el_mask) 
 
     #------------------------------------
     # collect_audio_events
@@ -342,90 +461,128 @@ class PrecRecComputer(object):
 
     def collect_audio_events(self, samples):
         '''
-        Returns an array of AudioEvent objects
-        found in the samples array
+        Given a 1d array of audio samples, 
+        returns a 2-column array containing the
+        start and stop indices of audio bursts.
+        An audio burst is a series of non-zero
+        volt samples, followed by one or more 
+        zero volt samples.
+        
+        Example:
+           samples =  np.array([20, 40, 0, 0, 0, 30, 0, 60, 50, 0])
+           
+        Returns:
+           [[0,2],
+            [5,6],
+            [7,9]
+            ]
         
         @param samples: array of audio samples
         @type samples: numpy.array
-        @return: deque of AudioEvent objects
-        @rtype: deque
+        @return: 2-col array with start/stop indices into samples. 
+        @rtype: np.array(2D)
         '''
-
-        # Double-ended queue:
-        audio_events = deque()
+        # Add a zero before and after the signal array:
+        samples_padded = np.insert(samples,(0,samples.size),0)
         
-        # Get array of indexes into samples array
-        # where sample is not zero; nonzero() returns
-        # a one-tuple, therefore the [0]:
-
-        non_zeros = np.nonzero(samples)[0]
-        if non_zeros.size == 0:
-            # No audio bursts at all:
-            return audio_events
+        # To use only vector ops, we replicate the padded samples
+        # array with one shifted left:
+        samples_padded_after = np.roll(samples_padded,-1)
         
-        curr_burst_start = non_zeros[0]
-        curr_burst_end   = non_zeros[0]
+        # Start indices are the ones in which samples_padded is a 0,
+        # followed by a non-zero:
+        self.log.info("Finding audio burst start indices...")
+        start_indices = 1 + np.where(np.logical_and(samples_padded == 0, samples_padded_after != 0))[0]
+        self.log.info("Done finding audio burst start indices.")
         
-        for non_zero_sample_pt in non_zeros[1:]:
-            if non_zero_sample_pt == curr_burst_end + 1:
-                # Still in a contiguous set of non-zeros:
-                curr_burst_end = non_zero_sample_pt
-            else:
-                # End of a burst: 1 beyond the last non-zero
-                # measurement:
-                audio_events.append(AudioEvent(curr_burst_start, curr_burst_end + 1))
-                curr_burst_start = non_zero_sample_pt
-                curr_burst_end   = non_zero_sample_pt
+        # Analogously for the end indices of each burst:
+        self.log.info("Finding audio burst end indices...")
+        end_indices   = 1 + np.where(np.logical_and(samples_padded != 0, samples_padded_after == 0))[0]
+        self.log.info("Done finding audio burst end indices.")
 
-        # If burst ended with the end of the sample file,
-        # add that closing burst:
-        audio_events.append(AudioEvent(curr_burst_start, curr_burst_end + 1)) 
-        return audio_events
-
+        self.log.info(f"Creating {start_indices.size} audio burst specs...")
+        burst_index_pairs = np.column_stack((start_indices, end_indices))
+        self.log.info(f"Done creating {start_indices.size} audio burst specs.")
+        
+        self.log.info("Creating audio event mask...")
+        audio_mask = ma.masked_not_equal(samples_padded, 0).mask
+        self.log.info("Done creating audio event mask.")
+        
+        return (burst_index_pairs, audio_mask.astype(int))
+    
     #------------------------------------
     # label_file_reader
     #-------------------
     
-    def label_file_reader(self, csv_reader):
+    def label_file_reader(self, label_file_path):
         '''
-        Given a CSV reader obj, return an array of 
-        ElephantEvent instances.
+        Given a CSV reader obj, return two representations
+        of the labeled bursts: A set of start/stop indices
+        into the samples that underly the labels. And a mask
+        the length of the number of samples, where burst 
+        regions have 1s, and other regions have 0s.
         
-        @param csv_reader:
-        @type csv_reader:
-        @returns instances of elephant events, one for each label entry 
-            in the label table. Events are in a deque, so can be treated
-            as a queue.
-        @rtype: deque(ElepantEvent)
+        The start_stop indices are of the form:
+           [[burst1_start_idx_into_samples, burst1_end_idx_into_samples], 
+            [burst2_start_idx_into_samples, burst2_end_idx_into_samples], 
+                ...
+           ]
+        
+        @param label_file_path: path to Raven label file
+        @type label_file_path: str
+        @returns two-tuples of indices into samples, and burst mask
+        @rtype: ([[int,int]], np.array(int))
         '''
         
         # For result:
-        events = deque()
+        self.events = []
         
-        # Discard col header:
-        _header = next(csv_reader)
-        
-        COL_SELECTION_INDEX = 0
-        COL_BEGIN_TIME_INDEX = 3
-        COL_END_TIME_INDEX = 4
-        # Each line is an array of 18 fields:
-        for line in csv_reader:
-            # Watch for (usually closing...) empty line(s):
-            if len(line) == 0:
-                continue
-            if csv_reader.dialect.delimiter != '\t':
-                # Unless the csv reader knows that elephant
-                # label files are tab-delimited, lines come 
-                # in as an arr of len 1: a string with embedded 
-                # '\t' chars. In that case: create an array:
-                line = line[0].split('\t')
-                
-            selection_index = int(line[COL_SELECTION_INDEX])
-            begin_time = float(line[COL_BEGIN_TIME_INDEX])
-            end_time = float(line[COL_END_TIME_INDEX])
-            events.append(ElephantEvent(selection_index, begin_time, end_time))
+        self.log.info("Reading label file...")
+        with open(label_file_path, 'r') as fd:
+            csv_reader = csv.reader(fd, delimiter='\t')
+            # Discard col header:
+            _header = next(csv_reader)
             
-        return events
+            COL_SELECTION_INDEX = 0
+            COL_BEGIN_TIME_INDEX = 3
+            COL_END_TIME_INDEX = 4
+            start_end_list = []
+            # Each line is an array of 18 fields:
+            for line in csv_reader:
+                # Watch for (usually closing...) empty line(s):
+                if len(line) == 0:
+                    continue
+                if csv_reader.dialect.delimiter != '\t':
+                    # Unless the csv reader knows that elephant
+                    # label files are tab-delimited, lines come 
+                    # in as an arr of len 1: a string with embedded 
+                    # '\t' chars. In that case: create an array:
+                    line = line[0].split('\t')
+                    
+                selection_index = int(line[COL_SELECTION_INDEX])
+                begin_time_secs = float(line[COL_BEGIN_TIME_INDEX])
+                end_time_secs = float(line[COL_END_TIME_INDEX])
+                self.events.append(ElephantEvent(selection_index, begin_time_secs, end_time_secs))
+                begin_time_samples = int(np.ceil(self.framerate * begin_time_secs))
+                # Don't know whether Cornell end time is inclusive or not,
+                # so for safety, add one to make the sample end time exclusive:
+                end_time_samples   = int(np.ceil(1 + self.framerate * end_time_secs))
+                start_end_list.append([begin_time_samples,end_time_samples])
+                
+        last_end_time_samples = end_time_samples
+        # Make np.array of sample-level start-stop:
+        elephant_burst_indices = np.array(start_end_list)
+        self.log.info("Done reading label file.")
+        
+        self.log.info("Creating elephant burst mask...")
+        # Mask is as long as the end of the last burst in
+        # sample space:    
+        el_mask = np.zeros(last_end_time_samples, dtype=int)
+        for (burst_start, burst_end) in elephant_burst_indices:
+            el_mask[burst_start:burst_end - 1] = 1
+        self.log.info("Done creating elephant burst mask.")
+
+        return (elephant_burst_indices, el_mask)
 
 # -------------------------------- ElephantEvent -------------
 
@@ -479,7 +636,7 @@ class AudioEvent(object):
 
 # --------------------------------------- PerformanceResult ------------------------
 
-class PerformanceResult(object):
+class PerformanceResult(OrderedDict):
     '''
     Instances hold results from performance
     computations. Quantities ending in '_events'
@@ -489,80 +646,162 @@ class PerformanceResult(object):
     non-zero sample values.
     
     '''
+
+    # Name of all properties stored in instances
+    # of this class. Needed when reading from
+    # previously saved csv file of a PerformanceResult
+    # instance:
+    props = {'recall_events'         : float,
+        	 'precision_events'      : float,
+        	 'f1score_events'        : float,
+        	 'recall_samples'        : float,
+        	 'precision_samples'     : float,
+        	 'f1score_samples'       : float,
+        	 'overlap_percentages'   : [list, float],
+        	 'true_pos_samples'      : int,
+        	 'false_pos_samples'     : int,
+        	 'true_neg_samples'      : int,
+        	 'false_neg_samples'     : int,
+        	 
+        	 'true_pos_events'       : int,
+        	 'false_pos_events'      : int,
+        	 'true_neg_events'       : int,
+        	 'false_neg_events'      : int,
+         
+             'mean_overlaps'         : float
+            }
+
     
-    def __init__(self,
-                 recall_events,
-                 precision_events,
-                 f1score_events,
-                 recall_samples,
-                 precision_samples,
-                 f1score_samples,
-                 overlap_percentages,
-                 confusion_matrix_events,
-                 confusion_matrix_samples
-                 ):
-        self.__recall_events = recall_events
-        self.__precision_events = precision_events
-        self.__f1score_events = f1score_events
-        self.__recall_samples = recall_samples
-        self.__precision_samples = precision_samples
-        self.__f1score_samples = f1score_samples
-        self.__overlap_percentages = overlap_percentages
-        self.__confusion_matrix_events = confusion_matrix_events
-        self.__confusion_matrix_samples = confusion_matrix_samples
+    def __init__(self, all_results):
+        # Install the initial results
+        super().__init__(all_results)
+        # Add mean of overlap percentages of
+        # detected events:
+        self['mean_overlaps']      = int(round(np.mean(self['overlap_percentages'])))
 
-    @property
-    def recall_events(self):
-        return self.__recall_events
+    #------------------------------------
+    # to_tsv
+    #-------------------
+    
+    def to_tsv(self, include_col_header=False, outfile=None, append=True):
+        if include_col_header:
+            # Create column header:
+            col_header = '\t'.join([f"{col_name}" for col_name in self.keys()])
+        csv_line = '\t'.join([str(res_val) for res_val in self.values()])
+        try:
+            if outfile is not None:
+                if not outfile.endswith('.tsv'):
+                    outfile += '.tsv'
+                fd = open(outfile, 'a' if append else 'w')
+            else:
+                fd = sys.stdout
+            if include_col_header:
+                fd.write(col_header + '\n')
+            fd.write(csv_line + '\n')
+        finally:
+            if outfile:
+                fd.close()
 
-    @property
-    def precision_events(self):
-        return self.__precision_events
+    #------------------------------------
+    # from_tsv
+    #-------------------
 
-    @property
-    def f1score_events(self):
-        return self.__f1score_events
-
-    @property
-    def recall_samples(self):
-        return self.__recall_samples
-
-    @property
-    def precision_samples(self):
-        return self.__precision_samples
-
-    @property
-    def f1score_samples(self):
-        return self.__f1score_samples
-
-    @property
-    def confusion_matrix_events(self):
-        return self.__confusion_matrix_events
-
-    @property
-    def confusion_matrix_samples(self):
-        return self.__confusion_matrix_samples
-
-    @property
-    def overlap_percentages(self):
-        return self.__overlap_percentages
+    def from_tsv(self, infile):
+        
+        res_obj_list = []
+        with open(infile, 'r') as fd:
+            reader = csv.reader(fd)
+            first_line = next(reader)
+            # Check whether first line is header;
+            # if so, it would not have any numbers:
+            line_arr = first_line.split(',')
+            if any([col is not None for col in line_arr]):
+                # First line is not a col header:
+                res_obj_list.append(self._make_res_obj(line_arr))
+            try:
+                while True:
+                    line_arr = next(reader).split(',')
+                    res_obj_list.append(self._make_res_obj(line_arr))
+            except:
+                # Finished the file.
+                pass
+        return res_obj_list
     
     #------------------------------------
-    # print_res
-    #-------------------    
+    # _make_res_obj
+    #-------------------
+
+    @classmethod
+    def _make_res_obj(cls, values_arr_strings):
+        res_obj = PerformanceResult()
+        for (indx, prop_name) in enumerate(PerformanceResult.props.keys()):
+            # To which data type must this string be
+            # coerced?:
+            dest_type = PerformanceResult.props[prop_name]
+            # Is type a list [list, <type>]?
+            if type(dest_type) == list:
+                array_el_types = dest_type[1]
+                # Create array of elements, all of the dest type:
+                typed_val = [array_el_types(el) for el in values_arr_strings[indx]]
+            else:
+                typed_val = dest_type(values_arr_strings[indx])
+            res_obj[prop_name] = typed_val
+        return res_obj 
+
+    #------------------------------------
+    # _is_number
+    #-------------------
+            
+    def _is_number(self, word):
+        p = re.compile('^[0-9.]*$')
+        return p.search(word)
+
+    #------------------------------------
+    # print
+    #-------------------
+
+    def print(self, outfile=None):
+        
+        try:
+            if outfile is None:
+                out_fd = sys.stdout
+            else:
+                out_fd = open(outfile, 'w')
+                
+            # For nice col printing: find longest 
+            # property name:
+            col_width = max(len(prop_name) for prop_name in self.keys())
+            for prop in self.keys():
+                print(''.join(prop.ljust(col_width), self.prop))
+
+        finally:
+            if out_fd != sys.stdout:
+                out_fd.close()
+
+    #------------------------------------
+    # confusion_matrix_samples 
+    #-------------------
+
+    def confusion_matrix_samples(self):
+        if self['confusion_matrix_samples'] is not None:
+            return self['confusion_matrix_samples']
+        self['confusion_matrix_samples'] = np.array([[self['true_pos_samples'], self['false_pos_samples']],
+                                                    [self['false_neg_samples'], self['true_neg_samples']]
+                                                    ]
+                                                   )
+        return['confusion_matrix_samples']
+
+
+    #------------------------------------
+    # confusion_matrix_events
+    #-------------------
+
+    def confusion_matrix_events(self):
+        if self['confusion_matrix_events'] is not None:
+            return self['confusion_matrix_events']
+        self['confusion_matrix_events'] = np.array([[self['true_pos_events'], self['false_pos_events']],
+                                                    [self['false_neg_events'], self['true_neg_events']]
+                                                    ]
+                                                   )
+        return self['confusion_matrix_events']
     
-    def print_res(self, fd=sys.stdout):
-        fd.write(f"Recall (event level):\t{self.recall_events}\n")
-        fd.write(f"Precision (event level):\t{self.precision_events}\n")
-        fd.write(f"F1 (event level):\t{self.f1score_events}\n")
-        fd.write(f"Recall (sample level):\t{self.recall_samples}\n")
-        fd.write(f"Precision (sample level):\t{self.precision_samples}\n")
-        fd.write(f"F1 (sample level):\t{self.f1score_samples}\n")
-        fd.write(f"Confusion matrix (event level):\t{self.confusion_matrix_events}\n")
-        fd.write(f"Confusion matrix (event level):\t{self.confusion_matrix_samples}\n")
-        
-        
-        
-        
-        
-        

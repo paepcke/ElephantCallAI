@@ -5,14 +5,12 @@ Created on Feb 18, 2020
 @author: paepcke
 
 Given a .wav file, read it, and normalize it
-so max voltage is 1. Then set all voltages that 
-are less than -20dB of the maximum voltage to zero.
-However, to avoid the 0->non-zero transitions to
-be impulse responses that will generate energy in many
-frequencies, create exponential attack and release envolopes
-for each transition between zero and non-zero, and non-zero
-to zero, respectively.
+so max voltage fills 32 bits. Then set all voltages that 
+are less than -20dB of the maximum voltage to zero (customizable)
 
+See header comment of method amplitude_gate() for details. 
+
+For reading code detail:
 Data structures for efficiently tracking bursts of non-zero voltages: 
 
    sample_npa       : a numpy array of voltages from the .wav file,
@@ -37,17 +35,17 @@ import os
 import sys
 
 from scipy.io import wavfile
-from scipy.signal import butter, lfilter 
-from scipy.signal.filter_design import freqz
+from scipy.signal import butter, lfilter, stft 
 
 from elephant_utils.logging_service import LoggingService
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.ma as ma
+from plotting.plotter import Plotter
+from plotting.plotter import PlotterTasks
 
+class FrequencyError(Exception):
+    pass
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    
 class AmplitudeGater(object):
     '''
     classdocs
@@ -56,19 +54,25 @@ class AmplitudeGater(object):
     # Constructor 
     #-------------------    
 
-
     def __init__(self,
                  wav_file_path,
                  outfile=None,
-                 amplitude_cutoff=-5,   # dB of peak
-                 cutoff_freq=100,
+                 amplitude_cutoff=-40,   # dB of peak
+                 spectrogram_freq_cap=300, # Hz
                  normalize=True,
-                 plot_result=False,
                  logfile=None,
                  framerate=None,  # Only used for testing.
+                 spectrogram_outfile=None,
                  testing=False
                  ):
         '''
+
+        During its work instances of this class may
+        produce plots of results. By default those
+        will not be plotted. To plot some or all,
+        call add_task(plot_name) on the PlotterTasks class.
+        Available plots are:
+           o 
 
         @param wav_file_path: path to .wav file to be gated
             Can leave at None, if testing is True
@@ -85,16 +89,17 @@ class AmplitudeGater(object):
             Can be set here for testing. Samples/sec
         @type framerate: int
 
+        @param spectrogram_outfile: optionally a file to which a
+            spectrogram of the entire noise-gated result is written.
+            If None, no spectrogram is created.
+        @type spectrogram_outfile: {None | str}
+
         @param logfile: file where to write logs; Default: stdout
         @type logfile: str
 
         @param logging_period: number of seconds between reporting
             envelope placement progress.
         @type logging_period: int
-        
-        @param plot_result: whether or not to create a plot of the 
-            new .wav signals.
-        @type plot_result: False
         
         @param testing: whether or not unittests are being run. If
             true, __init__() does not initiate any action, allowing
@@ -105,9 +110,6 @@ class AmplitudeGater(object):
         # Make sure the outfile can be opened for writing,
         # before going into lengthy computations:
         
-        #*******************
-        #amplitude_cutoff = -25
-        #*******************
         if outfile is not None:
             try:
                 with open(outfile, 'wb') as _fd:
@@ -116,8 +118,6 @@ class AmplitudeGater(object):
                 print(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
                 sys.exit(1)
 
-        self.plot_result = plot_result
-                
         AmplitudeGater.log = LoggingService(logfile=logfile)
         
         # For testing; usually framerate is read from .wav file:
@@ -131,7 +131,15 @@ class AmplitudeGater(object):
             except Exception as e:
                 print(f"Cannot read .wav file: {repr(e)}")
                 sys.exit(1)
-        
+
+        self.plotter = Plotter(self.framerate)
+
+        # Ensure that requested filter frequency is
+        # less than the Nyquist frequency: framerate/2: 
+        highest_filter_freq = min(math.floor(self.framerate / 2) - 1, spectrogram_freq_cap)
+        if highest_filter_freq < spectrogram_freq_cap:
+            raise FrequencyError(f"Cutoff frequency must be less than Nyquist freq (1/2 of sampling rate); max allowable is {highest_filter_freq}")
+
         if testing:
             self.recording_length_hhmmss = "<unknown>"
         else:
@@ -154,7 +162,9 @@ class AmplitudeGater(object):
         # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
         gated_samples  = self.amplitude_gate(normed_samples, 
                                              amplitude_cutoff, 
-                                             cutoff_freq=cutoff_freq)
+                                             spectrogram_freq_cap=spectrogram_freq_cap,
+                                             spectrogram_dest=spectrogram_outfile
+                                             )
  
         # Result back to int16:
         gated_samples = gated_samples.astype(np.int16)
@@ -163,7 +173,8 @@ class AmplitudeGater(object):
             # Write out the result:
             wavfile.write(outfile, self.framerate, gated_samples)
         
-        if self.plot_result:
+        if PlotterTasks.has_task('gated_wave_excerpt'):
+            
             # Find a series of 100 array elements where at least
             # the first is not zero. Just to show an interesting
             # area, not a flat line. The nonzero() function returns
@@ -174,12 +185,12 @@ class AmplitudeGater(object):
             end_indx   = start_indx + 100
             
             self.log.info(f"Plotting a 100 long series of result from {start_indx}...")
-            self.plot(np.arange(start_indx, end_indx),
-                      gated_samples[start_indx:end_indx],
-                      title=f"Amplitude-Gated {os.path.basename(wav_file_path)}",
-                      xlabel='Sample Index', 
-                      ylabel='Voltage'
-                      )
+            self.plotter.plot(np.arange(start_indx, end_indx),
+                              gated_samples[start_indx:end_indx],
+                              title=f"Amplitude-Gated {os.path.basename(wav_file_path)}",
+                              xlabel='Sample Index', 
+                              ylabel='Voltage'
+                              )
         
         print('Done')
         
@@ -188,32 +199,92 @@ class AmplitudeGater(object):
     # amplitude_gate
     #-------------------    
         
-    def amplitude_gate(self, sample_npa, threshold_db, order=1, cutoff_freq=100):
+    def amplitude_gate(self, 
+                       sample_npa, 
+                       threshold_db,
+                       order=4, 
+                       cutoff_freq=100,
+                       spectrogram_dest=None,
+                       spectrogram_freq_cap=300, # Hz 
+                       ):
+        '''
+        Given an array of raw audio samples, 
+        generate a noise-gated array of the same length.
+        Optionally, create a full spectrogram into a 
+        .npy file. 
+        Optionally, plot 30-second spectrograms from 
+        18 subsections of the gated samples.
+        
+        Procedure:
+           o Normalize audio to fill 32 bits.
+           o Create a temporary 'envelope' signal over
+             the samples. That is, a slow, lazy outline
+             of the fast audio signal. The cutoff_freq
+             controls this low-pass filter's limit on
+             higher frequencies. The order is the number
+             of filter stages that make up the low-pass
+             (Butterworth) filter. Usually, 4 seems fine. 
+           o On the envelope, find all samples that are
+             threshold-db below the maximum peak of the
+             envelope. The value must be negative. Experimentally,
+             at most -20(dB).
+           o At these very low-voltage times, set the original
+             audio to zero. This takes signal areas that
+             are clearly too low to be significant out of the
+             picture, removing some noise. The result is the
+             noise-gated signal, which will be returned.
+             
+           o Optionally: if spectrogram_dest is a file path
+                destination, create a spectrogram over the full
+                duration, and save it to that path as a numpy array.
+                All frequencies above spectrogram_freq_cap are
+                removed from the spectrogram before saving.
+                
+           o Optionally: plot 18 30-sec spectrograms from
+                times evenly spaced across the total recording.
+                Times and freqs in those plots correspond to
+                the true times in the recording.   
+             
+        
+        @param sample_npa: raw audio
+        @type sample_npa: np.array(int)
+        @param threshold_db: voltage below which signal is set to zero;
+            specified as dB below peak voltage: db FS.
+        @type threshold_db: negative int
+        @param order: polynomial of Butterworth filter
+        @type order: int
+        @param cutoff_freq: frequency in Hz for the envelope
+        @type cutoff_freq: int
+        @param spectrogram_dest: optionally: file name where 
+            spectrogram is stored
+        @type spectrogram_dest: str
+        @param spectrogram_freq_cap: optionally: frequency above 
+            which all frequencies are removed from spectrogram.
+        @type spectrogram_freq_cap: int
+        '''
 
         # Don't want to open the gate *during* a burst.
-        # So make a low-pass filter to only roughly envelops
+        # So make a low-pass filter that only roughly envelops
 
         self.log.info("Taking abs val of values...")
         samples_abs = np.abs(sample_npa)
         self.log.info("Done taking abs val of values.")
-        
-        self.log.info("Applying low pass filter...")
+
+        self.log.info(f"Applying low pass filter (cutoff {cutoff_freq})...")
         envelope = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
         self.log.info("Done applying low pass filter.")        
 
-        #**********************
-#         self.over_plot(samples_abs[1000:1100], 'ABS(samples)')
-#         self.over_plot(envelope[1000:1100], f"Env Order {order}")
-#         
-#         order = 3
-#         envOrd3 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
-#         self.over_plot(envOrd3[1000:1100], 'Order 3')
-# 
-#         order = 1
-#         envOrd1 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
-#         self.over_plot(envOrd1[1000:1100], 'Order 1')
-        
-        #**********************
+        if PlotterTasks.has_task('samples_plus_envelope'):
+            self.plotter.over_plot(samples_abs[1000:1100], 'ABS(samples)')
+            self.plotter.over_plot(envelope[1000:1100], f"Env Order {order}")
+         
+            #order = 5
+            #envOrd3 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
+            #self.over_plot(envOrd3[1000:1100], f'Order {order}')
+     
+            #order = 6
+            #envOrd1 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
+            #self.over_plot(envOrd1[1000:1100], f'Order {order}')
 
         # Compute the threshold below which we
         # set amplitude to 0. It's threshold_db of max
@@ -230,9 +301,133 @@ class AmplitudeGater(object):
         # Zero out all amplitudes below threshold:
         self.log.info("Zeroing sub-threshold values...")
 
-        sample_npa[abs(sample_npa) < Vthresh] = 0
+        mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
+        gated_samples = sample_npa * mask_for_where_non_zero
+        
+        zeroed_percentage = 100 * gated_samples[gated_samples==0].size / gated_samples.size
+        self.log.info(f"Zeroed {zeroed_percentage:.2f}% of signal.")
+        
+        if spectrogram_dest:
+            
+            # Get a combined frequency x time matrix. The matrix values will
+            # be complex: 
+            (freq_labels, time_labels, complex_freq_time) = self.make_spectrogram(gated_samples)
+            # Keep only the complex values:
+            self.log.info("Getting magnitudes of complex frequency values...")  
+            freq_time = np.absolute(complex_freq_time)
+            self.log.info("Done getting magnitudes of complex frequency values.")
+            
+            if spectrogram_freq_cap is not None:
+                self.log.info(f"Removing frequencies above {spectrogram_freq_cap}Hz...")
+                # Remove all frequencies above, and including
+                # spectrogram_freq_cap:
+                (new_freq_labels, capped_spectrogram) = self.filter_spectrogram(freq_labels,
+                                                                                freq_time, 
+                                                                                [(None, spectrogram_freq_cap)]
+                                                                                )
+                self.log.info(f"Done removing frequencies above {spectrogram_freq_cap}Hz.")
+            else:
+                capped_spectrogram = freq_time
+                new_freq_labels    = freq_labels
+        
+            # Save the spectrogram to file:
+            self.log.info(f"Saving spectrogram to {spectrogram_dest}...")
+            np.save(spectrogram_dest, capped_spectrogram)
+            self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
+        
+        if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts'):
+            # The matrix is large, and plotting takes forever,
+            # so define a matrix excerpt:
+            self.plotter.plot_spectrogram(new_freq_labels, 
+                                          time_labels,
+                                          capped_spectrogram)
 
-        return sample_npa
+        return gated_samples
+
+    #------------------------------------
+    # filter_spectrogram
+    #-------------------
+    
+    def filter_spectrogram(self, 
+                           freq_labels, 
+                           freq_time, 
+                           freq_bands):
+        '''
+        Given a spectrogram, return a new spectrogram
+        with only frequencies within given bands retained.
+        
+        freq_time is a matrix whose rows each contain energy
+        contributions by one frequency over time. 
+        
+        The freq_labels is an np.array with the frequency of
+        each row. I.e. the y-axis labels.
+        
+        freq_bands is an array of frequency intervals. The
+        following would only retain rows for frequencies 
+             10 <= f < 20,
+              0 <= f < 5,  
+         and  f >= 40:
+        
+           [(None, 5), (10,20), (40,None)]
+           
+        So: note that these extracts are logical OR.
+            Contributions from each of these three
+            intervals will be present, even though the 
+            (10,20) would squeeze out the last due to its
+            upper bound of 20.
+         
+        @param freq_labels: array of frequencies highest first
+        @type freq_labels: np.array[float]
+        @param freq_time: 2d array of energy contributions
+        @type freq_time: np.array(rows x cols) {float || int || complex}
+        @param freq_bands: bands of frequencies to retain.
+        @type freq_bands: [({float | int})]
+        @return revised spectrogram, and correspondingly reduced
+            frequency labels
+        @rtype: (np_array(1), np_array(n,m))
+        '''
+        # Prepare a new spectrogram matrix with
+        # the same num of cols as the one passed
+        # in, but no rows:
+        
+        (_num_rows, num_cols) = freq_time.shape
+        new_freq_time    = np.empty((0,num_cols))
+        
+        # Same for the list of frequencies:
+        new_freq_labels  = np.empty((0,))
+        
+        for (min_freq, out_freq) in freq_bands:
+            if min_freq is None and out_freq is None:
+                # Degenerate case: keep all:
+                continue
+            if min_freq is None:
+                min_freq = 0
+            if out_freq is None:
+                # No upper bound, so make a ceiling
+                # higher than maximum frequency:
+                out_freq = np.amax(freq_labels) + 1.
+                
+            # Get the indices of the frequency array 
+            # where the frequency is within this interval.
+            # The np.where returns a tuple, therefore [0]
+
+            filter_indices =  np.where(np.logical_and(freq_labels >= min_freq,
+                                                      freq_labels < out_freq
+                                                      ))[0]
+        
+            # Keep only rows (axis=0) that contain the energies for
+            # included frequencies:
+            new_freq_time = np.vstack(
+                (new_freq_time, np.take(freq_time, filter_indices, axis=0))
+                )
+
+            # Also take away the row labels that where excluded:
+            new_freq_labels = np.hstack(
+                (new_freq_labels, np.take(freq_labels, filter_indices))
+                )
+
+        return (new_freq_labels, new_freq_time)
+        
 
     #------------------------------------
     # butter_lowpass_filter
@@ -240,12 +435,21 @@ class AmplitudeGater(object):
 
     def butter_lowpass_filter(self, data, cutoff, order=5):
         b, a = self.get_butter_lowpass_parms(cutoff, order=order)
-        y = lfilter(b, a, data)
+        envelope = lfilter(b, a, data)
         
-        if self.plot_result:
-            self.plot_frequency_response(b, a, cutoff, order)
+        if PlotterTasks.has_task('low_pass_filter'):
+            self.plotter.plot_frequency_response(b, a, cutoff, order)
+            # Plot a piece of envelope, roughly from the middle:
+            mid_env_index = round(envelope.size/2)
+            end_index     = mid_env_index + 100
+            self.plotter.plot(np.arange(mid_env_index, end_index),
+                              envelope[mid_env_index:end_index],
+                              f"Envelope {mid_env_index} to {end_index}",
+                              "Time",
+                              "Amplitude"
+                              )
         
-        return y
+        return envelope
 
     #------------------------------------
     # get_butter_lowpass_parms
@@ -506,65 +710,43 @@ class AmplitudeGater(object):
                 fd.write(f"{indx},{val}\n")
         
     #------------------------------------
-    # plot
-    #------------------- 
-    
-    def plot(self, x_arr, y_arr, title='My Title', xlabel='X-axis', ylabel='Y-axis'):
-        fig = plt.figure()
-        ax  = fig.add_subplot(1,1,1)
-        ax.set_title(title)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        ax.plot(x_arr,y_arr)
-    
-    #------------------------------------
-    # plot_frequency_response
+    # make_spectrogram
     #-------------------
-    
-    def plot_frequency_response(self, b, a, cutoff, order):
+
+    def make_spectrogram(self, data):
         '''
-        b,a come from call to get_butter_lowpass_parms()
+        Given data, compute a spectrogram.
+
+        Assumptions:
+            o self.framerate contains the data framerate
+    
+        o The (Hanning) window overlap used (Hanning === Hann === Half-cosine)
+        o Length of each FFT segment: 4096 (2**12)
+        o Number of points to overlap with each window
+             slide: 1/2 the segments size: 2048
+        o Amount of zero-padding at the end of each segment:
+             the length of the segment again, i.e. doubling the window
+             so that the conversion to positive-only frequencies makes
+             the correct lengths
+             
+        Returns a three-tuple: an array of sample frequencies,
+            An array of segment times. And a 2D array of the SFTP:
+            frequencies x segment times
         
-        @param b:
-        @type b:
-        @param a:
-        @type a:
-        @param cutoff: frequency (Hz) at which filter is supposed to cut off
-        @type cutoff: int
-        @param order: order of the filter: 1st, 2nd, etc.; i.e. number of filter elements.
-        @type order: int
+        @param data: the time/amplitude data
+        @type data: np.array([float])
+        @return: (frequency_labels, time_labels, spectrogram_matrix)
+        @rtype: (np.array, np.array, np.array)
+        
         '''
-    
-        w, h = freqz(b, a, worN=8000)
-        plt.subplot(1, 1, 1)
-        plt.plot(0.5 * self.framerate * w/np.pi, np.abs(h), 'b')
-        plt.plot(cutoff, 0.5*np.sqrt(2), 'ko')
-        plt.axvline(cutoff, color='k')
-        plt.xlim(0, 0.5*self.framerate)
-        plt.title(f"Lowpass Filter Frequency Response (order: {order}, cutoff: {cutoff} Hz")
-        plt.xlabel('Frequency [Hz]')
-        plt.grid()
-
-    #------------------------------------
-    # over_plot
-    #-------------------    
-    
-    def over_plot(self, y_arr, legend_entry, title="Filters", xlabel="Time", ylabel='Voltage'):
-
-        try:
-            self.ax
-        except AttributeError:
-            fig = plt.figure()
-            self.ax  = fig.add_subplot(1,1,1)
-            self.ax.set_title(title)
-            self.ax.set_xlabel(xlabel)
-            self.ax.set_ylabel(ylabel)
-            
-        self.ax.plot(np.arange(y_arr.size),
-                     y_arr,
-                     label=legend_entry
-                     )
-        self.ax.legend()
+        
+        fft_width = 2**12  # 4096
+        self.log.info("Creating spectrogram...")
+        (freq_labels, time_labels, complex_freq_by_time) = stft(data, self.framerate, nperseg=fft_width)
+        self.log.info("Done creating spectrogram.")
+                
+        return (freq_labels, time_labels, complex_freq_by_time)
+        
 
     #------------------------------------
     # find_busy_array_section
@@ -680,15 +862,15 @@ if __name__ == '__main__':
 
     parser.add_argument('-c', '--cutoff',
                         help='dB attenuation from max amplitude below which signal \n' +\
-                            'is set to zero; default: -20dB',
+                            'is set to zero; default: -40dB',
                         type=int,
-                        default='-20'
+                        default='-40'
                         )
     
     parser.add_argument('-f', '--filter',
-                        help='highest frequency to keep.',
+                        help='highest frequency to keep in spectrogram.',
                         type=int,
-                        default=10);
+                        default=300);
     
     parser.add_argument('-p', '--padding',
                         help='seconds to keep before/after events; default: 5',
@@ -701,10 +883,11 @@ if __name__ == '__main__':
                         help="Set to prevent amplitudes to be  normalized to range from -32k to 32k; default is to normalize"
                         )
                         
-    parser.add_argument('-t', '--plot',
-                        action='store_true',
-                        default=False,
-                        help="Whether or not to plot result."
+    parser.add_argument('--plot',
+                        nargs='+',
+                        action='extend',
+                        choices=['gated_wave_excerpt','samples_plus_envelope','spectrogram_excerpts','low_pass_filter'],
+                        help="Plots to produce; repeatable; default: no plots"
                         )
 
     parser.add_argument('wavefile',
@@ -722,13 +905,16 @@ if __name__ == '__main__':
         print(f"Amplitude cutoff must be negative, not {cutoff}")
         sys.exit(1)
 
+    # Register the plots to produce:
+    for plot_name in args.plot:
+        PlotterTasks.add_task(plot_name)
+    
     # AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
     #                plot_result=True)
     AmplitudeGater(args.wavefile,
                    args.outfile,
                    amplitude_cutoff=cutoff,
-                   filter=args.filter,
-                   padding=args.padding,
+                   spectrogram_freq_cap=args.filter,
                    normalize=not args.raw,
                    plot_result=args.plot,
                    logfile=args.logfile,

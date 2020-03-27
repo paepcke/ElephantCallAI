@@ -331,9 +331,7 @@ class TestDSPPerformanceComputation(unittest.TestCase):
         self.pr_comp.framerate = 2
         
         # SAMPLE 1: total overlap
-        with open(self.tiny_labels_path, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            perf_res = self.pr_comp.compute_performance(self.samples1, reader, 100) # 100% overlap for success
+        perf_res = self.pr_comp.compute_performance(self.samples1, self.tiny_labels_path, 100) # 100% overlap for success
         
         self.assertEqual(perf_res.recall_events, 1)
         self.assertEqual(perf_res.precision_events, 1)
@@ -376,9 +374,7 @@ class TestDSPPerformanceComputation(unittest.TestCase):
         
         # SAMPLE 2: Audio has two false negatives
         
-        with open(self.tiny_labels_path, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            perf_res = self.pr_comp.compute_performance(self.samples2, reader, 100) # 100% overlap for success
+        perf_res = self.pr_comp.compute_performance(self.samples2, self.tiny_labels_path, 100) # 100% overlap for success
         
         self.assertEqual(np.round(perf_res.recall_events, 2), 0.67) # 2/3
         self.assertEqual(np.round(perf_res.precision_events, 2), 1.0)  # no false positives
@@ -419,9 +415,7 @@ class TestDSPPerformanceComputation(unittest.TestCase):
         
         # SAMPLE 3: Audio has one false positive:
         
-        with open(self.tiny_labels_path, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            perf_res = self.pr_comp.compute_performance(self.samples3, reader, 100) # 100% overlap for success
+        perf_res = self.pr_comp.compute_performance(self.samples3, self.tiny_labels_path, 100) # 100% overlap for success
         
         self.assertEqual(np.round(perf_res.recall_events, 2), 1) # got them all
         self.assertEqual(np.round(perf_res.precision_events, 2), 0.75)  # 3 of the claimed 4 are right
@@ -461,9 +455,7 @@ class TestDSPPerformanceComputation(unittest.TestCase):
         
         # SAMPLE 4: Audio has two false positive; one at each end:
         
-        with open(self.tiny_labels_path, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            perf_res = self.pr_comp.compute_performance(self.samples4, reader, 100) # 100% overlap for success
+        perf_res = self.pr_comp.compute_performance(self.samples4, self.tiny_labels_path, 100) # 100% overlap for success
         
         self.assertEqual(np.round(perf_res.recall_events, 2), 1) # got them all
         self.assertEqual(np.round(perf_res.precision_events, 2), 0.75)  # 3 of the claimed 4 are right
@@ -505,9 +497,7 @@ class TestDSPPerformanceComputation(unittest.TestCase):
         # SAMPLE 6: Audio has same number of 1s, but one
         #           event is shifted right by 50%:
         
-        with open(self.tiny_labels_path, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            perf_res = self.pr_comp.compute_performance(self.samples6, reader, 100) # 100% overlap for success
+        perf_res = self.pr_comp.compute_performance(self.samples6, self.tiny_labels_path, 100) # 100% overlap for success            
         
         self.assertEqual(np.round(perf_res.recall_events, 2), 0.67) # got 2 of 3: insufficent overlap
         self.assertEqual(np.round(perf_res.precision_events, 2), 0.67)  # the gotten ones are ok by *number*
@@ -537,11 +527,10 @@ class TestDSPPerformanceComputation(unittest.TestCase):
     #-------------------    
 
     def read_labels(self):
-        
-        with open(os.path.join(os.path.dirname(__file__), 'labels_for_testing.txt'), 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            labeled_events = self.pr_comp.label_file_reader(reader)
-            return labeled_events 
+
+        label_file_path = os.path.join(os.path.dirname(__file__), 'labels_for_testing.txt')   
+        labeled_events = self.pr_comp.label_file_reader(label_file_path)
+        return labeled_events 
 
 # --------------------------- Main ---------------
         

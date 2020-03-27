@@ -80,7 +80,7 @@ class Spectrogrammer(object):
         plt.ylabel('Audio Units')
         ax_audio.plot(t, raw_audio)
         
-        ax_spectrum = plt.subplot(grid_spec[1])
+        #ax_spectrum = plt.subplot(grid_spec[1])
         (spectrum, freqs, t_bins, im) = plt.specgram(raw_audio, 
                                                       Fs=samplerate,
                                                       cmap='jet'
