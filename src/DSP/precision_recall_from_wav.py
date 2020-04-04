@@ -80,11 +80,10 @@ class PrecRecComputer(object):
     
     def compute_performance(self, samples, label_file_path, overlap_perc_requirement):
         '''
-        Workhorse. Takes audio sample array, and a csv reader
-        pointed at a label file. The percentage number is the
-        overlap between audio-derived events and the corresponding
-        labeled event that is minimally required to count an
-        audio-detected event as a true event.
+        Workhorse. Takes audio sample array, and a csv path. 
+        he percentage number is the overlap between audio-derived 
+        events and the corresponding labeled event that is minimally 
+        required to count an audio-detected event as a true event.
         
         @param samples: the voltages
         @type samples: np.array({float | int})
@@ -125,7 +124,7 @@ class PrecRecComputer(object):
         #   ]
         
         elephant_burst_indices_shifted = np.roll(elephant_burst_indices, -1, axis=0)
-        last_sample_index = 100 # mele.size
+        last_sample_index = el_samples_mask.size # mele.size
         elephant_burst_indices_shifted[-1] = np.array([last_sample_index, -1])
         starts_and_ends = elephant_burst_indices[:,1], elephant_burst_indices_shifted[:,0]
         elephant_non_burst_indices = np.column_stack(starts_and_ends)
@@ -135,7 +134,7 @@ class PrecRecComputer(object):
 
         # Same for audio bursts:
         audio_burst_indices_shifted = np.roll(audio_burst_indices, -1, axis=0)
-        last_sample_index = 100 # mele.size
+        last_sample_index = aud_samples_mask.size # mele.size
         audio_burst_indices_shifted[-1] = np.array([last_sample_index, -1])
         starts_and_ends = audio_burst_indices[:,1], audio_burst_indices_shifted[:,0]
         audio_non_burst_indices = np.column_stack(starts_and_ends)
@@ -177,36 +176,34 @@ class PrecRecComputer(object):
         recall_samples    = num_true_positive_samples / np.sum(el_samples_mask)
         # Precision: samples recognized by audio as part of a call,
         #         over all the samples:
-        precision_samples = num_true_positive_samples / el_samples_mask.size
+        precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples) 
         
         f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
         self.log.info('Done computing recall/precision/F1 at sample granularity.')
 
-        # Phase 2:
+        # Phase 2: At event level
         
         (percent_overlaps, matches_aud) = self.compute_overlap_percentage(audio_burst_indices, 
                                                                           elephant_burst_indices)
         (percent_overlaps_non_bursts, matches_aud_non_bursts) = self.compute_overlap_percentage(audio_non_burst_indices, 
                                                                                                 elephant_non_burst_indices)
-        # Keep the audio events that overlap insufficiently:
-        #verified_audio_events = audio_burst_indices[np.nonzero(percent_overlaps[percent_overlaps >= overlap_perc_requirement])]
+        # Keep only the audio non-burst events that overlap sufficiently:
         verified_audio_non_events = audio_non_burst_indices[np.nonzero(percent_overlaps_non_bursts[percent_overlaps_non_bursts >= overlap_perc_requirement])]
         
         self.log.info('Computing true/false-pos/neg at event granularity...')
         num_true_pos_events = elephant_burst_indices[:,0].size
         #num_true_neg_events = elephant_non_burst_indices[:,0].size
         
-        num_detected_events     = matches_aud[:,0].size
+        # Detected audio bursts, including the false ones:
+        num_detected_events     = audio_burst_indices[:,0].size
         num_detected_non_events = matches_aud_non_bursts[:,0].size
         num_verified_non_events = verified_audio_non_events[:,0].size
 
-        num_true_pos_detected_events   = verified_audio_non_events[:,0].size
+        num_true_pos_detected_events   = matches_aud[:,0].size
         num_false_pos_detected_events  = num_detected_events - num_true_pos_detected_events
         
         num_true_neg_detected_events  = num_verified_non_events
         num_false_neg_detected_events  = num_detected_non_events - num_verified_non_events
-        
-#       num_false_pos_detected_non_events = num_detected_non_events - num_verified_audio_non_events 
         
         self.log.info('Done computing true/false-pos/neg at event granularity.')
 
@@ -248,18 +245,65 @@ class PrecRecComputer(object):
     #-------------------
     
     def compute_overlap_percentage(self, audio_burst_indices, elephant_burst_indices):
-
-        # At the event level: which are true aud *events*
-        # i.e. not true individual samples.
-        # We take advantage for the audio event indices 
-        # being sorted, and monotonically increasing. The
-        # audio events don't overlap, and they always have
-        # at least one 0 in between:
-        #    [[4,10], 
-        #     [11,30],
-        #      ...
-        # We do loop, but over the labeled events, which 
-        # are few (in the thousands at most for 24 hours):
+        '''
+        Given start/end indices into the discovered audio 
+        events, and the same for the labeled events, compute
+        the percentage overlaps for each. A complete example,
+        verified in unittests:
+        
+        daud = \                                                   Index in Ele   Absolute Overlap
+        np.array([[ 5, 10],      # +     covers exactly                  0             4            
+                  [40, 46],      # +     covers beyond borders           2             2
+                  [47, 49],      # -                                                    
+                  [51, 66],      # +     lower within borders            3            13
+                  [70, 75],      # +     upper within borders            5             1    [ 4  2 13 10  0  2]
+                  [77, 80],      # +     use ele burst twice             5             3
+                  [90, 95]       # -     more in aud than in labels      
+                  ])
+        dele = \                                                   Index in Aud    Absolute Overlap
+        np.array([[ 5, 10],                                              0             4
+                 [10, 11],       # abutting intervals                    -
+                 [42, 45],                                               1             2
+                 [50, 65],                                               3            13
+                 [55, 70],       # overlapping intervals                 3            
+                 [74, 80]                                                5
+                 ])
+        
+        Intermediate result: the matches between aud and ele bursts:
+        
+           Audio    Elephants Overlap       Highest Low Bounds            Lowest High Bounds           
+         [[ 5 10]   [[ 5 10]    5          [ 5 42 51 55 74 77]          [10 45 65 66 75 80]
+         [40 46]     [42 45]    3
+         [51 66]     [50 65]    14
+         [51 66]     [55 70]    11
+         [70 75]     [74 80]     1
+         [77 80]]    [74 80]]    3
+        
+        Percentage overlap: [100. 100. 93.33333333 73.33333333  16.66666667 50.]
+        
+        
+                                         
+        
+        result for percent_overlaps:
+        array([100.        , 100.        ,  93.33333333,  73.33333333,
+                16.66666667,  50.        ])
+        
+        
+        result for 'matches':
+        array([[ 5, 10],
+               [40, 46],
+               [51, 66],   should be 0.928571429 percent
+               [51, 66],   remove dups
+               [70, 75],   should be 20%, : 1/5
+               [77, 80]])  should be 40%  : 2/5
+        
+        
+        @param audio_burst_indices: list of discovered burst start/stops
+        @type audio_burst_indices: [(start,stop)]
+        @param elephant_burst_indices: list of burst start/stops from labels
+        @type elephant_burst_indices: (start,stop)]
+        @return: (percent_overlaps, matches_aud)
+        '''
 
         # Wouldn't have dreamed up the solution below myself
         # in a million years. searchsort(sorted_list, element)
@@ -300,8 +344,8 @@ class PrecRecComputer(object):
 
         # Now compute the percentage of overlap.
         # Think of the code as being just like the 
-        # following equivalent loop, except for  
-        # vectorization.
+        # following equivalent function applied in
+        # a loop, except for vectorization.
         
         # def overlaps(labeled_event, audio_event):
         #     '''
@@ -329,7 +373,7 @@ class PrecRecComputer(object):
         # pairs for elephant and audio events:
         matches_ele = elephant_burst_indices[matches[:,0]]
         matches_aud = audio_burst_indices[matches[:,1]]
-
+        
         # Get 1d arrays for low and high bounds for both
         # audio and eles:
         low_bounds_ele  = matches_ele[:,0]
@@ -347,7 +391,7 @@ class PrecRecComputer(object):
         # For each ele/aud interval pair, find
         # the highest of the two low bounds:
         highest_low_bounds = np.select([low_bounds_ele >= low_bounds_aud,
-                                        low_bounds_ele  < low_bounds_aud],
+                                        low_bounds_ele <  low_bounds_aud],
                                          [low_bounds_ele, low_bounds_aud]
                                          )
         
@@ -361,99 +405,7 @@ class PrecRecComputer(object):
         percent_overlaps = 100 * overlaps/ele_interval_widths
 
         return (percent_overlaps, matches_aud) 
-    
-    #------------------------------------
-    # get_total_labeled_samples
-    #-------------------
-    
-    def get_total_labeled_samples(self, el_event_objects_np):
-        '''
-        Given an array of labeled-event objects,
-        go through each object, and compute the number
-        of samples contained between start/end markers.
-        
-        Assumption: self.framerate contains framerate
-        
-        @param el_event_objects_np: ElephantEvent objects, each
-            containing start and end times in seconds of the
-            labeled burst.
-        @type el_event_objects_np: ElephantEvent
-        @return: number of audio samples contained in 
-            each burst
-        @rtype: int
-        '''
-        
-        # We need to use a loop, but OK, since there
-        # won't be *that* many labeled events:
-        
-        labeled_samples = 0
-        for label_event in el_event_objects_np:
-            begin_time = np.floor(label_event.begin_time)
-            end_time   = np.ceil(label_event.end_time)            
-            labeled_samples += self.framerate * (end_time - begin_time)
 
-        return labeled_samples
-
-    #------------------------------------
-    # get_el_and_aud_masks
-    #-------------------
-    
-    def get_el_and_aud_masks(self, audio_events, elephant_events):
-        '''
-        Given a 2d array of audio event indices, and the same
-        for labeled elephant events:
-        
-            [[event1_sample_start, event1_sample_end],
-             [event2_sample_start, event2_sample_end],
-                ...
-            ]
-        
-        Return two np.arrays of 1s and 0s, indicating where 
-        samples show elephant call audio, and labels indicate 
-        an el event, respectively. These masks will each have
-        length of the number of audio samples in the audio. 
-        
-        I.e. return two masks, one for audio samples, and one
-        for labeled data. 
-        
-        @param audio_events: indices of audio event boundaries
-        @type samples: np.array(1,2)
-        @param elephant_events: indices of elephant event label
-            boundaries.
-        @type elephant_events: np.array(1,2)
-        @return: two 1d np arrays of 1s and 0s indicating where
-            an event is occurring
-        @rtype: ([int], [int])
-        '''
-        
-        last_sample_burst_end_index = audio_events[-1,-1]
-        aud_mask = np.zeros(last_sample_burst_end_index, dtype=int)
-
-        # Set the mask position where audio is non-zero
-        # to 1:
-        def set_to_1(mask, from_idx, to_idx):
-            mask[from_idx : to_idx] = 1
-
-        self.log.info(f"Creating audio burst mask of length {last_sample_burst_end_index}...")
-        np.apply_along_axis(lambda from_to_idx: set_to_1(aud_mask, from_to_idx[0], from_to_idx[1]), 
-                            1, 
-                            audio_events
-                            )
-        self.log.info(f"Done creating audio burst mask of length {last_sample_burst_end_index}.")
-
-        # For the manually created elephant labels: start with a 
-        # mask of all 0, length same as sample mask:
-        
-        el_mask = np.zeros(last_sample_burst_end_index, dtype=int)
-        
-        self.log.info(f"Creating elephant label burst mask of length {last_sample_burst_end_index}...")
-        np.apply_along_axis(lambda from_to_idx: set_to_1(el_mask, from_to_idx[0], from_to_idx[1]), 
-                            1, 
-                            elephant_events
-                            )
-        self.log.info(f"Creating elephant label burst mask of length {last_sample_burst_end_index}...")
-        
-        return (aud_mask, el_mask) 
 
     #------------------------------------
     # collect_audio_events
@@ -508,6 +460,11 @@ class PrecRecComputer(object):
         audio_mask = ma.masked_not_equal(samples_padded, 0).mask
         self.log.info("Done creating audio event mask.")
         
+        # We have one extra mask bit at the front, and the
+        # end: chop those off:
+        audio_mask = audio_mask[1:-1]
+        # And correct the burst start/ends accordingly:
+        burst_index_pairs -= 1
         return (burst_index_pairs, audio_mask.astype(int))
     
     #------------------------------------
@@ -516,17 +473,23 @@ class PrecRecComputer(object):
     
     def label_file_reader(self, label_file_path):
         '''
-        Given a CSV reader obj, return two representations
+        Given the path to a Raven export, return two representations
         of the labeled bursts: A set of start/stop indices
         into the samples that underly the labels. And a mask
         the length of the number of samples, where burst 
         regions have 1s, and other regions have 0s.
+        
+        Note that the Ravel label files have start/stop in 
+        fractional seconds. We convert to samples.
         
         The start_stop indices are of the form:
            [[burst1_start_idx_into_samples, burst1_end_idx_into_samples], 
             [burst2_start_idx_into_samples, burst2_end_idx_into_samples], 
                 ...
            ]
+           
+        Assumption: self.framerate has framerate of corresponding
+        .wav file.
         
         @param label_file_path: path to Raven label file
         @type label_file_path: str
@@ -544,8 +507,8 @@ class PrecRecComputer(object):
             _header = next(csv_reader)
             
             COL_SELECTION_INDEX = 0
-            COL_BEGIN_TIME_INDEX = 3
-            COL_END_TIME_INDEX = 4
+            COL_BEGIN_TIME_INDEX = 4
+            COL_END_TIME_INDEX = 5
             start_end_list = []
             # Each line is an array of 18 fields:
             for line in csv_reader:
@@ -577,9 +540,9 @@ class PrecRecComputer(object):
         self.log.info("Creating elephant burst mask...")
         # Mask is as long as the end of the last burst in
         # sample space:    
-        el_mask = np.zeros(last_end_time_samples, dtype=int)
+        el_mask = np.zeros(last_end_time_samples + 1, dtype=int)
         for (burst_start, burst_end) in elephant_burst_indices:
-            el_mask[burst_start:burst_end - 1] = 1
+            el_mask[burst_start:burst_end] = 1
         self.log.info("Done creating elephant burst mask.")
 
         return (elephant_burst_indices, el_mask)
@@ -657,7 +620,7 @@ class PerformanceResult(OrderedDict):
         	 'recall_samples'        : float,
         	 'precision_samples'     : float,
         	 'f1score_samples'       : float,
-        	 'overlap_percentages'   : [list, float],
+        	 'overlap_percentages'   : [float],
         	 'true_pos_samples'      : int,
         	 'false_pos_samples'     : int,
         	 'true_neg_samples'      : int,
@@ -672,12 +635,17 @@ class PerformanceResult(OrderedDict):
             }
 
     
-    def __init__(self, all_results):
+    def __init__(self, all_results={}):
         # Install the initial results
         super().__init__(all_results)
         # Add mean of overlap percentages of
-        # detected events:
-        self['mean_overlaps']      = int(round(np.mean(self['overlap_percentages'])))
+        # detected events, if not present:
+        if 'mean_overlaps' not in self.keys() or \
+            self['mean_overlaps'] is None:
+            try:
+                self['mean_overlaps'] = np.mean(self['overlap_percentages'])
+            except KeyError:
+                self['mean_overlaps'] = None
 
     #------------------------------------
     # to_tsv
@@ -706,23 +674,26 @@ class PerformanceResult(OrderedDict):
     # from_tsv
     #-------------------
 
-    def from_tsv(self, infile):
+    @classmethod
+    def instances_from_tsv(cls, infile, first_line_is_col_header=False):
         
         res_obj_list = []
         with open(infile, 'r') as fd:
-            reader = csv.reader(fd)
+            reader = csv.reader(fd, delimiter='\t')
+            # Get array of one line:
             first_line = next(reader)
             # Check whether first line is header;
-            # if so, it would not have any numbers:
-            line_arr = first_line.split(',')
-            if any([col is not None for col in line_arr]):
-                # First line is not a col header:
-                res_obj_list.append(self._make_res_obj(line_arr))
+            if first_line_is_col_header:
+                prop_order = first_line
+            else:
+                # First line is also first data line: 
+                prop_order = PerformanceResult.props.keys()
+                res_obj_list.append(cls._make_res_obj(first_line, prop_order))
             try:
                 while True:
-                    line_arr = next(reader).split(',')
-                    res_obj_list.append(self._make_res_obj(line_arr))
-            except:
+                    line = next(reader)
+                    res_obj_list.append(cls._make_res_obj(line, prop_order))
+            except StopIteration:
                 # Finished the file.
                 pass
         return res_obj_list
@@ -732,17 +703,24 @@ class PerformanceResult(OrderedDict):
     #-------------------
 
     @classmethod
-    def _make_res_obj(cls, values_arr_strings):
+    def _make_res_obj(cls, values_arr_strings, prop_order):
+    
         res_obj = PerformanceResult()
-        for (indx, prop_name) in enumerate(PerformanceResult.props.keys()):
+        for (indx, prop_name) in enumerate(prop_order):
             # To which data type must this string be
             # coerced?:
             dest_type = PerformanceResult.props[prop_name]
-            # Is type a list [list, <type>]?
-            if type(dest_type) == list:
-                array_el_types = dest_type[1]
+            # Is type a list [<type>]?
+            if isinstance(dest_type, list):
+                array_el_types = dest_type[0]
                 # Create array of elements, all of the dest type:
-                typed_val = [array_el_types(el) for el in values_arr_strings[indx]]
+                # the overlay percentages will look like: '[1.0,2.0,3.0]'.
+                # Not that this is a str. We use eval with an empty 
+                # namespace to prevent safety issues:
+                typed_val = [array_el_types(el) for el in eval(values_arr_strings[indx],
+                                                               {"__builtins__":None},
+                                                               {}
+                                                               )]
             else:
                 typed_val = dest_type(values_arr_strings[indx])
             res_obj[prop_name] = typed_val
@@ -772,7 +750,7 @@ class PerformanceResult(OrderedDict):
             # property name:
             col_width = max(len(prop_name) for prop_name in self.keys())
             for prop in self.keys():
-                print(''.join(prop.ljust(col_width), self.prop))
+                print(prop.ljust(col_width), self[prop])
 
         finally:
             if out_fd != sys.stdout:

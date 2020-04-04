@@ -33,7 +33,7 @@ class PreprocessingCalibration(object):
                  thresholds_db, 
                  cutoff_freqs,
                  outfile_dir='/tmp',
-                 spectrogram_outfile=None,
+                 spectrogram=None,
                  logfile=None):
 
         AmplitudeGater.log = LoggingService(logfile=logfile)
@@ -42,7 +42,7 @@ class PreprocessingCalibration(object):
         outfile_names_deque = self.construct_outfile_names(thresholds_db, cutoff_freqs, outfile_dir)
         self.log.info(f"Output files will be: {self.list_outfiles_from_deque(outfile_names_deque)}")
 
-        self.spectrogram_outfile = spectrogram_outfile
+        self.spectrogram = spectrogram
                 
         # Generate a new .wav file from the input file 
         # for each pair of voltage threshold/cutoff-freq pair.
@@ -60,7 +60,7 @@ class PreprocessingCalibration(object):
                                thresholds_db, 
                                cutoff_freqs, 
                                outfile_names_deque.copy(),
-                               spectrogram_outfile=self.spectrogram_outfile)
+                               spectrogram=self.spectrogram)
         # Option for just one precomputed gated .wav file:
         #outfile_names_deque = deque(['/Users/paepcke/tmp/filtered_wav_-40dB_500Hz_20200321_202339.wav'])
         # Option for two precomputed gated .wav files; 
@@ -99,7 +99,7 @@ class PreprocessingCalibration(object):
                           thresholds_db, 
                           cutoff_freqs, 
                           outfile_names,
-                          spectrogram_outfile=None):
+                          spectrogram=None):
         '''
         Run through each threshold voltage and lowpass filter
         cutoff frequency, and generate a wave file for each.
@@ -118,16 +118,19 @@ class PreprocessingCalibration(object):
         @param outfile_names: list of full path filenames, one
             for each experiment.
         @type outfile_names: [str]
-        @param spectrogram_outfile: if non-none, must be file path
-            to which a spectrogram is written as .npy. If none,
-            no spectrogram is created.
-        @type spectrogram_outfile: {None | str}
+        @param spectrogram: if True, a spectrogram is created,
+            and written to outdir, with the same file name as the 
+            .wav file, but with an.npy extension. If False, no 
+            spectrogram is created.
+        @type spectrogram: bool
         '''
 
         experiments = []
         for threshold in thresholds_db:
             for cutoff_freq in cutoff_freqs:
                 outfile = outfile_names.popleft()
+                # Create a corresponding file name for spectrograms:
+                spectrogram_outfile = os.path.join(os.path.splitext(outfile)[0], '.npy') 
                 self.log.info(f"Generating [{threshold}dB, {cutoff_freq}Hz]...")
                 try:
                     # Generate an Experiment instance to
@@ -262,19 +265,19 @@ if __name__ == '__main__':
                         nargs='+',
                         default=100,
                         help='Repeatable: cutoff frequencies for lowpass filter; default: 100Hz')
-    parser.add_argument('-s', '--spectrogram_outfile',
+    parser.add_argument('-s', '--spectrogram',
                         default=None,
-                        help='If provided, a spectrogram is created and written here as .npy file')
+                        help='If provided, a spectrogram is created and written to outdir as .npy file')
     parser.add_argument('--plot',
                         nargs='+',
                         choices=['gated_wave_excerpt','samples_plus_envelope','spectrogram_excerpts','low_pass_filter'],
                         help="Plots to produce; repeatable; default: no plots"
                         )
-    parser.add_argument('-w', '--wavefile',
-                        help='fully qualified log file name to elephant wav file.',
+    parser.add_argument('wavefile',
+                        help='fully qualified path to elephant wav file.',
                         default=None)
-    parser.add_argument('-b', '--labelfile',
-                        help='fully qualified log file name to corresponding Raven label file.',
+    parser.add_argument('labelfile',
+                        help='fully qualified path to corresponding Raven label file.',
                         default=None)
 
     args = parser.parse_args();
@@ -289,6 +292,6 @@ if __name__ == '__main__':
                              args.threshold_dbs,
                              args.cutoff_freqs,
                              outfile_dir=args.outdir,
-                             spectrogram_outfile=args.spectrogram_outfile,
+                             spectrogram=args.spectrogram,
                              logfile=args.logfile
                              )
