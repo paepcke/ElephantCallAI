@@ -43,6 +43,8 @@ import numpy.ma as ma
 from plotting.plotter import Plotter
 from plotting.plotter import PlotterTasks
 
+from dsp_utils import PrecRecFileTypes, DSPUtils
+
 class FrequencyError(Exception):
     pass
 
@@ -50,6 +52,9 @@ class AmplitudeGater(object):
     '''
     classdocs
     '''
+    
+    spectrogram_freq_cap = 300 # Hz.
+    
     #------------------------------------
     # Constructor 
     #-------------------    
@@ -58,6 +63,7 @@ class AmplitudeGater(object):
                  wav_file_path,
                  outfile=None,
                  amplitude_cutoff=-40,   # dB of peak
+                 envelope_cutoff_freq=200, # Hz
                  spectrogram_freq_cap=300, # Hz
                  normalize=True,
                  logfile=None,
@@ -84,7 +90,10 @@ class AmplitudeGater(object):
         @param amplitude_cutoff: dB attenuation from maximum
             amplitude below which voltage is set to zero
         @type amplitude_cutoff: int
-        
+
+        @param envelope_cutoff_freq: Butterworth -3dB filter frequency
+        @type envelope_cutoff_freq: int
+                
         @param framerate: normally extracted from the .wav file.
             Can be set here for testing. Samples/sec
         @type framerate: int
@@ -136,8 +145,8 @@ class AmplitudeGater(object):
 
         # Ensure that requested filter frequency is
         # less than the Nyquist frequency: framerate/2: 
-        highest_filter_freq = min(math.floor(self.framerate / 2) - 1, spectrogram_freq_cap)
-        if highest_filter_freq < spectrogram_freq_cap:
+        highest_filter_freq = min(math.floor(self.framerate / 2) - 1, envelope_cutoff_freq)
+        if highest_filter_freq < envelope_cutoff_freq:
             raise FrequencyError(f"Cutoff frequency must be less than Nyquist freq (1/2 of sampling rate); max allowable is {highest_filter_freq}")
 
         if testing:
@@ -161,7 +170,8 @@ class AmplitudeGater(object):
          
         # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
         gated_samples  = self.amplitude_gate(normed_samples, 
-                                             amplitude_cutoff, 
+                                             amplitude_cutoff,
+                                             envelope_cutoff_freq=envelope_cutoff_freq,
                                              spectrogram_freq_cap=spectrogram_freq_cap,
                                              spectrogram_dest=spectrogram_outfile
                                              )
@@ -203,7 +213,7 @@ class AmplitudeGater(object):
                        sample_npa, 
                        threshold_db,
                        order=4, 
-                       cutoff_freq=100,
+                       envelope_cutoff_freq=100,
                        spectrogram_dest=None,
                        spectrogram_freq_cap=300, # Hz 
                        ):
@@ -219,7 +229,7 @@ class AmplitudeGater(object):
            o Normalize audio to fill 32 bits.
            o Create a temporary 'envelope' signal over
              the samples. That is, a slow, lazy outline
-             of the fast audio signal. The cutoff_freq
+             of the fast audio signal. The envelope_cutoff_freq
              controls this low-pass filter's limit on
              higher frequencies. The order is the number
              of filter stages that make up the low-pass
@@ -253,8 +263,8 @@ class AmplitudeGater(object):
         @type threshold_db: negative int
         @param order: polynomial of Butterworth filter
         @type order: int
-        @param cutoff_freq: frequency in Hz for the envelope
-        @type cutoff_freq: int
+        @param envelope_cutoff_freq: frequency in Hz for the envelope
+        @type envelope_cutoff_freq: int
         @param spectrogram_dest: optionally: file name where 
             spectrogram is stored
         @type spectrogram_dest: str
@@ -270,8 +280,8 @@ class AmplitudeGater(object):
         samples_abs = np.abs(sample_npa)
         self.log.info("Done taking abs val of values.")
 
-        self.log.info(f"Applying low pass filter (cutoff {cutoff_freq})...")
-        envelope = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
+        self.log.info(f"Applying low pass filter (cutoff {envelope_cutoff_freq})...")
+        envelope = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
         self.log.info("Done applying low pass filter.")        
 
         if PlotterTasks.has_task('samples_plus_envelope'):
@@ -279,11 +289,11 @@ class AmplitudeGater(object):
             self.plotter.over_plot(envelope[1000:1100], f"Env Order {order}")
          
             #order = 5
-            #envOrd3 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
+            #envOrd3 = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
             #self.over_plot(envOrd3[1000:1100], f'Order {order}')
      
             #order = 6
-            #envOrd1 = self.butter_lowpass_filter(samples_abs, cutoff_freq, order)
+            #envOrd1 = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
             #self.over_plot(envOrd1[1000:1100], f'Order {order}')
 
         # Compute the threshold below which we
@@ -333,6 +343,12 @@ class AmplitudeGater(object):
             # Save the spectrogram to file:
             self.log.info(f"Saving spectrogram to {spectrogram_dest}...")
             np.save(spectrogram_dest, capped_spectrogram)
+            freq_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest, 
+                                                              PrecRecFileTypes.FREQ_LABELS)
+            time_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest,
+                                                              PrecRecFileTypes.TIME_LABELS)
+            np.save(freq_labels_file, new_freq_labels)
+            np.save(time_labels_file, time_labels)
             self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
         
         if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts'):
@@ -867,7 +883,13 @@ if __name__ == '__main__':
                         default='-40'
                         )
     
-    parser.add_argument('-f', '--filter',
+    parser.add_argument('-e', '--envelope',
+                        help='frequency of Butterworth low-pass filter (default: 200Hz',
+                        type=int,
+                        default='200'
+                        )
+    
+    parser.add_argument('-s', '--spectrofilter',
                         help='highest frequency to keep in spectrogram.',
                         type=int,
                         default=300);
@@ -914,7 +936,8 @@ if __name__ == '__main__':
     AmplitudeGater(args.wavefile,
                    args.outfile,
                    amplitude_cutoff=cutoff,
-                   spectrogram_freq_cap=args.filter,
+                   envelope_cutoff_freq=args.envelope,
+                   spectrogram_freq_cap=args.spectrofilter,
                    normalize=not args.raw,
                    plot_result=args.plot,
                    logfile=args.logfile,
