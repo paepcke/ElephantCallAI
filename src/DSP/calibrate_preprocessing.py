@@ -33,7 +33,7 @@ class PreprocessingCalibration(object):
     def __init__(self,
                  in_wav_file,
                  label_file,
-                 overlap_perc,
+                 overlap_percentages,
                  thresholds_db, 
                  cutoff_freqs,
                  spectrogram_freq_cap=AmplitudeGater.spectrogram_freq_cap,
@@ -76,10 +76,12 @@ class PreprocessingCalibration(object):
         #                            )
         
         # Compute precision/recall and other info for each 
-        # of the just created files:
-        prec_recall_results = self.generate_prec_recall(outfile_names_deque.copy(),
-                                                        label_file,
-                                                        overlap_perc)
+        # of the just created gated wav files. Repeat for
+        # each requested overlap percentage:
+        for overlap_perc in overlap_percentages:
+            prec_recall_results = self.generate_prec_recall(outfile_names_deque.copy(),
+                                                            label_file,
+                                                            overlap_perc)
         
         try:
             outfile_names_deque_copy = outfile_names_deque.copy()
@@ -132,8 +134,10 @@ class PreprocessingCalibration(object):
                 filtered_wavfile = file_deque.popleft()
                 self.log.info(f"Compute prec/recall for {filtered_wavfile}...")
                 precrec_computer = PrecRecComputer(filtered_wavfile, labelfile, overlap_perc)
-                self.log.info(f"Done compute prec/recall for {filtered_wavfile}.")                
-                precrec_results.append(precrec_computer.performance_result)
+                self.log.info(f"Done compute prec/recall for {filtered_wavfile}.")
+                perf_res = precrec_computer.performance_result
+                perf_res['min_required_overlap'] = overlap_perc
+                precrec_results.append(perf_res)
         except IndexError:
             # No more work to do:
             return precrec_results
@@ -418,9 +422,10 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--outdir',
                         help='fully qualified directory for output wav files.',
                         default='/tmp');
-    parser.add_argument('-o', '--overlap',
+    parser.add_argument('-o', '--overlaps',
                         type=int,
-                        help='percentage overlap of prediction with label to count as success; default: 10%',
+                        nargs='+',
+                        help='percentage overlap of prediction with label to count as success; repeatable; default: 10%.',
                         default=10);
     parser.add_argument('-t', '--threshold_dbs',
                         type=int,
@@ -457,7 +462,7 @@ if __name__ == '__main__':
 
     PreprocessingCalibration(args.wavefile,
                              args.labelfile,
-                             args.overlap,
+                             args.overlaps,
                              args.threshold_dbs,
                              args.cutoff_freqs,
                              outfile_dir=args.outdir,

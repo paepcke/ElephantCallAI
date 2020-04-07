@@ -43,6 +43,7 @@ import numpy.ma as ma
 from plotting.plotter import Plotter
 from plotting.plotter import PlotterTasks
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 from dsp_utils import PrecRecFileTypes, DSPUtils
 
 class FrequencyError(Exception):
@@ -143,11 +144,12 @@ class AmplitudeGater(object):
 
         self.plotter = Plotter(self.framerate)
 
-        # Ensure that requested filter frequency is
-        # less than the Nyquist frequency: framerate/2: 
-        highest_filter_freq = min(math.floor(self.framerate / 2) - 1, envelope_cutoff_freq)
-        if highest_filter_freq < envelope_cutoff_freq:
-            raise FrequencyError(f"Cutoff frequency must be less than Nyquist freq (1/2 of sampling rate); max allowable is {highest_filter_freq}")
+        if not testing:
+            # Ensure that requested filter frequency is
+            # less than the Nyquist frequency: framerate/2: 
+            highest_filter_freq = min(math.floor(self.framerate / 2) - 1, envelope_cutoff_freq)
+            if highest_filter_freq < envelope_cutoff_freq:
+                raise FrequencyError(f"Cutoff frequency must be less than Nyquist freq (1/2 of sampling rate); max allowable is {highest_filter_freq}")
 
         if testing:
             self.recording_length_hhmmss = "<unknown>"

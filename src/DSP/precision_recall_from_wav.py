@@ -44,7 +44,7 @@ class PrecRecComputer(object):
     def __init__(self, 
                  wavefile, 
                  labelfile, 
-                 overlap_perc=10, 
+                 overlap_percentages=10, 
                  print_res=True, 
                  testing=False):
         '''
@@ -64,7 +64,7 @@ class PrecRecComputer(object):
                 print(f"Cannot read .wav file {wavefile}: {repr(e)}")
                 sys.exit(1)
 
-            self.performance_result = self.compute_performance(samples, labelfile, overlap_perc)
+            self.performance_result = self.compute_performance(samples, labelfile, overlap_percentages)
             
             if PlotterTasks.has_task('performance_results'):
                 self.plot(self.performance_result)
@@ -700,7 +700,8 @@ class PerformanceResult(OrderedDict):
         	 'true_neg_events'       : int,
         	 'false_neg_events'      : int,
          
-             'mean_overlaps'         : float
+             'mean_overlaps'         : float,
+             'min_required_overlap'  : float,
             }
 
     
