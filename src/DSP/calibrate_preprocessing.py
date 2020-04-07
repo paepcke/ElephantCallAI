@@ -97,7 +97,7 @@ class PreprocessingCalibration(object):
                 experiment['experiment_res']    = prec_recall_res
                 experiment['result_file_path']  = prec_recall_res_file
                 exp_res_file = DSPUtils.prec_recall_file_name(gated_outfile_name,
-                                                              PrecRecFileTypes.EXPERIMENT)
+                                                             PrecRecFileTypes.EXPERIMENT)
                 experiment.to_tsv(include_col_header=True, outfile=exp_res_file)
         except IndexError:
             # Done
@@ -202,7 +202,7 @@ class PreprocessingCalibration(object):
                                             amplitude_cutoff=threshold,
                                             envelope_cutoff_freq=cutoff_freq,
                                             spectrogram_freq_cap=spectrogram_freq_cap,
-                                            spectrogram_outfile=spectrogram_outfile
+                                            spectrogram_outfile=spectrogram_outfile if self.spectrogram else None
                                             )
                 except FrequencyError as e:
                     self.log.err(f"Bad frequency; skipping it: {repr(e)}")

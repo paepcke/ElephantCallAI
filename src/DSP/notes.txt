@@ -1,0 +1,43 @@
+                Notes on Digital Signal Preprocessing
+                --------------------------------------
+
+
+Explanation of Procedure
+Explanation of Performance Measures
+
+
+Explanation of Performance Measures
+-----------------------------------
+
+num_elephant_events              : bona fide elephant events from labels
+num_detected_events              : total events detected from audio
+recall_events                    : recall at the event level
+precision_events                 : precision  at the event level
+f1score_events                   : f1score  at the event level
+
+recall_samples                   : recall at the samples level
+precision_samples                : precision  at the samples level
+f1score_samples                  : f1score  at the samples level
+true_pos_samples                 : num audio-detected samples that are labeled as part of an ele call
+false_pos_samples                : num audio-detected samples that are not part of an ele call
+true_neg_samples                 : num audio-detected samples that really are not part of an ele call
+false_neg_samples                : num samples that audio falsely claims as not being part of a call
+
+overlap_percentages              : for each event detected through audio, overlap with respective labeled event.
+                                   Already multiplied by 100
+
+true_pos_events                  : num events that audio properly identifies; counts only events with sufficient overlaps
+false_pos_events                 : num events that audio identifies as a call, but are not
+true_neg_events                  : num events that audio correctly identifies as not being a call
+false_neg_events                 : num events that audio misses
+
+true_pos_any_overlap_events      : num events that audio identifies, disregarding the min overlap requirement
+
+num_true_pos_detected_non_events : num of non-events that audio properly identifies; only with proper overlap
+num_false_pos_detected_non_events: num of non-events that audio identifies, that are actually ele calls
+num_false_neg_detected_non_events: num of events that audio claims are where none actually are
+
+true_pos_any_overlap_non_event   : non-events detected by audio, disregarding min overlap requirement
+
+mean_overlaps                    : list of overlap percentages for non-events
+                                   Already multiplied by 100

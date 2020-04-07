@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from precision_recall_from_wav import PerformanceResult, PrecRecComputer
 
 TEST_ALL = True
-# ***TEST_ALL = False
+#TEST_ALL = False
 
 class TestPrecisionRecall(unittest.TestCase):
     
@@ -172,8 +172,14 @@ class TestPrecisionRecall(unittest.TestCase):
                  [74, 80]        #                                       5
                  ])
         
-        (percent_overlaps, matches_aud) = self.prec_rec_computer.compute_overlap_percentage(audio_burst_indices, 
-                                                                                            elephant_burst_indices)
+        (percent_overlaps, 
+         matches_aud, 
+         _num_true_pos_detected_events,
+         _num_false_neg_detected_events,
+         _num_false_pos_detected_events
+         ) = self.prec_rec_computer.compute_overlap_percentage(audio_burst_indices, 
+                                                               elephant_burst_indices).values()
+
         res_perc_overlaps = np.array([100., 100., 93.33333333, 73.33333333, 16.66666667, 50.])
         self.assertTrue(np.array_equal(np.round(percent_overlaps, 1), 
                                        np.round(res_perc_overlaps, 1)))
@@ -205,22 +211,30 @@ class TestPrecisionRecall(unittest.TestCase):
         label_file_name = self.create_label_file(label_start_stops)
         perf_res = self.prec_rec_computer.compute_performance(voltages, label_file_name, 10)
         
-        res_dict = {'recall_events'         : 1.0,
-                    'precision_events'      : 0.6666666666666666,
-                    'f1score_events'        : 0.8,
-                    'recall_samples'        : 0.8333333333333334,
-                    'precision_samples'     : 0.7142857142857143,
-                    'f1score_samples'       : 0.7692307692307692,
-                    'overlap_percentages'   : np.array([66.66666667, 100.]),
-                    'true_pos_samples'      : 5,
-                    'false_pos_samples'     : 2,
-                    'true_neg_samples'      : 8,
-                    'false_neg_samples'     : 1,
-                    'true_pos_events'       : 2,
-                    'false_pos_events'      : 1,
-                    'true_neg_events'       : 4,
-                    'false_neg_events'      : 0,
-                    'mean_overlaps'         : 83.33333333333334
+        res_dict = {
+                    'num_elephant_events' : 2,
+                    'num_detected_events': 3,
+                    'recall_events': 1.0,
+                    'precision_events': 0.6666666666666666,
+                    'f1score_events': 0.8,
+                    'recall_samples': 0.8333333333333334,
+                    'precision_samples': 0.7142857142857143,
+                    'f1score_samples': 0.7692307692307692,
+                    'overlap_percentages': np.array([ 66.66666667, 100.]),
+                    'true_pos_samples': 5,
+                    'false_pos_samples': 2,
+                    'true_neg_samples': 8,
+                    'false_neg_samples': 1,
+                    'true_pos_events': 2,
+                    'false_pos_events': 1,
+                    'true_neg_events': 3,
+                    'false_neg_events': 0,
+                    'mean_overlaps': 83.33333333333334,
+                    'true_pos_any_overlap_events': 2,
+                    'num_true_pos_detected_non_events' : 3,
+                    'num_false_pos_detected_non_events' : 0,
+                    'num_false_neg_detected_non_events' : 0,
+                    'true_pos_any_overlap_non_event' : 3
                     }
         true_res = PerformanceResult(res_dict)
         self.assertTrue(self.performance_results_equality(perf_res, true_res))
@@ -303,7 +317,7 @@ class TestPrecisionRecall(unittest.TestCase):
         '''
         try:
             label_file_name = os.path.join(os.path.dirname(__file__),
-                                           'fake_label_file'
+                                           'fake_label_file.tsv'
                                            )
             os.remove(label_file_name)
         except Exception:
@@ -320,8 +334,8 @@ class TestPrecisionRecall(unittest.TestCase):
             generic_label_entry_arr = [str(entry) for entry in generic_label_entry.split('\t')]
             
             for (start, stop) in start_stop_arr:
-                generic_label_entry_arr[4] = str(start)
-                generic_label_entry_arr[5] = str(stop)
+                generic_label_entry_arr[3] = str(start)
+                generic_label_entry_arr[4] = str(stop)
                 fd.write('\t'.join(generic_label_entry_arr) + '\n')
 
         return label_file_name

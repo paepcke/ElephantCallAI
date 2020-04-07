@@ -175,60 +175,87 @@ class PrecRecComputer(object):
         # Recall: samples recognized by audio as part of a call,
         #         over samples labeled as par of a call:
         self.log.info('Computing recall/precision/F1 at sample granularity...')
-        recall_samples    = num_true_positive_samples / np.sum(el_samples_mask)
+        try:
+            recall_samples    = num_true_positive_samples / np.sum(el_samples_mask)
+        except ZeroDivisionError:
+            recall_samples = 1
+            
         # Precision: samples recognized by audio as part of a call,
         #         over all the samples:
-        precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples) 
         
-        f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
+        try:
+            precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples)
+        except ZeroDivisionError:
+            precision_samples = 0 
+        
+        try:
+            f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
+        except ZeroDivisionError:
+            f_score_samples = 0
+            
         self.log.info('Done computing recall/precision/F1 at sample granularity.')
 
         # Phase 2: At event level
         
         (percent_overlaps, 
          matches_aud, 
-         num_ele_bursts_matched) = self.compute_overlap_percentage(audio_burst_indices, 
-                                                                   elephant_burst_indices)
+         num_true_pos_detected_events,
+         num_false_neg_detected_events,
+         num_false_pos_detected_events
+         ) = self.compute_overlap_percentage(audio_burst_indices, 
+                                             elephant_burst_indices).values()
         (percent_overlaps_non_bursts, 
          matches_aud_non_bursts,
-         num_ele_non_bursts_matched) = self.compute_overlap_percentage(audio_non_burst_indices, 
-                                                                       elephant_non_burst_indices)
+         num_true_detected_non_events,           # Found non-events
+         num_false_neg_detected_non_events,      # Was actually an event
+         num_false_pos_detected_non_events       # Was actually not an event
+         ) = self.compute_overlap_percentage(audio_non_burst_indices, 
+                                             elephant_non_burst_indices).values()
+                                             
+        # Keep only the audio non-burst events that overlap sufficiently:
+        verified_audio_events = \
+            matches_aud[np.nonzero(percent_overlaps[percent_overlaps >= overlap_perc_requirement])]
+        num_verified_audio_events = verified_audio_events[:,0].size
+        
         # Keep only the audio non-burst events that overlap sufficiently:
         verified_audio_non_events = \
-            audio_non_burst_indices[np.nonzero(percent_overlaps_non_bursts[percent_overlaps_non_bursts >= overlap_perc_requirement])]
+            matches_aud_non_bursts[np.nonzero(percent_overlaps_non_bursts[percent_overlaps_non_bursts >= overlap_perc_requirement])]
+        num_verified_audio_non_events = verified_audio_non_events[:,0].size  - num_false_pos_detected_events
         
         self.log.info('Computing true/false-pos/neg at event granularity...')
-        num_true_pos_events = elephant_burst_indices[:,0].size
+        #num_true_pos_events = elephant_burst_indices[:,0].size
         #num_true_neg_events = elephant_non_burst_indices[:,0].size
         
         # Detected audio bursts, including the false ones,
         # and including the multiple separate aud events that 
         # lie within an individual ele event:
         num_detected_events     = audio_burst_indices[:,0].size
-        num_detected_non_events = matches_aud_non_bursts[:,0].size
-        num_verified_non_events = verified_audio_non_events[:,0].size
-
-        num_true_pos_detected_events   = matches_aud[:,0].size
-        num_false_pos_detected_events  = num_detected_events - num_true_pos_detected_events
-        
-        num_true_neg_detected_events  = num_verified_non_events
-        num_false_neg_detected_events  = num_detected_non_events - num_verified_non_events
+        num_elephant_events     = elephant_burst_indices[:,0].size
+        num_true_neg_detected_events = num_verified_audio_non_events
         
         self.log.info('Done computing true/false-pos/neg at event granularity.')
 
         # Recall: samples recognized by audio as part of a call,
         #         over events labeled as part of a call:
         self.log.info('Computing recall/precision/F1 at event granularity...')
-        recall_events = num_ele_bursts_matched / num_true_pos_events 
+        try:
+            recall_events = num_verified_audio_events  / num_elephant_events
+        except ZeroDivisionError:
+            recall_events = 1
         
         # Precision: samples recognized by audio as part of a call,
         #         over all its predictions:
-        precision_events = num_true_pos_detected_events / (num_true_pos_detected_events + num_false_pos_detected_events)
+        try:
+            precision_events = num_verified_audio_events / (num_verified_audio_events + num_false_pos_detected_events)
+        except ZeroDivisionError:
+            precision_events = 1
         
         f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
         self.log.info('Done computing recall/precision/F1 at event granularity.')
 
-        results = {'recall_events' :          recall_events,
+        results = {'num_elephant_events' :    num_elephant_events,
+                   'num_detected_events' :    num_detected_events,
+                   'recall_events' :          recall_events,
         		   'precision_events' :       precision_events,
         		   'f1score_events' :         f_score_events,
         		   'recall_samples' :         recall_samples,
@@ -239,10 +266,16 @@ class PrecRecComputer(object):
         		   'false_pos_samples' :      num_false_positive_samples,
         		   'true_neg_samples' :       num_true_negative_samples,
         		   'false_neg_samples' :      num_false_negative_samples,
-        		   'true_pos_events' :        num_true_pos_detected_events,
+        		   'true_pos_events' :        num_verified_audio_events,
         		   'false_pos_events' :       num_false_pos_detected_events,
         		   'true_neg_events' :        num_true_neg_detected_events,
-        		   'false_neg_events' :       num_false_neg_detected_events
+        		   'false_neg_events' :       num_false_neg_detected_events,
+                   
+                   'true_pos_any_overlap_events':    num_true_pos_detected_events,
+                   'num_true_pos_detected_non_events': num_verified_audio_non_events,
+                   'num_false_pos_detected_non_events': num_false_pos_detected_non_events,
+                   'num_false_neg_detected_non_events': num_false_neg_detected_non_events,
+                   'true_pos_any_overlap_non_event': num_true_detected_non_events
                    }
         
         performance_result = PerformanceResult(results)
@@ -304,12 +337,21 @@ class PrecRecComputer(object):
                [70, 75],   should be 20%, : 1/5
                [77, 80]])  should be 40%  : 2/5
         
+        Results returned: an ordered dict:
         
+        results = {'percent_overlaps' : percent_overlaps,
+                   'matches_aud' : matches_aud,
+                   'true_pos_events' : true_pos_events,
+                   'false_neg_events' : false_neg_events,
+                   'false_pos_events' : false_pos_events
+                   }
+                           
         @param audio_burst_indices: list of discovered burst start/stops
         @type audio_burst_indices: [(start,stop)]
         @param elephant_burst_indices: list of burst start/stops from labels
         @type elephant_burst_indices: (start,stop)]
-        @return: (percent_overlaps, matches_aud, num_ele_bursts_matched)
+        @return: dict with percent_overlaps, matches_aud, 
+            true_pos_events, false_neg_events, false_pos_events)
         '''
 
         # Wouldn't have dreamed up the solution below myself
@@ -326,7 +368,11 @@ class PrecRecComputer(object):
         # array as flat list:
         aud_indices_flat = audio_burst_indices.flatten()
         labeled_with_aud_interval_ptr_matches = []
-        num_ele_bursts_matched = 0
+        true_pos_events  = 0
+        # Start assuming all detected events are false positives
+        false_pos_events = audio_burst_indices[:,0].size
+        false_neg_events = 0
+        
         self.log.info('Finding which audio events have overlap with labeled events...')
         for (el_burst_indices_pt, (lower, upper)) in enumerate(elephant_burst_indices):
             i = np.searchsorted(aud_indices_flat, lower, side='right')
@@ -341,7 +387,8 @@ class PrecRecComputer(object):
             if num_aud_burst_indices > 0:
                 # One more elephant burst matched by at least one
                 # audio burst:
-                num_ele_bursts_matched += 1
+                true_pos_events += 1
+                false_pos_events -= num_aud_burst_indices
                 # Handle multiple aud burst associated with one
                 # labeled burst: Replicate the pt into the labeled burst
                 # intervals once for each such multi-match:
@@ -351,6 +398,10 @@ class PrecRecComputer(object):
                 labeled_with_aud_interval_ptr_matches.extend(np.column_stack((ele_match_indices, 
                                                                               audio_burst_indices_pts
                                                                               )))
+            else:
+                # No aud event for this ele event:
+                false_neg_events += 1
+                
         self.log.info('Done finding which audio events have overlap with labeled events.')
 
         # Now compute the percentage of overlap.
@@ -415,7 +466,14 @@ class PrecRecComputer(object):
         # Finally!!!! The overlaps in percent.
         percent_overlaps = 100 * overlaps/ele_interval_widths
 
-        return (percent_overlaps, matches_aud, num_ele_bursts_matched) 
+        
+        results = OrderedDict({'percent_overlaps' : percent_overlaps,
+                               'matches_aud'      : matches_aud,
+                               'true_pos_events'  : true_pos_events,
+                               'false_neg_events' : false_neg_events,
+                               'false_pos_events' : false_pos_events
+                              })
+        return results
 
 
     #------------------------------------
