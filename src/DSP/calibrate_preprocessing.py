@@ -4,20 +4,22 @@ Created on Mar 5, 2020
 
 @author: paepcke
 '''
-from _collections import OrderedDict, deque
+from _collections import OrderedDict
 import argparse
 from collections import deque
 import csv
 import os
+import pickle
 import sys
 import time
 
-from precision_recall_from_wav import PerformanceResult
 from amplitude_gating import AmplitudeGater
 from amplitude_gating import FrequencyError
-from dsp_utils import DSPUtils, PrecRecFileTypes
+from dsp_utils import DSPUtils, PrecRecFileTypes, SignalTreatmentDescriptor
 from elephant_utils.logging_service import LoggingService
+import numpy as np
 from plotting.plotter import PlotterTasks
+from precision_recall_from_wav import PerformanceResult
 from precision_recall_from_wav import PrecRecComputer
 
 
@@ -41,10 +43,15 @@ class PreprocessingCalibration(object):
                  spectrogram=None,
                  logfile=None):
 
+        if not isinstance(overlap_percentages, list):
+            overlap_percentages = [overlap_percentages]
         AmplitudeGater.log = LoggingService(logfile=logfile)
         self.log = AmplitudeGater.log
         self.log.info("Constructing output file names...")
-        outfile_names_deque = self.construct_outfile_names(thresholds_db, cutoff_freqs, outfile_dir)
+        outfile_names_deque = self.construct_outfile_names(thresholds_db, 
+                                                           cutoff_freqs,
+                                                           overlap_percentages,
+                                                           outfile_dir)
         names_as_str = self.list_outfiles_from_deque(outfile_names_deque)
         self.log.info(f"Output files will be: {names_as_str}")
 
@@ -62,12 +69,50 @@ class PreprocessingCalibration(object):
         # To skip generating gated files for
         # testing the precision/recall component,
         # switch the commenting below:
-        experiments = self.generate_outfiles(in_wav_file, 
-                                             thresholds_db, 
-                                             cutoff_freqs,
-                                             outfile_names_deque.copy(),
-                                             spectrogram_freq_cap=spectrogram_freq_cap,
-                                             spectrogram=self.spectrogram)
+        
+        #****************************
+#         experiments = self.generate_outfiles(in_wav_file, 
+#                                              thresholds_db, 
+#                                              cutoff_freqs,
+#                                              outfile_names_deque.copy(),
+#                                              spectrogram_freq_cap=spectrogram_freq_cap,
+#                                              spectrogram=self.spectrogram)
+        
+        # Overwrite the outfiles initialized above:
+        file1 = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057.wav'
+        file1_gated = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057_gated.wav'
+        file2 = '/tmp/filtered_wav_-30dB_1000Hz_20200413_222057.wav'
+        file2_gated = '/tmp/filtered_wav_-30dB_1000Hz_20200413_222057_gated.wav'
+        outfile_names_deque = deque([file1_gated,file2_gated])
+        exp1 = Experiment({'signal_treatment' : SignalTreatmentDescriptor(-40,500),
+                           'in_wav_file' : file1,
+                           'outfile'     : file1_gated,
+                           'spectrogram_outfile' : None,
+                           'threshold' : -40,
+                           'cutoff_freq' : 500,
+                           'spectrogram_freq_cap' : spectrogram_freq_cap,
+                           'result_file_path' : '/tmp/foo.tsv',
+                           'percent_zeroed' : None,
+                           'experiment_res' : None
+                           }
+                           
+                          )
+        exp2 = Experiment({'signal_treatment' : SignalTreatmentDescriptor(-30,1000),
+                           'in_wav_file' : file2,
+                           'outfile'     : file2_gated,
+                           'spectrogram_outfile' : None,
+                           'threshold' : -30,
+                           'cutoff_freq' : 1000,
+                           'spectrogram_freq_cap' : spectrogram_freq_cap,
+                           'result_file_path' : '/tmp/foo.tsv',
+                           'percent_zeroed' : None,
+                           'experiment_res' : None
+                           }
+                          )
+        
+        experiments = deque([exp1,exp2])
+        #****************************
+        
         # Option for just one precomputed gated .wav file:
         #outfile_names_deque = deque(['/Users/paepcke/tmp/filtered_wav_-40dB_500Hz_20200321_202339.wav'])
         # Option for two precomputed gated .wav files; 
@@ -78,47 +123,87 @@ class PreprocessingCalibration(object):
         # Compute precision/recall and other info for each 
         # of the just created gated wav files. Repeat for
         # each requested overlap percentage:
-        for overlap_perc in overlap_percentages:
-            prec_recall_results = self.generate_prec_recall(outfile_names_deque.copy(),
-                                                            label_file,
-                                                            overlap_perc)
-        
-        try:
-            outfile_names_deque_copy = outfile_names_deque.copy()
-            experiments_copy         = experiments.copy()
-            while True:
-                gated_outfile_name = outfile_names_deque_copy.popleft()
-                prec_recall_res        = prec_recall_results.popleft()
-                prec_recall_res_file   = DSPUtils.prec_recall_file_name(gated_outfile_name,
-                                                                        PrecRecFileTypes.PREC_REC_RES)
-                prec_recall_res.to_tsv(prec_recall_res_file)
-                # Get the Experiment instance that holds
-                # the parameters of this experiment:
-                experiment = experiments_copy.popleft()
-                # Add the just computed result:
-                experiment['experiment_res']    = prec_recall_res
-                experiment['result_file_path']  = prec_recall_res_file
-                exp_res_file = DSPUtils.prec_recall_file_name(gated_outfile_name,
-                                                             PrecRecFileTypes.EXPERIMENT)
-                experiment.to_tsv(include_col_header=True, outfile=exp_res_file)
-        except IndexError:
-            # Done
-            pass
+        perf_res_objs = deque()
 
+        # Get in turn each Experiment instance that holds
+        # the parameters of one volt/cutoffFreq experiment:
+        
+        outfile_names_deque_copy = outfile_names_deque.copy()
+        for experiment in experiments:
+            experiment_signal_treatment = experiment['signal_treatment']
+            # Gated signal file created by this experiment:
+            gated_outfile_name = outfile_names_deque_copy.popleft()
+                
+            for overlap_perc in overlap_percentages:
+                # Get PerformanceResult this overlap percentage
+                # and the current gated file. The resulting deque
+                # will only have one element, b/c we only pass in
+                # one file at a time:
+                perf_res_obj_deque = self.generate_prec_recall(experiment_signal_treatment,
+                                                               gated_outfile_name,
+                                                               label_file,
+                                                               overlap_perc)
+                
+                perf_res_objs.extend(perf_res_obj_deque)
+
+                # First experiment to be written to .tsv needs a col header line:
+                saving_first_experiment  = True
+                while True:
+                    
+                    # Add replicas of this volt/cutoffFreq experiment
+                    # to one .tsv file. Each replica will have the 
+                    # perf_res with a different overlap percentage:
+                    
+                    try:
+                        # Is next performance result for a different
+                        # signal treatment?
+                        if perf_res_objs[0]['signal_treatment'] != experiment_signal_treatment:
+                            break # out of True loop
+                        # Get next result
+                        prec_recall_res = perf_res_objs.popleft()
+
+                        # New experiment instance for this overlap percentage:
+                        experiment_copy = experiment.copy()
+                        experiment_copy['experiment_res'] = prec_recall_res
+                        # Duplicate this result's min required overlap
+                        # percentage into the Experiment instance for
+                        # easier access later:
+                        experiment_copy['min_required_overlap'] = experiment_copy['experiment_res']['min_required_overlap']
+                        if saving_first_experiment:
+                            exp_res_file = DSPUtils.prec_recall_file_name(gated_outfile_name,
+                                                                         PrecRecFileTypes.EXPERIMENT)
+                            # Start fresh file, and add column header:
+                            experiment_copy.to_flat_tsv(include_col_header=True,
+                                                        append=False, 
+                                                        outfile=exp_res_file)
+                            # Next experiment should get appended to the same tsv file:
+                            saving_first_experiment = False
+                        else:
+                            experiment_copy.to_flat_tsv(include_col_header=False,
+                                                        append=True, 
+                                                        outfile=exp_res_file)
+                    except IndexError:
+                        # Done
+                        return
+                self.log.info("Done generating precision/recall measures.")
     #------------------------------------
     # generate_prec_recall
     #-------------------
     
-    def generate_prec_recall(self, file_deque, labelfile, overlap_perc):
+    def generate_prec_recall(self, signal_treatment, gated_files_to_process, labelfile, overlap_perc):
         '''
-        For each elephant .wav file in file_deque, compute precision,
+        For each elephant .wav file in gated_files_to_process, compute precision,
         recall, and other measures. Return a deque of PerformanceResult
         instances. The .wav files are normally noise-gated versions
         of one original .wav file. Therfore, only one label file
         exists.
-        
-        @param file_deque: elephant recordings .wav files
-        @type file_deque: Dequeue
+    
+        @param signal_treatment: descriptor for what was done to
+            the original audio file.
+        @type signal_treatment: str
+        @param gated_files_to_process: file path(s) to signal files that
+            were noise gated in an earlier step.
+        @type gated_files_to_process: {deque | str}
         @param labelfile: path to the Raven label file associated
             with all the .wav files.
         @type labelfile: the Raven labels text file.
@@ -126,18 +211,21 @@ class PreprocessingCalibration(object):
             a detected burst must overlap a labeled burst to count
             as a detection.
         @type overlap_perc: {int | float}
+        @return: array of PerformanceResult instances
+        @rtype: [PerformanceResult]
         '''
-        
+        if not isinstance(gated_files_to_process, deque):
+            gated_files_to_process = deque([gated_files_to_process])
+            
         precrec_results = deque()
         try:
             while True:
-                filtered_wavfile = file_deque.popleft()
+                filtered_wavfile = gated_files_to_process.popleft()
                 self.log.info(f"Compute prec/recall for {filtered_wavfile}...")
-                precrec_computer = PrecRecComputer(filtered_wavfile, labelfile, overlap_perc)
+                precrec_computer = PrecRecComputer(signal_treatment, filtered_wavfile, labelfile, overlap_perc)
                 self.log.info(f"Done compute prec/recall for {filtered_wavfile}.")
-                perf_res = precrec_computer.performance_result
-                perf_res['min_required_overlap'] = overlap_perc
-                precrec_results.append(perf_res)
+                perf_res = precrec_computer.performance_results
+                precrec_results.extend(perf_res)
         except IndexError:
             # No more work to do:
             return precrec_results
@@ -149,7 +237,7 @@ class PreprocessingCalibration(object):
     def generate_outfiles(self, 
                           in_wav_file, 
                           thresholds_db, 
-                          cutoff_freqs, 
+                          cutoff_freqs,
                           outfile_names,
                           spectrogram_freq_cap=AmplitudeGater.spectrogram_freq_cap,
                           spectrogram=None):
@@ -168,6 +256,9 @@ class PreprocessingCalibration(object):
         @param cutoff_freqs: frequencies for the low-pass filter
             in each experiment.
         @type cutoff_freqs: [int]
+        @param overlap_percentages: list of the minimum percentage
+            overlap of detected with labeled burst required
+        @type overlap_percentages: [float]
         @param outfile_names: list of full path filenames, one
             for each experiment.
         @type outfile_names: [str]
@@ -192,15 +283,19 @@ class PreprocessingCalibration(object):
                     # Generate an Experiment instance to
                     # which caller can later add precision/recall
                     # results:
-                    experiment = Experiment({'in_wav_file'           : in_wav_file,
+                    experiment = Experiment({'signal_treatment'      : self.make_signal_treatment_descriptor(threshold,
+                                                                                                             cutoff_freq
+                                                                                                             ),
+                                             'in_wav_file'           : in_wav_file,
                             	    		 'outfile'               : outfile,
                                     		 'spectrogram_outfile'   : spectrogram_outfile,
                                     		 'threshold'             : threshold,
                                     		 'cutoff_freq'           : cutoff_freq,
                                     		 'spectrogram_freq_cap'  : spectrogram_freq_cap,
-                                    		 'experiment_res'        : None
+                                             'min_required_overlap'  : None,  # Added when overlaps are run
+                                             'percent_zeroed'        : None,  # Get that from AmplitudeGater
+                                    		 'experiment_res'        : None   # Get from AmplitudeGater
                                             })                        
-                    experiments.append(experiment)
                     _gater = AmplitudeGater(in_wav_file,
                                             outfile=outfile,
                                             amplitude_cutoff=threshold,
@@ -208,6 +303,8 @@ class PreprocessingCalibration(object):
                                             spectrogram_freq_cap=spectrogram_freq_cap,
                                             spectrogram_outfile=spectrogram_outfile if self.spectrogram else None
                                             )
+                    experiment['percent_zeroed'] = _gater.percent_zeroed
+                    experiments.append(experiment)
                 except FrequencyError as e:
                     self.log.err(f"Bad frequency; skipping it: {repr(e)}")
                     continue
@@ -219,7 +316,31 @@ class PreprocessingCalibration(object):
     # construct_outfile_names
     #-------------------
     
-    def construct_outfile_names(self, thresholds_db, cutoff_freqs, outfile_dir):
+    def construct_outfile_names(self, 
+                                thresholds_db, 
+                                cutoff_freqs, 
+                                overlap_percentages, 
+                                outfile_dir):
+        '''
+        Construct a file names that contain the 
+        passed-in parameters. Note that thresholds_db
+        and cutoff_freqs are lists. So multiple names
+        are constructed.
+        
+        @param thresholds_db: list of dB below which
+            signals were clamped to 0
+        @type thresholds_db: [int]
+        @param cutoff_freqs: list of envelope frequencies
+        @type cutoff_freqs: [int]
+        @param outfile_dir: directory for which the paths 
+            are to be constructed
+        @param overlap_percentages: list of the minimum percentage
+            overlap of detected with labeled burst required
+        @type overlap_percentages: [float]
+        @type outfile_dir: str
+        @return all outfile paths
+        @rtype: dequeue
+        '''
         
         out_files = deque()
         for threshold in thresholds_db:
@@ -232,8 +353,7 @@ class PreprocessingCalibration(object):
                 out_files.append(outfile)
 
         return out_files
-
-
+    
     #------------------------------------
     # list_outfiles_from_deque
     #-------------------
@@ -268,32 +388,121 @@ class Experiment(OrderedDict):
     # of this class. Needed when reading from
     # previously saved csv file of a PerformanceResult
     # instance:
-    props = {'in_wav_file'           : str,
-        	 'outfile'               : str,
-             'spectrogram_outfile'   : str,
-             'threshold'             : int,
-             'cutoff_freq'           : int,
-             'spectrogram_freq_cap'  : int,
-             'result_file_path'      : str,
-             'experiment_res'        : PerformanceResult
-            }
+    props = OrderedDict({'signal_treatment'      : SignalTreatmentDescriptor,
+                         'in_wav_file'           : str,
+                    	 'outfile'               : str,
+                         'spectrogram_outfile'   : str,
+                         'threshold_db'          : int,
+                         'cutoff_freq'           : int,
+                         'min_required_overlap'  : float,
+                         'spectrogram_freq_cap'  : int,
+                         'result_file_path'      : str,
+                         'percent_zeroed'        : float,
+                         'experiment_res'        : PerformanceResult
+                        })
+    
+    # The properties when SignalTreatmentDescriptor and PerformanceResult
+    # are expanded with their own props:
+    flat_props = OrderedDict()
+    for (prop_name, dest_type) in props.items():
+        if dest_type in (str,int,float):
+            flat_props[prop_name] = dest_type
+
+        else:
+            # Append to flat_props the dict of props
+            # of the complex type (e.g. SignalTreatmentDescriptor).
+            # Update works in place, and like array.extend():
+            flat_props.update(dest_type.props) 
     
     #------------------------------------
     # Constructor
     #-------------------
     
     def __init__(self, all_results={}):
-        super().__init__(all_results)
+        # Put the passed-in dict into a logical order:
+        self_dict = self.props.copy()
+        for key in self_dict.keys():
+            try:
+                self_dict[key] = all_results[key]
+            except KeyError:
+                # Passed-in dict does not have result
+                # the prop:
+                self_dict[key] = None
+        # Add any entries in all_results that are unexpected
+        # to the end, preserving order:
+        for key in all_results.keys():
+            if key not in self_dict.keys():
+                self_dict[key] = all_results[key]
+         
+        # Save the dict as who this instance is:
+        super().__init__(self_dict)
 
     #------------------------------------
-    # to_tsv
+    # to_flat_tsv
     #-------------------
 
-    def to_tsv(self, include_col_header=False, outfile=None, append=True):
+    def to_flat_tsv(self, include_col_header=False, outfile=None, append=True):
+        '''
+        Write an Experiment instance to .tsv file with all PerformanceResult
+        instances flattened. 
+        
+        The purpose of this method is to make an 
+        Experiment accessible to Tableau or Excel.
+        Only the overlaps_summary stats remain as
+        a dict.
+        
+        That is in contrast to method save(), which preserves
+        the ability to reconstitute an Experiment instance via
+        instances_from_tsv()
+
+        @param include_col_header:
+        @type include_col_header:
+        @param outfile:
+        @type outfile:
+        @param append:
+        @type append:
+        '''
+        
         if include_col_header:
-            # Create column header:
-            col_header = '\t'.join([f"{col_name}" for col_name in self.keys()])
-        csv_line = '\t'.join([str(res_val) for res_val in self.values()])
+            # Create column header, but remove the 'experiment_res'
+            # column name, because it will be expanded below into 
+            # the col names of the PerformanceResult instance:
+            
+            col_header = '\t'.join([f"{col_name}" for col_name in self.keys() if col_name != 'experiment_res'])
+        else:
+            col_header = ''
+
+        row_arr = []
+        for prop_val in self.values():
+            # Numpy arrays add a '\n' char after a certain
+            # number of array elements, make that num huge:
+            if isinstance(prop_val, np.ndarray):
+                row_arr.append(np.array2string(prop_val,
+                                               max_line_width=10000,
+                                               separator=','))
+            elif isinstance(prop_val, PerformanceResult):
+                # Found a PerformanceResult object. Add its
+                # col names to the Experiment class related
+                # col names:
+                flat_perf_res = prop_val.to_flat_dict()
+                col_header += '\t' + '\t'.join([f"{col_name}" for col_name in flat_perf_res.keys()])
+                
+                # And add all the PerformanceResult attributes
+                # to the row_arr:
+                row_arr.extend(flat_perf_res.values())
+                
+            elif isinstance(prop_val, dict):
+                # Found the overlaps_summary dict:
+                col_header += '\t'.join([f"{col_name}" for col_name in prop_val.keys()])
+                row_arr.extend(prop_val.values())
+                
+            elif isinstance(prop_val, SignalTreatmentDescriptor):
+                row_arr.append(prop_val.to_flat_str())
+            else:
+                row_arr.append(str(prop_val))
+            
+        csv_line = '\t'.join([str(item) for item in row_arr])
+
         try:
             if outfile is not None:
                 if not outfile.endswith('.tsv'):
@@ -308,34 +517,72 @@ class Experiment(OrderedDict):
             if outfile:
                 fd.close()
 
+
+    #------------------------------------
+    # save
+    #-------------------
+
+    def save(self, outfile, append=True):
+        '''
+        Pickle an Exeriment instance, so that the load()
+        method can reconstitute the instance from that
+        file.
+        
+        May be called multiple times to save
+        multiple experiments, if append is set
+        to True
+         
+        @param outfile:
+        @type outfile:
+        '''
+        with open(outfile, 'wb' if append else 'ab') as fd:
+            pickle.dump(self,fd)
+
+    #------------------------------------
+    # load
+    #-------------------
+    
+    @classmethod
+    def load(cls, fd_or_path):
+        '''
+        Given an open fd_or_path to a pickeled
+        file, return one exeperiment object.
+        Can be called multiple times to get 
+        successive instances that were all
+        pickled, if fd_or_path is not closed in the between.
+        
+        Raises EOFError when nothing left.
+        
+        @param fd_or_path: file object open for 
+            binary read (br)
+        @type fd_or_path:
+        @raise EOFERROR: if nothing left in file. 
+        '''
+        if isinstance(fd_or_path, str):
+            fd = open(fd_or_path, 'br')
+        try:
+            while True:
+                yield pickle.load(fd)
+        except EOFError:
+            return
+        finally:
+            fd.close()
+
     #------------------------------------
     # instances_from_tsv
     #-------------------
 
     @classmethod
-    def instances_from_tsv(cls, infile, first_line_is_col_header=False):
+    def instances_from_tsv(cls, infile):
         
         res_obj_list = []
-        with open(infile, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            # Get array of one line:
-            first_line = next(reader)
-            # Check whether first line is header;
-            if first_line_is_col_header:
-                prop_order = first_line
-            else:
-                # First line is also first data line: 
-                prop_order = Experiment.props.keys()
-                res_obj_list.append(cls._make_res_obj(first_line, prop_order))
-            try:
-                while True:
-                    line = next(reader)
-                    res_obj_list.append(cls._make_res_obj(line, prop_order))
-            except StopIteration:
-                # Finished the file.
-                pass
-        return res_obj_list
-
+        with open(infile, 'rb') as fd:
+            while True:
+                try:
+                    res_obj_list.append(pickle.load(fd))
+                except EOFError:
+                    return res_obj_list
+            
     #------------------------------------
     # _make_res_obj
     #-------------------
@@ -349,33 +596,38 @@ class Experiment(OrderedDict):
             # coerced?:
             dest_type = Experiment.props[prop_name]
             # Does it call for a PerformanceResult?
-            # (Can't get EQ dest_type/PerformanceResult
-            # to work. So kludge):
-            if issubclass(dest_type, OrderedDict):
+            if dest_type == PerformanceResult:
                 # Reconstitute the PerformanceResult
-                # instance. We use eval with an empty 
-                # namespace to prevent safety issues:
+                # instance:
                 perf_res_create_str = values_arr_strings[indx]
-                # Safe eval: only the PerformanceResult class
-                # is available, and no built-ins:
-                typed_val = eval(perf_res_create_str,
-                                 {"__builtins__":None},
-                                 {'PerformanceResult' : PerformanceResult}
-                                 )
+                typed_val = PerformanceResult.from_str(perf_res_create_str)
+            elif dest_type == SignalTreatmentDescriptor:
+                # Reconstitute the SignalTreatmentDescriptor
+                # instance:
+                sig_treat_desc_create_str = values_arr_strings[indx]
+                typed_val = SignalTreatmentDescriptor.from_str(sig_treat_desc_create_str)
             else:
                 typed_val = dest_type(values_arr_strings[indx])
             res_obj[prop_name] = typed_val
             
-        # Materialize the PerformanceResult instance, if
-        # we have a path to its .tsv:
-        res_obj_tsv_path = res_obj['result_file_path']
-        if isinstance(res_obj_tsv_path, str) and\
-           os.path.exists(res_obj_tsv_path):
-            res_obj['experiment_res'] = \
-                PerformanceResult.instances_from_tsv(res_obj_tsv_path, 
-                                                     first_line_is_col_header = True) 
-
         return res_obj 
+
+    #------------------------------------
+    # __eq__
+    #-------------------
+
+    def __eq__(self, other):
+        
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+        for (key, val) in self.items():
+            # Use ==, rather than != in case
+            # other has no __ne__
+            if val == other[key]:
+                continue
+            else:
+                return False
+        return True
 
     #------------------------------------
     # print

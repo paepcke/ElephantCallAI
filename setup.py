@@ -18,6 +18,7 @@ setup(
     install_requires = ['requests>=2.22.0',
                         'matplotlib>=3.1.3',
                         'sklearn',
+                        'PTable>=0.9.2',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']

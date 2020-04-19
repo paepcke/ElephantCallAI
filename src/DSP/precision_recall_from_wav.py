@@ -11,6 +11,7 @@ import re
 import sys
 
 from scipy.io import wavfile
+from dsp_utils import SignalTreatmentDescriptor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -40,8 +41,10 @@ class PrecRecComputer(object):
     '''
 
     SAMPLE_RATE_FOR_TESTING = 4000
+    logfile = '/tmp/precrec_computer.log'
 
-    def __init__(self, 
+    def __init__(self,
+                 signal_treatment,
                  wavefile, 
                  labelfile, 
                  overlap_percentages=10, 
@@ -50,9 +53,12 @@ class PrecRecComputer(object):
         '''
         Constructor
         '''
-        PrecRecComputer.log = LoggingService(logfile='/tmp/precrec_computer.log')
+        PrecRecComputer.log = LoggingService(logfile=self.logfile)
         self.log = PrecRecComputer.log
 
+        if not isinstance(overlap_percentages, list):
+            overlap_percentages = [overlap_percentages]
+            
         self.print_res = print_res
         # Read the samples:
         if not testing:
@@ -64,13 +70,20 @@ class PrecRecComputer(object):
                 print(f"Cannot read .wav file {wavefile}: {repr(e)}")
                 sys.exit(1)
 
-            self.performance_result = self.compute_performance(samples, labelfile, overlap_percentages)
+            self.performance_results = []
+            for overlap_perc_requirement in overlap_percentages:
+                signal_treatment = signal_treatment.add_overlap_to_treatment_desc(overlap_perc_requirement)
+                performance_result = self.compute_performance(signal_treatment, 
+                                                              samples, 
+                                                              labelfile, 
+                                                              overlap_perc_requirement)
+                self.performance_results.append(performance_result)
             
-            if PlotterTasks.has_task('performance_results'):
-                self.plot(self.performance_result)
-                
-            if self.print_res:
-                self.performance_result.print()
+                if PlotterTasks.has_task('performance_results'):
+                    self.plot(performance_result)
+                    
+                if self.print_res:
+                    performance_result.print()
                 
         else: # Unittesting:
             # Just assume some framerate.
@@ -80,13 +93,16 @@ class PrecRecComputer(object):
     # compute_performance
     #-------------------
     
-    def compute_performance(self, samples, label_file_path, overlap_perc_requirement):
+    def compute_performance(self, signal_treatment, samples, label_file_path, overlap_perc_requirement):
         '''
         Workhorse. Takes audio sample array, and a csv path. 
-        he percentage number is the overlap between audio-derived 
+        The percentage number is the overlap between audio-derived 
         events and the corresponding labeled event that is minimally 
         required to count an audio-detected event as a true event.
-        
+    
+        @param signal_treatment: a string that identifies the 
+            changes made to the original audio signal. Ex: '-30dB_300Hz'
+        @type signal_treatment
         @param samples: the voltages
         @type samples: np.array({float | int})
         @param label_file_path: path to Raven label file 
@@ -186,7 +202,7 @@ class PrecRecComputer(object):
         try:
             precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples)
         except ZeroDivisionError:
-            precision_samples = 0 
+            precision_samples = -1.0 
         
         try:
             f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
@@ -220,7 +236,7 @@ class PrecRecComputer(object):
         # Keep only the audio non-burst events that overlap sufficiently:
         verified_audio_non_events = \
             matches_aud_non_bursts[np.nonzero(percent_overlaps_non_bursts[percent_overlaps_non_bursts >= overlap_perc_requirement])]
-        num_verified_audio_non_events = verified_audio_non_events[:,0].size  - num_false_pos_detected_events
+        num_verified_audio_non_events = verified_audio_non_events[:,0].size
         
         self.log.info('Computing true/false-pos/neg at event granularity...')
         #num_true_pos_events = elephant_burst_indices[:,0].size
@@ -249,11 +265,14 @@ class PrecRecComputer(object):
             precision_events = num_verified_audio_events / (num_verified_audio_events + num_false_pos_detected_events)
         except ZeroDivisionError:
             precision_events = 1
-        
-        f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
+        try:
+            f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
+        except ZeroDivisionError:
+            f_score_events = -1.0
         self.log.info('Done computing recall/precision/F1 at event granularity.')
 
-        results = {'num_elephant_events' :    num_elephant_events,
+        results = {'signal_treatment'    :    signal_treatment,
+                   'num_elephant_events' :    num_elephant_events,
                    'num_detected_events' :    num_detected_events,
                    'recall_events' :          recall_events,
         		   'precision_events' :       precision_events,
@@ -261,7 +280,6 @@ class PrecRecComputer(object):
         		   'recall_samples' :         recall_samples,
         		   'precision_samples' :      precision_samples,
         		   'f1score_samples' :        f_score_samples,
-        		   'overlap_percentages' :    percent_overlaps,
         		   'true_pos_samples' :       num_true_positive_samples,
         		   'false_pos_samples' :      num_false_positive_samples,
         		   'true_neg_samples' :       num_true_negative_samples,
@@ -278,7 +296,8 @@ class PrecRecComputer(object):
                    'true_pos_any_overlap_non_event': num_true_detected_non_events
                    }
         
-        performance_result = PerformanceResult(results)
+        results['min_required_overlap'] = overlap_perc_requirement 
+        performance_result = PerformanceResult(results, percent_overlaps)
 
         return performance_result
 
@@ -616,6 +635,7 @@ class PrecRecComputer(object):
 
         return (elephant_burst_indices, el_mask)
 
+
 # -------------------------------- ElephantEvent -------------
 
 class ElephantEvent(object):
@@ -682,50 +702,129 @@ class PerformanceResult(OrderedDict):
     # Name of all properties stored in instances
     # of this class. Needed when reading from
     # previously saved csv file of a PerformanceResult
-    # instance:
-    props = {'recall_events'         : float,
-        	 'precision_events'      : float,
-        	 'f1score_events'        : float,
-        	 'recall_samples'        : float,
-        	 'precision_samples'     : float,
-        	 'f1score_samples'       : float,
-        	 'overlap_percentages'   : [float],
-        	 'true_pos_samples'      : int,
-        	 'false_pos_samples'     : int,
-        	 'true_neg_samples'      : int,
-        	 'false_neg_samples'     : int,
-        	 
-        	 'true_pos_events'       : int,
-        	 'false_pos_events'      : int,
-        	 'true_neg_events'       : int,
-        	 'false_neg_events'      : int,
-         
-             'mean_overlaps'         : float,
-             'min_required_overlap'  : float,
-            }
+    # instance. 
+    props = OrderedDict({'signal_treatment'      : SignalTreatmentDescriptor,
+                         'recall_events'         : float,
+                         'precision_events'      : float,
+                         'f1score_events'        : float,
+                         'recall_samples'        : float,
+                         'precision_samples'     : float,
+                         'f1score_samples'       : float,
+                         'overlaps_summary'      : dict,
+                         'true_pos_samples'      : int,
+                         'false_pos_samples'     : int,
+                         'true_neg_samples'      : int,
+                         'false_neg_samples'     : int,
+                         
+                         'true_pos_events'       : int,
+                         'false_pos_events'      : int,
+                         'true_neg_events'       : int,
+                         'false_neg_events'      : int,
 
+                         'min_required_overlap'  : float,
+                        })
+
+    # In the final instance overlap_percentages will
+    # be replaced with a dict of stats about the 
+    # (usually very long) array:
     
-    def __init__(self, all_results={}):
+    def __init__(self, all_results={}, overlap_percentages=[]):
+        '''
+        Created instance will have all information
+        in the all_results dict. If overlap_percentages
+        is given, it is a (possibly very long) np.array
+        of overlap percentage floats. Summary statistics
+        will be computed from that array, and retained
+        under the key 'overlaps_summary'
+        
+        @param all_results: results to be contained in the instance
+        @type all_results: dict
+        @param overlap_percentages: percentages of overlap for each
+            audio burst, (already multiplied by 100)
+        @type overlap_percentages: np.array([float])
+        '''
+        self.log = LoggingService(logfile=PrecRecComputer.logfile)
+        if len(overlap_percentages) == 0:
+            self.log.warn("Overlap percentages is empty; so no overlaps summary stats computed")
+        # Summarize the overlap_percentages, which can be
+        # a huge array:
+        try:
+            overlaps_summary = self.summarize_overlaps(overlap_percentages, 
+                                                       all_results['min_required_overlap'])
+        except KeyError:
+            # min_required_overlap was not passed in:
+            self.log.warn("No min_required_overlap provide; PerformanceResult won't contain an overlaps summary.")
+            overlaps_summary = {}
+        all_results['overlaps_summary'] = overlaps_summary
         # Install the initial results
         super().__init__(all_results)
-        # Add mean of overlap percentages of
-        # detected events, if not present:
-        if 'mean_overlaps' not in self.keys() or \
-            self['mean_overlaps'] is None:
-            try:
-                self['mean_overlaps'] = np.mean(self['overlap_percentages'])
-            except KeyError:
-                self['mean_overlaps'] = None
 
     #------------------------------------
-    # to_tsv
+    # __eq__
+    #-------------------
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+
+        for (key, val) in self.items():
+            # Use ==, rather than != in case
+            # other has no __ne__
+            try:
+                if val == other[key]:
+                    continue
+                else:
+                    return False
+            except KeyError:
+                # Missing key, so: not equal
+                return False
+        return True
+
+    def _ne__(self, other):
+        return not self.__eq__(other)
+    
+    #------------------------------------
+    # to_flat_dict
     #-------------------
     
-    def to_tsv(self, include_col_header=False, outfile=None, append=True):
+    def to_flat_dict(self):
+        '''
+        Returns an OrderedDict where the top level
+        key/val pairs of self are again top level.
+        But the overlaps_summary is flattened. The
+        attr names will be overlaps_summary_min,
+        overlaps_summary_max, etc.
+        '''
+        res_dict = OrderedDict()
+        for prop_key, prop_val in self.items():
+            if isinstance(prop_val, dict):
+                if len(prop_val) == 0:
+                    # Empty dict:
+                    res_dict[prop_key] = {}
+                else:
+                    for (key, val) in prop_val.items():
+                        res_dict[f"{prop_key}_{key}"] = val
+            elif isinstance(prop_val, SignalTreatmentDescriptor):
+                res_dict[prop_key] = prop_val.to_flat_str()
+            else:
+                res_dict[prop_key] = prop_val
+                
+        return res_dict
+        
+
+    #------------------------------------
+    # save
+    #-------------------
+    
+    def save(self, include_col_header=False, outfile=None, append=True):
         if include_col_header:
             # Create column header:
             col_header = '\t'.join([f"{col_name}" for col_name in self.keys()])
-        csv_line = '\t'.join([str(res_val) for res_val in self.values()])
+        val_arr = []
+        for prop_val in self.values():
+            val_arr.append(str(prop_val))
+            
+        csv_line = '\t'.join(val_arr)
         try:
             if outfile is not None:
                 if not outfile.endswith('.tsv'):
@@ -779,22 +878,48 @@ class PerformanceResult(OrderedDict):
         for (indx, prop_name) in enumerate(prop_order):
             # To which data type must this string be
             # coerced?:
-            dest_type = PerformanceResult.props[prop_name]
-            # Is type a list [<type>]?
-            if isinstance(dest_type, list):
-                array_el_types = dest_type[0]
-                # Create array of elements, all of the dest type:
-                # the overlay percentages will look like: '[1.0,2.0,3.0]'.
-                # Not that this is a str. We use eval with an empty 
-                # namespace to prevent safety issues:
-                typed_val = [array_el_types(el) for el in eval(values_arr_strings[indx],
-                                                               {"__builtins__":None},
-                                                               {}
-                                                               )]
-            else:
-                typed_val = dest_type(values_arr_strings[indx])
+            string_val = values_arr_strings[indx]
+            typed_val = PerformanceResult.from_str(string_val)
             res_obj[prop_name] = typed_val
         return res_obj 
+
+    #------------------------------------
+    # from_str
+    #-------------------
+    
+    @classmethod
+    def from_str(cls, stringified_perf_result):
+        instance = eval(stringified_perf_result,
+                        {'__builtins__' : None},
+                        {'PerformanceResult' : PerformanceResult,
+                         'OrderedDict' : OrderedDict}
+                        )
+        if not isinstance(instance, PerformanceResult):
+            # Passed-in string is a primitive, such as
+            # '30.2', rather than a str that makes
+            # a PerformanceResult inst:
+            raise ValueError(f"String '{stringified_perf_result}' does not evaluate to a PerformanceResult") 
+            
+        # Find the overlaps_summary dict embedded in
+        # the stringified PerformanceResult. I.e. dig
+        # out the dict from: 
+        #  ...('overlaps_summary', {'min': 0.0, 'max': 74.6, ... 'perc_ge_min': 0.0})
+       
+        pat = re.compile(r".*(\{[^}]*\})")
+        match = pat.match(stringified_perf_result)
+        try:
+            dict_str = match.groups()[0]
+        except IndexError:
+            # Did not find it:
+            cls.log.warn(f"Could not find overlap_summary dict in {stringified_perf_result}")
+        try:
+            instance['overlaps_summary'] = eval(dict_str,
+                                                {'__builtins__' : None},
+                                                {}
+                                                )
+        except Exception:
+            cls.log.warn(f"Could not eval overlap_summary dict in {stringified_perf_result}")
+        return instance        
 
     #------------------------------------
     # _is_number
@@ -803,6 +928,18 @@ class PerformanceResult(OrderedDict):
     def _is_number(self, word):
         p = re.compile('^[0-9.]*$')
         return p.search(word)
+
+    #------------------------------------
+    # __str__
+    #-------------------
+
+    def __str__(self):
+        '''
+        Make str evaluatable into a PerformanceResult instance:
+        '''
+        tmp_dict = OrderedDict(self.items())
+        tmp_dict['signal_treatment'] = str(tmp_dict['signal_treatment'])
+        return f"PerformanceResult({str(tmp_dict)})"
 
     #------------------------------------
     # print
@@ -852,4 +989,40 @@ class PerformanceResult(OrderedDict):
                                                     ]
                                                    )
         return self['confusion_matrix_events']
+
+    #------------------------------------
+    # summarize_overlaps
+    #-------------------
     
+    def summarize_overlaps(self, overlap_percentages, min_required_overlap):
+        '''
+        Computes summary statistics of an np array of
+        overlap percentages:
+           min
+           max
+           mean
+           med
+           sd
+           num_ge_min
+           perc_ge_min 
+        
+        @param overlap_percentages: array of percentages (already multiplied by 100)
+        @type overlap_percentages: np.array([float])
+        @param min_required_overlap: minimum percentage overlap required for a 
+            detection to be counted as true-positive
+        @type min_required_overlap: {int | float}
+        @return: summary statistics
+        @rtype: {str : float}
+        '''
+        res_dict = {}
+        if len(overlap_percentages) == 0:
+            return res_dict
+        res_dict['min'] = np.round(np.min(overlap_percentages), 1)
+        res_dict['max'] = np.round(np.max(overlap_percentages), 1)
+        res_dict['mean'] = np.round(np.mean(overlap_percentages), 1)
+        res_dict['med'] = np.round(np.median(overlap_percentages), 1)
+        res_dict['sd'] = np.round(np.std(overlap_percentages), 1)
+        qualifying_overlaps = overlap_percentages[overlap_percentages >= min_required_overlap]
+        res_dict['num_ge_min'] = qualifying_overlaps.size
+        res_dict['perc_ge_min'] = np.round(qualifying_overlaps.size / overlap_percentages.size, 0)
+        return res_dict 

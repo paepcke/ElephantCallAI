@@ -5,11 +5,11 @@ Created on Mar 27, 2020
 '''
 import csv
 import os, sys
-import statistics
 import tempfile
 import unittest
 
 import numpy as np
+from DSP.dsp_utils import SignalTreatmentDescriptor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from precision_recall_from_wav import PerformanceResult, PrecRecComputer
@@ -45,24 +45,13 @@ class TestPrecisionRecall(unittest.TestCase):
         for prop_name in PerformanceResult.props:
             try:
                 # All properties need to be floats or ints.
-                # But overlap_percentages must be a list,
+                # But overlaps_summary must be a dict,
                 # and will cause an error here. We take
-                # care of that after the loop:
+                # care of that in setUp():
                 cls.artificial_prop_values[prop_name] = PerformanceResult.props[prop_name](val)
             except TypeError:
                 continue
             val += 1
-            
-        # The overlap_percentages needs to be a list
-        # of floats:
-        cls.artificial_prop_values['overlap_percentages'] = [1.0,2.0,3.0]
-
-        # Add mean of overlap percentages, as will be
-        # done when PerformanceResult is instantiated
-        # later:
-        cls.artificial_prop_values['mean_overlaps'] = \
-            statistics.mean(cls.artificial_prop_values['overlap_percentages'])
-            
 
     #------------------------------------
     # setUp
@@ -71,10 +60,25 @@ class TestPrecisionRecall(unittest.TestCase):
     def setUp(self):
         # Create a fresh PerformanceResult instance for each test 
         # to use.
-        self.perf_res = PerformanceResult(self.artificial_prop_values)
+        self.overlap_percentages = np.array([1.0,2.0,3.0])
+        min_required_overlap = 10
+        self.perf_res = PerformanceResult(self.artificial_prop_values,
+                                          self.overlap_percentages) 
+        summary_stats_dict = {}
+        summary_stats_dict['min'] = np.min(self.overlap_percentages)
+        summary_stats_dict['max'] = np.max(self.overlap_percentages)
+        summary_stats_dict['mean'] = np.mean(self.overlap_percentages)
+        summary_stats_dict['med'] = np.median(self.overlap_percentages)
+        summary_stats_dict['sd'] = np.std(self.overlap_percentages)
+        qualifying_overlaps = self.overlap_percentages[self.overlap_percentages >= min_required_overlap]
+        summary_stats_dict['num_ge_min'] = qualifying_overlaps.size
+        summary_stats_dict['perc_ge_min'] = np.round(qualifying_overlaps.size / self.overlap_percentages.size, 0)
+
+        TestPrecisionRecall.artificial_prop_values['overlaps_summary'] = summary_stats_dict
         
         # Create a non-acting PrecRecComputer instance:
-        self.prec_rec_computer = PrecRecComputer(None,  # No wavfile
+        self.prec_rec_computer = PrecRecComputer(None,  # No Signal treatment
+                                                 None,  # No wavfile
                                                  None,  # No labelfile
                                                  testing=True)
 
@@ -103,7 +107,7 @@ class TestPrecisionRecall(unittest.TestCase):
     def test_to_tsv(self):
         # Save a test result instance  to a .tsv file:
         
-        self.perf_res.to_tsv(include_col_header=True, outfile=self.tmp_file_name, append=True)
+        self.perf_res.save(include_col_header=True, outfile=self.tmp_file_name, append=True)
         with open(self.tmp_file_name, 'r') as tmp_file_fd:
             reader = csv.reader(tmp_file_fd, delimiter='\t')
             col_header = next(reader)
@@ -113,38 +117,39 @@ class TestPrecisionRecall(unittest.TestCase):
             res_dict = {}
             for (col_num, val) in enumerate(res_line):
                 key = col_header[col_num]
-                required_type = PerformanceResult.props[key]
-                if isinstance(required_type, list):
-                    # The list will be single-element, with
-                    # value being the type of elements in the
-                    # array:
-                    required_type_in_arr = required_type[0]
-                    res_arr = [required_type_in_arr(el) for el in eval(val)]
-                    res_dict[key] = res_arr                    
-                else:
-                    res_dict[key] = required_type(val)
+                typed_val = eval(val,
+                                 {'__builtins__' : None},
+                                 {})
+                res_dict[key] = typed_val
             # From what we picked out of the .tsv file,
             # create a PerformanceResult instance:
-            retrieved_perf_res = PerformanceResult(res_dict)
+            retrieved_perf_res = PerformanceResult(res_dict, self.overlap_percentages)
             self.assertTrue(self.performance_results_equality(retrieved_perf_res, self.perf_res))
 
     #------------------------------------
     # test_from_tsv
     #-------------------
     
-    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    #@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def test_from_tsv(self):
         # Make a new test result instance from a results
         # .tsv file:
         
         # Write our known PerformanceResult instance to tsv:
-        self.perf_res.to_tsv(include_col_header=True, outfile=self.tmp_file_name, append=True)
+        self.perf_res.save(include_col_header=True, outfile=self.tmp_file_name, append=True)
         # Make a new instance, and read that tsv file:
         perf_inst_list = PerformanceResult.instances_from_tsv(self.tmp_file_name, first_line_is_col_header=True)
 
         restored_perf_res = perf_inst_list[0]
         for (prop_name, prop_value) in self.perf_res.items():
-            self.assertEqual(prop_value, restored_perf_res[prop_name])
+            try:
+                if isinstance(prop_value, np.ndarray):
+                    # Equality works differently for ndarrays:
+                    self.assertTrue((restored_perf_res[prop_name] == prop_value).all())
+                else:
+                    self.assertEqual(restored_perf_res[prop_name], prop_value)
+            except Exception as e:
+                print(e)
 
     #------------------------------------
     # test_compute_overlap_percentages
@@ -209,7 +214,10 @@ class TestPrecisionRecall(unittest.TestCase):
         # samples:
         label_start_stops = label_start_stops / self.framerate
         label_file_name = self.create_label_file(label_start_stops)
-        perf_res = self.prec_rec_computer.compute_performance(voltages, label_file_name, 10)
+        perf_res = self.prec_rec_computer.compute_performance(SignalTreatmentDescriptor(-20,300),
+                                                              voltages, 
+                                                              label_file_name, 
+                                                              10)
         
         res_dict = {
                     'num_elephant_events' : 2,
@@ -220,7 +228,6 @@ class TestPrecisionRecall(unittest.TestCase):
                     'recall_samples': 0.8333333333333334,
                     'precision_samples': 0.7142857142857143,
                     'f1score_samples': 0.7692307692307692,
-                    'overlap_percentages': np.array([ 66.66666667, 100.]),
                     'true_pos_samples': 5,
                     'false_pos_samples': 2,
                     'true_neg_samples': 8,
@@ -229,15 +236,16 @@ class TestPrecisionRecall(unittest.TestCase):
                     'false_pos_events': 1,
                     'true_neg_events': 3,
                     'false_neg_events': 0,
-                    'mean_overlaps': 83.33333333333334,
                     'true_pos_any_overlap_events': 2,
                     'num_true_pos_detected_non_events' : 3,
                     'num_false_pos_detected_non_events' : 0,
                     'num_false_neg_detected_non_events' : 0,
-                    'true_pos_any_overlap_non_event' : 3
+                    'true_pos_any_overlap_non_event' : 3,
+                    'min_required_overlap' : 10
                     }
-        true_res = PerformanceResult(res_dict)
-        self.assertTrue(self.performance_results_equality(perf_res, true_res))
+        true_res = PerformanceResult(res_dict, overlap_percentages=np.array([ 66.66666667, 100.]))
+        self.assertEqual(perf_res, true_res)
+        #****self.assertTrue(self.performance_results_equality(perf_res, true_res))
 
     #------------------------------------
     # test_label_file_reader

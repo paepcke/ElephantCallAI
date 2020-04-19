@@ -73,6 +73,9 @@ class AmplitudeGater(object):
                  testing=False
                  ):
         '''
+        After completion, property percent_zeroed
+        will contain the percentage of audio that was
+        too low in amplitude to keep.
 
         During its work instances of this class may
         produce plots of results. By default those
@@ -129,6 +132,8 @@ class AmplitudeGater(object):
                 sys.exit(1)
 
         AmplitudeGater.log = LoggingService(logfile=logfile)
+        
+        self.percent_zeroed = None
         
         # For testing; usually framerate is read from .wav file:
         self.framerate = framerate
@@ -316,8 +321,8 @@ class AmplitudeGater(object):
         mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
         gated_samples = sample_npa * mask_for_where_non_zero
         
-        zeroed_percentage = 100 * gated_samples[gated_samples==0].size / gated_samples.size
-        self.log.info(f"Zeroed {zeroed_percentage:.2f}% of signal.")
+        self.percent_zeroed = 100 * gated_samples[gated_samples==0].size / gated_samples.size
+        self.log.info(f"Zeroed {self.percent_zeroed:.2f}% of signal.")
         
         if spectrogram_dest:
             
@@ -782,7 +787,6 @@ class AmplitudeGater(object):
         # Nothing found, return start of array:
         return 0
 
-        
 # --------------------------- Burst -----------------------
 
 class Burst(object):

@@ -10,6 +10,8 @@ import sys
 from calibrate_preprocessing import Experiment
 from dsp_utils import DSPUtils, PrecRecFileTypes
 
+from prettytable import PrettyTable
+from DSP.precision_recall_from_wav import PerformanceResult
 
 class ExperimentExplorer(object):
     
@@ -34,16 +36,16 @@ class ExperimentExplorer(object):
             # msg and exit:
              
             if os.path.isdir(experiment_pointer):
-                exp_dir = os.path.dirname(experiment_pointer)
                 # Find all experiment result files 
                 # the dir:
-                files_in_dir = os.listdir(exp_dir)
+                files_in_dir = os.listdir(experiment_pointer)
                 # Piece of file name that indicates the file
                 # is a saved experiment:
                 experiment_indicator = PrecRecFileTypes.EXPERIMENT.value
+                re_pat = re.compile(f".*{experiment_indicator}.*")
                 for file in files_in_dir:
-                    if re.match(experiment_indicator, file):
-                        self.experiment_pointers.append(os.path.join(exp_dir,file))
+                    if re.match(re_pat, file):
+                        self.experiment_pointers.append(os.path.join(experiment_pointer,file))
                 if len(self.experiment_pointers) == 0:
                     raise self.NoExperimentFile()
             else:
@@ -60,18 +62,46 @@ class ExperimentExplorer(object):
             print(f"File {experiment_pointer} is not an experiment result file.")
             sys.exit(1)
 
-        self.materialize_experiments()
+        experiments = self.materialize_experiments()
+        
+        #html_tables = self.make_html_tables(experiments)
+        txt_tables = self.make_txt_tables(experiments)
+        for tbl in txt_tables:
+            print(tbl)
+        print("Done")
         
     #------------------------------------
-    # materialize_experiments
+    # make_html_tables
     #-------------------
-    
-    def materialize_experiments(self):
-        self.experiments = []
-        for exp_path in self.experiment_pointers:
-            experiment = Experiment.instance_from_tsv(exp_path)
-            self.experiments.append(experiment)
 
+    def make_html_tables(self, experiments):
+        
+        if not isinstance(experiments, list):
+            experiments = [experiments]
+        
+    #------------------------------------
+    # make_txt_tables
+    #-------------------
+
+    def make_txt_tables(self, experiments):
+        
+        txt_tables = []
+        for experiment in experiments:
+            tbl = PrettyTable()
+            tbl.field_names = ['Measurement', 'Value']
+            tbl.align["Measurement"] = "l"
+            tbl.align["Value"] = "l"
+            for (prop_name, prop_type) in experiment.props.items():
+                if prop_type in [int, str, float]:
+                    tbl.add_row([prop_name, experiment[prop_name]])
+            # Get the PerformanceResult:
+            perf_res = experiment['experiment_res']
+            for (prop_name, prop_val) in perf_res.items():
+                tbl.add_row([prop_name, prop_val])
+            txt_tables.append(tbl)
+            #overlap_stats = experiment['overlaps_summary']
+        return txt_tables
+    
     #------------------------------------
     # print
     #-------------------
@@ -80,7 +110,20 @@ class ExperimentExplorer(object):
         for experiment in self.experiments:
             experiment.print(experiment_file)
             
-        
+    #------------------------------------
+    # materialize_experiments
+    #-------------------
+    
+    def materialize_experiments(self):
+        experiments = []
+        for exp_path in self.experiment_pointers:
+            # Each .tsv may contain rows for multiple 
+            # experiments; the the first only for now:
+            experiment = Experiment.instances_from_tsv(exp_path)[0]
+            experiments.append(experiment)
+        return experiments
+
+
 # ------------------ Main ---------------
 if __name__ == '__main__':
-    pass
+    exp_explorer = ExperimentExplorer('/tmp')
