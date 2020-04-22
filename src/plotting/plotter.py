@@ -16,6 +16,8 @@ class Plotter(object):
     '''
     Plotting for spectrograms and other simple plots,
     including overplotting two wave forms.
+    You can add plotting tasks by name through
+    the PlotterTask class in this file.
     '''
     DEFAULT_TITLE = 'Spectrogram'
     
@@ -316,6 +318,16 @@ class Plotter(object):
 # ------------------------------ class PlotterTasks ----------------
 
 class PlotterTasks(object):
+    '''
+    All methods are class level. Add plot
+    names, such as 
+      o 'gated_wave_excerpt',
+      o 'samples_plus_envelope',
+      o 'spectrogram_excerpts',
+      o 'low_pass_filter'
+    by calling 'PlotterTasks.add_task(<plotName>, **kwargs) 
+    '''
+    
     
     plotter_tasks = {}
     

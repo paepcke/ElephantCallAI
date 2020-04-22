@@ -37,13 +37,16 @@ import sys
 from scipy.io import wavfile
 from scipy.signal import butter, lfilter, stft 
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+
 from elephant_utils.logging_service import LoggingService
 import numpy as np
 import numpy.ma as ma
 from plotting.plotter import Plotter
 from plotting.plotter import PlotterTasks
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 from dsp_utils import PrecRecFileTypes, DSPUtils
 
 class FrequencyError(Exception):
@@ -80,9 +83,16 @@ class AmplitudeGater(object):
         During its work instances of this class may
         produce plots of results. By default those
         will not be plotted. To plot some or all,
-        call add_task(plot_name) on the PlotterTasks class.
+        call add_task(plot_name) on the PlotterTasks class
+        before creating this instance:
+        
         Available plots are:
-           o 
+           o 'gated_wave_excerpt',
+           o 'samples_plus_envelope',
+           o 'spectrogram_excerpts',
+           o 'low_pass_filter'
+           
+        PlotterTasks.add_task(<plotName>, **kwargs)
 
         @param wav_file_path: path to .wav file to be gated
             Can leave at None, if testing is True
@@ -208,7 +218,7 @@ class AmplitudeGater(object):
                               xlabel='Sample Index', 
                               ylabel='Voltage'
                               )
-        
+            
         print('Done')
         
         
@@ -913,7 +923,6 @@ if __name__ == '__main__':
                         
     parser.add_argument('--plot',
                         nargs='+',
-                        action='extend',
                         choices=['gated_wave_excerpt','samples_plus_envelope','spectrogram_excerpts','low_pass_filter'],
                         help="Plots to produce; repeatable; default: no plots"
                         )
@@ -945,7 +954,6 @@ if __name__ == '__main__':
                    envelope_cutoff_freq=args.envelope,
                    spectrogram_freq_cap=args.spectrofilter,
                    normalize=not args.raw,
-                   plot_result=args.plot,
                    logfile=args.logfile,
                    )
 

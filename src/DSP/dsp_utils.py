@@ -16,6 +16,7 @@ class PrecRecFileTypes(Enum):
     GATED_WAV    = '_gated'
     PREC_REC_RES = '_prec_rec_res'
     EXPERIMENT   = '_experiment'
+    PICKLE       = '_pickle'
         
 class DSPUtils(object):
     '''
@@ -27,7 +28,10 @@ class DSPUtils(object):
     #-------------------
 
     @classmethod
-    def prec_recall_file_name(cls, root_info, file_type):
+    def prec_recall_file_name(cls, 
+                              root_info, 
+                              file_type,
+                              experiment_id=None):
         '''
         Given root info like one of:
           o filtered_wav_-50dB_500Hz_20200404_192128.npy
@@ -40,6 +44,11 @@ class DSPUtils(object):
           o filtered_wav_-50dB_500Hz_20200404_192128_time_labels.npy
           o filtered_wav_-50dB_500Hz_20200404_192128_freq_labels.npy
           o filtered_wav_-50dB_500Hz_20200404_192128_gated.wav
+        
+        The experiment_id argument is for type PICKLE. Such files
+        hold a single experiment object in pickle form:
+        
+         o filtered_wav_-50dB_500Hz_20200404_192128_exp<experiment_id>.pickle
         
         @param root_info: example file name
         @type root_info: str
@@ -56,6 +65,8 @@ class DSPUtils(object):
         elif file_type in [PrecRecFileTypes.PREC_REC_RES,
                            PrecRecFileTypes.EXPERIMENT]:
             ext = '.tsv'
+        elif file_type == PrecRecFileTypes.PICKLE:
+            ext = f"{experiment_id}.pickle"
             
         new_file_path = f"{path_no_ext}{file_type.value}{ext}"
         return new_file_path
@@ -245,10 +256,10 @@ class SignalTreatmentDescriptor(object):
 
 
     #------------------------------------
-    # add_overlap_to_treatment_desc
+    # add_overlap
     #-------------------
 
-    def add_overlap_to_treatment_desc(self, min_required_overlap):
+    def add_overlap(self, min_required_overlap):
         '''
         Add the given minimum required overlap to the 
         given signal description.
@@ -375,7 +386,7 @@ if __name__ == '__main__':
     
     d = SignalTreatmentDescriptor(-40, 400)
     assert (str(d) == "SignalTreatmentDescriptor(-40,400,None)")
-    d.add_overlap_to_treatment_desc(10)
+    d.add_overlap(10)
     assert (str(d) == "SignalTreatmentDescriptor(-40,400,10)")
     
     # SignalTreatmentDescriptor

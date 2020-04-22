@@ -29,7 +29,7 @@ class ExperimentExplorer(object):
         
         self.experiment_pointers = []
         try:
-            # If a dir is given, find all experiment files 
+            # If a dir is given, find all pickled experiment files 
             # in it. If arg is a file, ensure that it is an
             # experiment file. If no file found in given dir, 
             # or given file is not an experiment file, print
@@ -41,7 +41,7 @@ class ExperimentExplorer(object):
                 files_in_dir = os.listdir(experiment_pointer)
                 # Piece of file name that indicates the file
                 # is a saved experiment:
-                experiment_indicator = PrecRecFileTypes.EXPERIMENT.value
+                experiment_indicator = PrecRecFileTypes.PICKLE.value
                 re_pat = re.compile(f".*{experiment_indicator}.*")
                 for file in files_in_dir:
                     if re.match(re_pat, file):
@@ -122,6 +122,14 @@ class ExperimentExplorer(object):
             experiment = Experiment.instances_from_tsv(exp_path)[0]
             experiments.append(experiment)
         return experiments
+
+
+    #------------------------------------
+    # is_experiment_file
+    #-------------------
+    
+    def is_experiment_file(self, file_path):
+        pass
 
 
 # ------------------ Main ---------------

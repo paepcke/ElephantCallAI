@@ -21,8 +21,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 
-#****TEST_ALL = True
-TEST_ALL = False
+TEST_ALL = True
+#TEST_ALL = False
 
 class Test(unittest.TestCase):
 
@@ -187,7 +187,7 @@ class Test(unittest.TestCase):
     # test_filter_spectrogram_two_simples
     #-------------------
     
-    #@unittest.skipIf(not TEST_ALL, "Temporarily skipping")
+    @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     def test_filter_spectrogram_two_simples(self):
         
         freq_labels = np.array([10,20,30,40])
@@ -221,7 +221,6 @@ class Test(unittest.TestCase):
     #-------------------
 
     @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
-    @unittest.skip('Header numbers are slightly different')
     def test_wav_read_write(self):
         
         test_sound_path = os.path.join(os.path.dirname(__file__), 'testsound.wav')
@@ -241,13 +240,21 @@ class Test(unittest.TestCase):
         
         orig_file_len = os.stat(test_sound_path).st_size
         tmp_file_len  = os.stat(tmp_file_nm).st_size
+        
+        # NOTE: the original file is 105886 bytes long.
+        #       method wavfile.write() writes this back
+        #       as 105884 bytes. The difference is that
+        #       the original file pads the 'Bits per sample'
+        #       information in 1 byte, rather than 2.
+        #       Both files play the same, and have the same
+        #       length data section of the wav file:
 
         try:
-            self.assertEqual(tmp_file_len, orig_file_len)
+            self.assertEqual(tmp_file_len, orig_file_len - 2)
             
             # Check the metadata:
             
-            tmp_wave_read_obj = wave.open(self.gater.wave_fd(tmp_file_nm))
+            tmp_wave_read_obj = wave.open(tmp_file_nm)
             test_sound_wave_read_obj = wave.open(test_sound_path)
             
             # Get all metadata in one tuple:

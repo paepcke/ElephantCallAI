@@ -72,7 +72,7 @@ class PrecRecComputer(object):
 
             self.performance_results = []
             for overlap_perc_requirement in overlap_percentages:
-                signal_treatment = signal_treatment.add_overlap_to_treatment_desc(overlap_perc_requirement)
+                signal_treatment.add_overlap(overlap_perc_requirement)
                 performance_result = self.compute_performance(signal_treatment, 
                                                               samples, 
                                                               labelfile, 
@@ -194,7 +194,7 @@ class PrecRecComputer(object):
         try:
             recall_samples    = num_true_positive_samples / np.sum(el_samples_mask)
         except ZeroDivisionError:
-            recall_samples = 1
+            recall_samples = np.inf
             
         # Precision: samples recognized by audio as part of a call,
         #         over all the samples:
@@ -202,12 +202,12 @@ class PrecRecComputer(object):
         try:
             precision_samples = num_true_positive_samples / (num_true_positive_samples + num_false_positive_samples)
         except ZeroDivisionError:
-            precision_samples = -1.0 
+            precision_samples = np.inf 
         
         try:
             f_score_samples  = 2 * precision_samples * recall_samples / (precision_samples + recall_samples)
         except ZeroDivisionError:
-            f_score_samples = 0
+            f_score_samples = np.inf
             
         self.log.info('Done computing recall/precision/F1 at sample granularity.')
 
@@ -257,7 +257,7 @@ class PrecRecComputer(object):
         try:
             recall_events = num_verified_audio_events  / num_elephant_events
         except ZeroDivisionError:
-            recall_events = 1
+            recall_events = np.inf
         
         # Precision: samples recognized by audio as part of a call,
         #         over all its predictions:
@@ -268,7 +268,7 @@ class PrecRecComputer(object):
         try:
             f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
         except ZeroDivisionError:
-            f_score_events = -1.0
+            f_score_events = np.inf
         self.log.info('Done computing recall/precision/F1 at event granularity.')
 
         results = {'signal_treatment'    :    signal_treatment,
@@ -388,8 +388,10 @@ class PrecRecComputer(object):
         aud_indices_flat = audio_burst_indices.flatten()
         labeled_with_aud_interval_ptr_matches = []
         true_pos_events  = 0
-        # Start assuming all detected events are false positives
-        false_pos_events = audio_burst_indices[:,0].size
+        # Collect unique aud indices that are involved
+        # in an ele burst:
+        good_aud_indices = set()
+        
         false_neg_events = 0
         
         self.log.info('Finding which audio events have overlap with labeled events...')
@@ -404,10 +406,12 @@ class PrecRecComputer(object):
             # If no audio burst event, move on to the 
             # next bona fide (i.e. labeled) burst, else:
             if num_aud_burst_indices > 0:
+                
                 # One more elephant burst matched by at least one
                 # audio burst:
                 true_pos_events += 1
-                false_pos_events -= num_aud_burst_indices
+                good_aud_indices = good_aud_indices.union(audio_burst_indices_pts)
+                
                 # Handle multiple aud burst associated with one
                 # labeled burst: Replicate the pt into the labeled burst
                 # intervals once for each such multi-match:
@@ -422,7 +426,10 @@ class PrecRecComputer(object):
                 false_neg_events += 1
                 
         self.log.info('Done finding which audio events have overlap with labeled events.')
-
+        
+        # False positives:
+        false_pos_events = audio_burst_indices[:,0].size - len(good_aud_indices)
+        
         # Now compute the percentage of overlap.
         # Think of the code as being just like the 
         # following equivalent function applied in
@@ -454,6 +461,29 @@ class PrecRecComputer(object):
         # pairs for elephant and audio events:
         matches_ele = elephant_burst_indices[matches[:,0]]
         matches_aud = audio_burst_indices[matches[:,1]]
+        
+        # A single ele burst may be 'discovered' multiple
+        # times. Like this:
+        #    matches_ele   matches_aud:
+        #    darray: [     ndarray: [  
+        #     [50 65]       [56 57]    
+        #     [50 65]       [58 59]    
+        #     [50 65]       [64 65]    
+        #     [55 70]       [56 57]    
+        #     [55 70]       [58 59]  
+        # We only give credit to the first match, i.e.
+        #    matches_ele   matches_aud:
+        #    darray: [     ndarray: [  
+        #     [50 65]       [56 57]    
+        #     [55 70]       [58 59]  
+        
+        # Generate indices of the first instance of
+        # each elephant burst that is matched. Ref above:
+        # [0,3]:\
+        (matches_ele, first_uniq_indices) = np.unique(matches_ele, return_index=True, axis=0)
+        # For both ele and aud matches, keep only these uniques:
+        
+        matches_aud = matches_aud[first_uniq_indices]
         
         # Get 1d arrays for low and high bounds for both
         # audio and eles:
@@ -784,6 +814,43 @@ class PerformanceResult(OrderedDict):
         return not self.__eq__(other)
     
     #------------------------------------
+    # diff
+    #-------------------
+    
+    def diff(self, perf_res_left, perf_res_right):
+        '''
+        Prints differences between two performance
+        result instances. Returns True if no difference
+        
+        @param perf_res_left:
+        @type perf_res_left:
+        @param perf_res_right:
+        @type perf_res_right:
+        '''
+        errors = []
+        for (key,val) in perf_res_left.items():
+            if isinstance(val, np.ndarray):
+                # Values are np.arrays; simple Python
+                # equality won't work. Also, for floats,
+                # array_equal also fails over slight diffs.
+                # Rather than using isclose(), just round
+                # to 2 decimals for both:
+                if not np.array_equal(np.round(val,2), 
+                                      np.round(perf_res_right[key], 2)
+                                      ):
+                    errors.append(key)
+                continue
+            if val != perf_res_right[key]:
+                errors.append(key)
+                continue
+        if len(errors) == 0:
+            return True
+        for problem_key in errors:
+            print(f"{problem_key}: Left: {perf_res_left[problem_key]}; Right: {perf_res_right[problem_key]}")
+        return False
+
+    
+    #------------------------------------
     # to_flat_dict
     #-------------------
     
@@ -812,76 +879,6 @@ class PerformanceResult(OrderedDict):
         return res_dict
         
 
-    #------------------------------------
-    # save
-    #-------------------
-    
-    def save(self, include_col_header=False, outfile=None, append=True):
-        if include_col_header:
-            # Create column header:
-            col_header = '\t'.join([f"{col_name}" for col_name in self.keys()])
-        val_arr = []
-        for prop_val in self.values():
-            val_arr.append(str(prop_val))
-            
-        csv_line = '\t'.join(val_arr)
-        try:
-            if outfile is not None:
-                if not outfile.endswith('.tsv'):
-                    outfile += '.tsv'
-                fd = open(outfile, 'a' if append else 'w')
-            else:
-                fd = sys.stdout
-            if include_col_header:
-                fd.write(col_header + '\n')
-            fd.write(csv_line + '\n')
-        finally:
-            if outfile:
-                fd.close()
-
-    #------------------------------------
-    # instances_from_tsv
-    #-------------------
-
-    @classmethod
-    def instances_from_tsv(cls, infile, first_line_is_col_header=False):
-        
-        res_obj_list = []
-        with open(infile, 'r') as fd:
-            reader = csv.reader(fd, delimiter='\t')
-            # Get array of one line:
-            first_line = next(reader)
-            # Check whether first line is header;
-            if first_line_is_col_header:
-                prop_order = first_line
-            else:
-                # First line is also first data line: 
-                prop_order = PerformanceResult.props.keys()
-                res_obj_list.append(cls._make_res_obj(first_line, prop_order))
-            try:
-                while True:
-                    line = next(reader)
-                    res_obj_list.append(cls._make_res_obj(line, prop_order))
-            except StopIteration:
-                # Finished the file.
-                pass
-        return res_obj_list
-    
-    #------------------------------------
-    # _make_res_obj
-    #-------------------
-
-    @classmethod
-    def _make_res_obj(cls, values_arr_strings, prop_order):
-    
-        res_obj = PerformanceResult()
-        for (indx, prop_name) in enumerate(prop_order):
-            # To which data type must this string be
-            # coerced?:
-            string_val = values_arr_strings[indx]
-            typed_val = PerformanceResult.from_str(string_val)
-            res_obj[prop_name] = typed_val
-        return res_obj 
 
     #------------------------------------
     # from_str
