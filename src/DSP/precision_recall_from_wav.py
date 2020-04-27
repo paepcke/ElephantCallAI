@@ -227,6 +227,28 @@ class PrecRecComputer(object):
          num_false_pos_detected_non_events       # Was actually not an event
          ) = self.compute_overlap_percentage(audio_non_burst_indices, 
                                              elephant_non_burst_indices).values()
+        # Detected audio bursts, including the false ones,
+        # and including the multiple separate aud events that 
+        # lie within an individual ele event:
+        num_detected_events     = audio_burst_indices[:,0].size
+        num_elephant_events     = elephant_burst_indices[:,0].size
+
+        self.log.info('Computing recall/precision/F1 at event granularity; no overlap constraints...')
+        # First, compute prec/recall without considering
+        # the constraint of overlap:
+        recall_events_any_overlap = num_true_pos_detected_events / num_elephant_events
+        try:
+            precision_events_any_overlap = num_true_pos_detected_events / \
+                               (num_true_pos_detected_events + num_false_pos_detected_events)
+        except ZeroDivisionError:
+            precision_events_any_overlap = np.inf
+        try:
+            f_score_events_any_overlap  = 2 * precision_events_any_overlap * recall_events_any_overlap / \
+                            (precision_events_any_overlap + recall_events_any_overlap)
+        except ZeroDivisionError:
+            f_score_events_any_overlap = np.inf
+        self.log.info('Done computing recall/precision/F1 at event granularity; no overlap constraints.')
+                           
                                              
         # Keep only the audio non-burst events that overlap sufficiently:
         verified_audio_events = \
@@ -242,11 +264,6 @@ class PrecRecComputer(object):
         #num_true_pos_events = elephant_burst_indices[:,0].size
         #num_true_neg_events = elephant_non_burst_indices[:,0].size
         
-        # Detected audio bursts, including the false ones,
-        # and including the multiple separate aud events that 
-        # lie within an individual ele event:
-        num_detected_events     = audio_burst_indices[:,0].size
-        num_elephant_events     = elephant_burst_indices[:,0].size
         num_true_neg_detected_events = num_verified_audio_non_events
         
         self.log.info('Done computing true/false-pos/neg at event granularity.')
@@ -264,7 +281,7 @@ class PrecRecComputer(object):
         try:
             precision_events = num_verified_audio_events / (num_verified_audio_events + num_false_pos_detected_events)
         except ZeroDivisionError:
-            precision_events = 1
+            precision_events = np.inf
         try:
             f_score_events  = 2 * precision_events * recall_events / (precision_events + recall_events)
         except ZeroDivisionError:
@@ -293,7 +310,11 @@ class PrecRecComputer(object):
                    'num_true_pos_detected_non_events': num_verified_audio_non_events,
                    'num_false_pos_detected_non_events': num_false_pos_detected_non_events,
                    'num_false_neg_detected_non_events': num_false_neg_detected_non_events,
-                   'true_pos_any_overlap_non_event': num_true_detected_non_events
+                   'true_pos_any_overlap_non_event': num_true_detected_non_events,
+                   'recall_events_any_overlap' : recall_events_any_overlap,
+                   'precision_events_any_overlap' : precision_events_any_overlap,
+                   'f_score_events_any_overlap' : f_score_events_any_overlap
+                   
                    }
         
         results['min_required_overlap'] = overlap_perc_requirement 

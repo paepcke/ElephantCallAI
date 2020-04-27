@@ -23,7 +23,7 @@ from precision_recall_from_wav import PerformanceResult, PrecRecComputer
 
 
 TEST_ALL = True
-#TEST_ALL = False
+#*****TEST_ALL = False
 
 class TestCalibrate(unittest.TestCase):
 

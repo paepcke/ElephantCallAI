@@ -7,11 +7,13 @@ import os
 import re
 import sys
 
+from prettytable import PrettyTable
+
+from DSP.precision_recall_from_wav import PerformanceResult
 from calibrate_preprocessing import Experiment
 from dsp_utils import DSPUtils, PrecRecFileTypes
+from plotting.plotter import Plotter
 
-from prettytable import PrettyTable
-from DSP.precision_recall_from_wav import PerformanceResult
 
 class ExperimentExplorer(object):
     
@@ -62,14 +64,75 @@ class ExperimentExplorer(object):
             print(f"File {experiment_pointer} is not an experiment result file.")
             sys.exit(1)
 
-        experiments = self.materialize_experiments()
+        self.experiments = self.materialize_experiments()
         
         #html_tables = self.make_html_tables(experiments)
-        txt_tables = self.make_txt_tables(experiments)
-        for tbl in txt_tables:
-            print(tbl)
-        print("Done")
+        self.txt_tables = self.make_txt_tables(self.experiments)
+
+    #------------------------------------
+    # plot_spectrogram
+    #-------------------
+    
+    def plot_spectrogram(self, experiment_id):
         
+        if isinstance(experiment_id, str):
+            # Got a signal_treatment as identifier:
+            experiment = self.find_experiment(experiment_id)
+            if experiment is None:
+                raise ValueError(f"Could not find experiment given '{experiment_id}'")
+        elif isinstance(experiment_id, Experiment):
+            experiment = experiment_id
+        else:
+            raise TypeError(f"Value '{experiment_id}' must be string or Experiment instance")
+
+        #********
+        spectrogram_info = DSPUtils.get_spectrogram_data(-45, 50)
+        #****** Must find framerate:
+        #plotter = Plotter(experiment.framerate)
+        plotter = Plotter(4000)
+        #******
+        plotter.plot_spectrogram(spectrogram_info['freq_labels'],
+                                 spectrogram_info['time_labels'],
+                                 spectrogram_info['spectrogram']
+                                 )
+        print(experiment)
+
+    #------------------------------------
+    # find_experiment
+    #-------------------
+    
+    def find_experiment(self, signal_treatment_str):
+        '''
+        Given a list of experiment, find the first
+        with the given signal_treatment_str signature.
+        E.g.: given '-45dB_50Hz_1perc', find the
+        Experiment instance that was conducted with
+        these specifications.
+        
+        Assumption: self.experiments holds a list of
+            Experiment instances
+        
+        @param signal_treatment_str: experiment signal treatment 
+        @type signal_treatment_str: str
+        @return: the experiment instance if found, else None
+        @rtype: {Experiment | None}
+        '''
+        
+        for experiment in self.experiments:
+            if experiment['signal_treatment'].to_flat_str() == signal_treatment_str:
+                return experiment
+            
+        return None
+        
+    #------------------------------------
+    # print_experiment_tables
+    #-------------------
+
+    def print_experiment_tables(self):
+        for tbl in self.txt_tables:
+            print(tbl)
+        
+
     #------------------------------------
     # make_html_tables
     #-------------------
@@ -117,9 +180,7 @@ class ExperimentExplorer(object):
     def materialize_experiments(self):
         experiments = []
         for exp_path in self.experiment_pointers:
-            # Each .tsv may contain rows for multiple 
-            # experiments; the the first only for now:
-            experiment = Experiment.instances_from_tsv(exp_path)[0]
+            experiment = Experiment.load(exp_path)
             experiments.append(experiment)
         return experiments
 
@@ -134,4 +195,6 @@ class ExperimentExplorer(object):
 
 # ------------------ Main ---------------
 if __name__ == '__main__':
-    exp_explorer = ExperimentExplorer('/tmp')
+    # exp_explorer = ExperimentExplorer('/tmp')
+    exp_explorer = ExperimentExplorer('/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/src/DSP/ExperimentResults/Results_20200422_182516')
+    exp = exp_explorer.plot_spectrogram('-45dB_50Hz_1perc')

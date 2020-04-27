@@ -67,8 +67,8 @@ class AmplitudeGater(object):
                  wav_file_path,
                  outfile=None,
                  amplitude_cutoff=-40,   # dB of peak
-                 envelope_cutoff_freq=200, # Hz
-                 spectrogram_freq_cap=300, # Hz
+                 envelope_cutoff_freq=10, # Hz
+                 spectrogram_freq_cap=150, # Hz
                  normalize=True,
                  logfile=None,
                  framerate=None,  # Only used for testing.
@@ -301,9 +301,20 @@ class AmplitudeGater(object):
         envelope = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
         self.log.info("Done applying low pass filter.")        
 
-        if PlotterTasks.has_task('samples_plus_envelope'):
-            self.plotter.over_plot(samples_abs[1000:1100], 'ABS(samples)')
-            self.plotter.over_plot(envelope[1000:1100], f"Env Order {order}")
+        if PlotterTasks.has_task('samples_plus_envelope') is not None:
+            # Show a 1 second wide window:
+            desired_secs = 1
+            duration_in_samples = self.framerate * desired_secs
+
+            # Take the shown sample not right at the start:
+            desired_start_point_secs = 10
+            start_point_in_samples = self.framerate * desired_start_point_secs
+            self.plotter.over_plot(samples_abs[start_point_in_samples:start_point_in_samples+duration_in_samples], 
+                                   'ABS(samples)',
+                                   xlabel=f"Time in samples at {self.framerate} samples/sec")
+            self.plotter.over_plot(envelope[start_point_in_samples:start_point_in_samples+duration_in_samples], 
+                                   f"Env Order {order}",
+                                   xlabel=f"Time in samples at {self.framerate} samples/sec")
          
             #order = 5
             #envOrd3 = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
@@ -368,7 +379,7 @@ class AmplitudeGater(object):
             np.save(time_labels_file, time_labels)
             self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
         
-        if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts'):
+        if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts') is not None:
             # The matrix is large, and plotting takes forever,
             # so define a matrix excerpt:
             self.plotter.plot_spectrogram(new_freq_labels, 
@@ -470,7 +481,7 @@ class AmplitudeGater(object):
         b, a = self.get_butter_lowpass_parms(cutoff, order=order)
         envelope = lfilter(b, a, data)
         
-        if PlotterTasks.has_task('low_pass_filter'):
+        if PlotterTasks.has_task('low_pass_filter') is not None:
             self.plotter.plot_frequency_response(b, a, cutoff, order)
             # Plot a piece of envelope, roughly from the middle:
             mid_env_index = round(envelope.size/2)
@@ -900,16 +911,21 @@ if __name__ == '__main__':
                         )
     
     parser.add_argument('-e', '--envelope',
-                        help='frequency of Butterworth low-pass filter (default: 200Hz',
+                        help='frequency of Butterworth low-pass filter (default: 10Hz',
                         type=int,
-                        default='200'
+                        default='10'
                         )
     
     parser.add_argument('-s', '--spectrofilter',
-                        help='highest frequency to keep in spectrogram.',
+                        help='highest frequency to keep in spectrogram (default: 150Hz)',
                         type=int,
-                        default=300);
-    
+                        default=150);
+
+    parser.add_argument('-o', '--outfilespectrogram',
+                        help="Path to where spectrogram .npy file will be written; if none, no spectrogram saved",
+                        default=None
+                        )
+
     parser.add_argument('-p', '--padding',
                         help='seconds to keep before/after events; default: 5',
                         type=int,
@@ -943,8 +959,11 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Register the plots to produce:
-    for plot_name in args.plot:
-        PlotterTasks.add_task(plot_name)
+    if len(args.plot) > 0:
+        for plot_name in args.plot:
+            PlotterTasks.add_task(plot_name)
+        #(root,extension) = os.path.splitext(args.outfile)
+        #spectrogram_outfile = os.path.join(root, '.npy')
     
     # AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
     #                plot_result=True)
@@ -953,8 +972,10 @@ if __name__ == '__main__':
                    amplitude_cutoff=cutoff,
                    envelope_cutoff_freq=args.envelope,
                    spectrogram_freq_cap=args.spectrofilter,
+                   spectrogram_outfile=args.outfilespectrogram,
                    normalize=not args.raw,
                    logfile=args.logfile,
                    )
-
+    
+    Plotter.block_till_figs_dismissed()    
     sys.exit(0)

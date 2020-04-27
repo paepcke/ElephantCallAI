@@ -193,7 +193,9 @@ class Plotter(object):
         fig, axes = plt.subplots(ncols=plot_grid_width,
                                  nrows=plot_grid_height,
                                  constrained_layout=True)
+
         fig.show()
+
         flat_axes = axes.flatten()
         plot_position = 0
         for (min_sec_index, max_sec_index) in time_label_indices_to_cover:
@@ -314,6 +316,22 @@ class Plotter(object):
                      label=legend_entry
                      )
         self.ax.legend()
+        
+    #------------------------------------
+    # block_till_figs_dismissed
+    #-------------------
+
+    @classmethod
+    def block_till_figs_dismissed(cls):
+        '''
+        Block execution until all currently drawn figure
+        windows are dismissed by the user.
+        
+        @param cls: Plotter class
+        @type cls: Plotter
+        '''
+        plt.ioff()
+        plt.show()
 
 # ------------------------------ class PlotterTasks ----------------
 

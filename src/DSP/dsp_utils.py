@@ -9,6 +9,8 @@ from enum import Enum
 import os
 import re
 
+import numpy as np
+
 class PrecRecFileTypes(Enum):
     SPECTROGRAM  = '_spectrogram'
     TIME_LABELS  = '_time_labels'
@@ -70,6 +72,21 @@ class DSPUtils(object):
             
         new_file_path = f"{path_no_ext}{file_type.value}{ext}"
         return new_file_path
+
+    #------------------------------------
+    # get_spectrogram_data
+    #-------------------
+    
+    @classmethod
+    def get_spectrogram_data(cls, threshold_db, cutoff_freq):
+        #**************
+        spectrogram = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram.npy')
+        freq_labels = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram_freq_labels.npy')
+        time_labels = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram_time_labels.npy')
+        return({'spectrogram' : spectrogram,
+                'freq_labels' : freq_labels,
+                'time_labels' : time_labels
+                })
 
 # ---------------------------- Class SignalTreatment ------------
     

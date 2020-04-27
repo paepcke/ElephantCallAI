@@ -542,8 +542,7 @@ class Experiment(OrderedDict):
         if isinstance(fd_or_path, str):
             fd = open(fd_or_path, 'br')
         try:
-            while True:
-                yield pickle.load(fd)
+            return pickle.load(fd)
         except EOFError:
             return
         finally:

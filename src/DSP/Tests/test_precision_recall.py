@@ -185,9 +185,10 @@ class TestPrecisionRecall(unittest.TestCase):
 
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def test_compute_performance(self):
-        voltages = np.array([0,0,1,2,3,0,4,0,0,0,0,5,6,7,0,0])
+        voltages = np.array([0,0,1,2,3,0,4,0,0,0,0,5,6,7,0,0,8,9,0,0,0,0])
         label_start_stops = np.array([[ 1, 3],  # incl on both sides
                                       [11,13],  # incl on both sides
+                                      [16,20]
                                       ])
         # The start/stop seconds (1,4,11,14) will at some
         # point be turned into sample indices by multiplying 
@@ -203,31 +204,78 @@ class TestPrecisionRecall(unittest.TestCase):
                                                               10)
         
         res_dict = {'signal_treatment' : signal_desc,
-                    'num_elephant_events' : 2,
-                    'num_detected_events': 3,
+                    'num_elephant_events' : 3,
+                    'num_detected_events': 4,
                     'recall_events': 1.0,
-                    'precision_events': 0.6666666666666666,
-                    'f1score_events': 0.8,
-                    'recall_samples': 0.8333333333333334,
-                    'precision_samples': 0.7142857142857143,
-                    'f1score_samples': 0.7692307692307692,
-                    'true_pos_samples': 5,
+                    'precision_events': 0.75,
+                    'f1score_events': 0.8571428571428571,
+                    'recall_samples': 0.636363636363636,
+                    'precision_samples': 0.7777777777777778,
+                    'f1score_samples': 0.7,
+                    'true_pos_samples': 7,
                     'false_pos_samples': 2,
-                    'true_neg_samples': 8,
-                    'false_neg_samples': 1,
+                    'true_neg_samples': 9,
+                    'false_neg_samples': 4,
+                    'true_pos_events': 3,
+                    'false_pos_events': 1,
+                    'true_neg_events': 4,
+                    'false_neg_events': 0,
+                    'true_pos_any_overlap_events': 3,
+                    'num_true_pos_detected_non_events' : 4,
+                    'num_false_pos_detected_non_events' : 0,
+                    'num_false_neg_detected_non_events' : 0,
+                    'true_pos_any_overlap_non_event' : 4,
+                    'recall_events_any_overlap' : 1.0,
+                    'precision_events_any_overlap' : 0.75,
+                    'f_score_events_any_overlap' : 0.8571428571428571,
+                    
+                    'min_required_overlap' : 10,
+                    
+                    }
+        true_res = PerformanceResult(res_dict, 
+                                     overlap_percentages=np.array([ 66.66666667, 100., 40.]))
+        self.assertDictAlmostEqual(perf_res, true_res)
+
+        # Now with high enough overlap percentage requirement 
+        # to fail the right-most burst:
+        perf_res = self.prec_rec_computer.compute_performance(signal_desc,
+                                                              voltages, 
+                                                              label_file_name, 
+                                                              41)
+        
+        res_dict = {'signal_treatment' : signal_desc,
+                    'num_elephant_events' : 3,
+                    'num_detected_events': 4,  # 3
+                    'recall_events': 0.6666666666666666,
+                    'precision_events': 0.6666666666666666,
+                    'f1score_events': 0.6666666666666666,
+                    'recall_samples': 0.636363636363636,
+                    'precision_samples': 0.7777777777777778,
+                    'f1score_samples': 0.7,
+                    'true_pos_samples': 7,
+                    'false_pos_samples': 2,
+                    'true_neg_samples': 9,
+                    'false_neg_samples': 4,
                     'true_pos_events': 2,
                     'false_pos_events': 1,
                     'true_neg_events': 3,
                     'false_neg_events': 0,
-                    'true_pos_any_overlap_events': 2,
+                    'true_pos_any_overlap_events': 3,
                     'num_true_pos_detected_non_events' : 3,
                     'num_false_pos_detected_non_events' : 0,
                     'num_false_neg_detected_non_events' : 0,
-                    'true_pos_any_overlap_non_event' : 3,
-                    'min_required_overlap' : 10
+                    'true_pos_any_overlap_non_event' : 4,
+                    'recall_events_any_overlap' : 1.0,
+                    'precision_events_any_overlap' : 0.75,
+                    'f_score_events_any_overlap' : 0.8571428571428571,
+                    
+                    'min_required_overlap' : 41
+                    
                     }
-        true_res = PerformanceResult(res_dict, overlap_percentages=np.array([ 66.66666667, 100.]))
-        self.assertEqual(perf_res, true_res)
+        true_res = PerformanceResult(res_dict, 
+                                     overlap_percentages=np.array([ 66.66666667, 100., 40.]))
+        self.assertDictAlmostEqual(perf_res, true_res)
+        
 
     #------------------------------------
     # test_label_file_reader
@@ -329,6 +377,33 @@ class TestPrecisionRecall(unittest.TestCase):
                 fd.write('\t'.join(generic_label_entry_arr) + '\n')
 
         return label_file_name
+
+    #------------------------------------
+    # assertDictAlmostEqual
+    #-------------------
+    
+    def assertDictAlmostEqual(self, d1, d2):
+        errors = {}
+        for k1 in d1.keys():
+            val1 = d1[k1]
+            val2 = d2[k1]
+            if type(val1) in (float, np.float64):
+                try:
+                    assert(round(val1, 2) == round(val2, 2))
+                    continue
+                except AssertionError:
+                    errors[k1] = [val1, val2]
+                    continue
+            if val1 != val2:
+                errors[k1] = [val1, val2]
+                continue
+                
+        if len(errors) == 0:
+            return True
+        raise AssertionError(f"Dicts unequal: {errors}")
+        
+            
+
 
     #------------------------------------
     # performance_results_equality
