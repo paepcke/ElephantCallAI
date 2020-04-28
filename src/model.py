@@ -1231,7 +1231,7 @@ def calc_num_chunks_calls(data_loader):
     print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
-def main(mode, model, train_loader, test_loader):
+def main(mode, model, train_loader, test_loader, save_path):
     dloaders = {'train':train_loader, 'valid':test_loader}
 
 
@@ -1277,8 +1277,6 @@ def main(mode, model, train_loader, test_loader):
     else:
         ## Training
         model_id = int(model)
-
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
         model = get_model(model_id)
 
@@ -1345,6 +1343,8 @@ if __name__ == '__main__':
         print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
         print ("3) model.py model_id - train a given model")
     elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
-        main("visualization", sys.argv[2], train_loader, test_loader)
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[2]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        main("visualization", sys.argv[2], train_loader, test_loader, save_path)
     else:
-        main("training", sys.argv[1], test_loader, test_loader)
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[1]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        main("training", sys.argv[1], test_loader, test_loader, save_path)
