@@ -1231,19 +1231,7 @@ def calc_num_chunks_calls(data_loader):
     print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
-def main(mode, model):    
-    ## Build Dataset
-    # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"a
-    # train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # Quatro
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # The validation loader should be the full 24hr trainind data use for adversarial discovery
-    #validation_loader 
-    # test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # Quatro
-    test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    
+def main(mode, model, train_loader, test_loader):
     dloaders = {'train':train_loader, 'valid':test_loader}
 
 
@@ -1348,12 +1336,15 @@ def main(mode, model):
         writer.close()
 
 if __name__ == '__main__':
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+
     if sys.argv[1].lower() == 'help':
         print ("Run types are as follows:")
         print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
         print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
         print ("3) model.py model_id - train a given model")
     elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
-        main("visualization", sys.argv[2])
+        main("visualization", sys.argv[2], train_loader, test_loader)
     else:
-        main("training", sys.argv[1])
+        main("training", sys.argv[1], test_loader, test_loader)
