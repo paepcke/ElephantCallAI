@@ -89,6 +89,7 @@ class ElephantDataset(data.Dataset):
 
         assert len(self.features) == len(self.labels)
 
+        print("Dataset from path {}".format(data_path))
         print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
         print('Normalizing with {} and scaling {}'.format(preprocess, scale))
         print("Shape of a feature is {} and a label is {}".format(self[0][0].shape, self[0][1].shape))
