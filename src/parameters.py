@@ -11,7 +11,7 @@ TRAIN_STOP_ITERATIONS = 30
 # many adversarial samples to find based on the size of the
 # current dataset. 
 # Note: -1 means find all adversarial samples!
-ADVERSARIAL_SAMPLES = 0.04
+ADVERSARIAL_SAMPLES = 0.5
 # How many incorrect slices for a chunk to be considered
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
@@ -135,6 +135,12 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         },
 17: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        }
+18: {
         'lr': 1e-3,
         'lr_decay_step': 4,
         'lr_decay': 0.95,

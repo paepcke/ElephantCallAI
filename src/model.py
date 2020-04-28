@@ -99,6 +99,8 @@ def get_model(idx):
         return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 17:
         return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif idx == 18:
+        return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -791,9 +793,40 @@ class Model16(nn.Module):
         return logits
 
 
+"""
+ResNet-18
+"""
 class Model17(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model17, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log((1 - weight_init) / weight_init))
+            self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
+
+
+"""
+ResNet-18
+"""
+class Model18(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model18, self).__init__()
 
         self.input_size = input_size
 
@@ -977,7 +1010,7 @@ def get_f_score(logits, labels, threshold=0.5):
     return f_score
 
 
-def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs):
+def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs, starting_epoch=0):
     since = time.time()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -991,7 +1024,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
 
     try:
-        for epoch in range(num_epochs):
+        for epoch in range(starting_epoch, num_epochs):
             for phase in ['train', 'valid']:
                 if phase == 'train':
                     model.train(True)
