@@ -53,7 +53,7 @@ def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save
         assert model_wts != None
 
         model.load_state_dict(model_wts)
-        model_save_path = save_path + '/' + "model" + "_adversarial_iteration_" + outer_iteration +"_.pt"
+        model_save_path = save_path + '/' + "model" + "_adversarial_iteration_" + str(outer_iteration) +"_.pt"
         torch.save(model, model_save_path)
         print('Saved best val acc model to path {}'.format(model_save_path))
 

@@ -4,6 +4,8 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
+NUM_EPOCHS = 1000
+
 ADVERSARIAL_LOOPS = 10
 TRAIN_STOP_ITERATIONS = 30
 # Determines number of adversarial samples to discover.
@@ -152,7 +154,6 @@ RANDOM_SEED = 8
 DATA_LOADER_SEED = 33
 
 BATCH_SIZE = 32
-NUM_EPOCHS = 1000
 
 #Local
 # SAVE_PATH = '../models/'

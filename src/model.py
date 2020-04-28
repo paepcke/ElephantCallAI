@@ -1120,6 +1120,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
             writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
             writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+            writer.add_scalar('valid_epoch_fscore', valid_epoch_fscore, epoch)
             writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
             scheduler.step()
