@@ -1023,7 +1023,6 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     # Check this
     last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
 
-    print("hey")
     try:
         for epoch in range(starting_epoch, num_epochs):
             for phase in ['train', 'valid']:
@@ -1032,7 +1031,6 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                 else:
                     model.train(False)
 
-                print("got here")
                 running_loss = 0.0
                 running_corrects = 0
                 running_samples = 0
@@ -1051,7 +1049,6 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     if (i % 1000 == 0) and parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
-                    print(i)
                     inputs = inputs.float()
                     
                     labels = labels.float()
