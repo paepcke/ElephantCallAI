@@ -1237,7 +1237,7 @@ def main(mode, model):
     # train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
     #validation_loader 
     # test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
