@@ -835,12 +835,11 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
 
 
 
-def main():
+def main(args):
     """
     Example runs:
 
     """
-    args = parser.parse_args()
     
     model, model_id = loadModel(args.model)
     # Put in eval mode!
@@ -1508,4 +1507,5 @@ def test_event_metric(test, compare, threshold=0.1, is_truth=False, call_length=
 
 
 if __name__ == '__main__':
-    main()
+    args = parser.parse_args()
+    main(args)
