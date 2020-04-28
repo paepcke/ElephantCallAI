@@ -48,7 +48,7 @@ def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save
 
     for outer_iteration in range(parameters.ADVERSARIAL_LOOPS):
 
-        model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS, starting_epoch=outer_iteration*parameters.NUM_EPOCHS)
+        model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, (outer_iteration + 1)*parameters.NUM_EPOCHS, starting_epoch=outer_iteration*parameters.NUM_EPOCHS)
 
         assert model_wts != None
 
