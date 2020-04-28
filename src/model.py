@@ -1231,30 +1231,26 @@ def calc_num_chunks_calls(data_loader):
     print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
-def main():    
+def main(mode, model):    
     ## Build Dataset
     # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"a
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    # train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # The validation loader should be the full 24hr trainind data use for adversarial discovery
     #validation_loader 
-    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    # test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     # Quatro
-    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    if sys.argv[1].lower() == 'help':
-        print ("Run types are as follows:")
-        print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
-        print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
-        print ("3) model.py model_id - train a given model")
-    elif len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
+
+    if mode == "visualization":
         ## Data Visualization
         # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=parameters.device)
-        model = torch.load(sys.argv[2], map_location=parameters.device)
+        model = torch.load(model, map_location=parameters.device)
         print(model)
 
         for inputs, labels in dloaders['valid']:
@@ -1275,25 +1271,24 @@ def main():
 
                 visualize(features, output, label)
 
-    elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
+    
         # Load a model that was already trained and run through adversarial 
         # discovery. Could also just do this
-        model = torch.load(sys.argv[2], map_location=parameters.device)
+        model = torch.load(model, map_location=parameters.device)
 
         adversarial_files = adversarial_discovery(test_loader, model, min_length=parameters.ADVERSARIAL_THRESHOLD)
         print ("Discovered {} adversaries".format(len(adversarial_files)))
         # We want to save these to a given file for testing purposes
         # Get the model name from the path
         # Also include what the threshold was! 
-        tokens = sys.argv[2].split('/')
+        tokens = model.split('/')
         model_id = tokens[-2]
         with open(model_id + "_threshold_" + str(parameters.ADVERSARIAL_THRESHOLD) + ".txt", 'w') as f:
             for file in adversarial_files:
                 f.write('{}\n'.format(file))
-
     else:
         ## Training
-        model_id = int(sys.argv[1])
+        model_id = int(model)
 
         save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
 
@@ -1353,4 +1348,12 @@ def main():
         writer.close()
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1].lower() == 'help':
+        print ("Run types are as follows:")
+        print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
+        print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
+        print ("3) model.py model_id - train a given model")
+    elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
+        main("visualization", sys.argv[2])
+    else:
+        main("training", sys.argv[1])
