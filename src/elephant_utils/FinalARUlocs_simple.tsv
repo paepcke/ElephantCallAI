@@ -1,0 +1,54 @@
+Site	Latitude	longitude	Habitat	Protection
+nn01a	2.32474	16.45236	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn01b	2.32401	16.51591	mixed forest-open	national park
+nn01c	2.32410	16.55124	mixed forest-closed	national park
+nn01d	2.32381	16.61412	mixed forest-closed	national park
+nn01e	2.32445	16.65944	mixed forest-closed	national park
+nn01f	2.32398	16.68664	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn01g	2.32400	16.7132	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn02a	2.27026	16.46156	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn02b	2.26136	16.50592	mixed forest-closed	national park
+nn02c	2.27007	16.5512	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn02d	2.28811	16.59631	mixed forest-closed	national park
+nn02e	2.26941	16.64061	mixed forest-closed	national park
+nn02f	2.25139	16.68626	mixed forest-closed	national park
+nn02g	2.26951	16.74016	mixed forest-open	national park
+nn03a	2.21546	16.44315	mixed forest-closed	national park
+nn03b	2.21574	16.49722	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn03c	2.21702	16.54836	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn03d	2.21554	16.59586	mixed forest-closed	national park
+nn03e	2.21619	16.6591	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn03f	2.21571	16.67704	swamp forest	national park
+nn03g	2.21599	16.73092	mixed forest-closed	national park
+nn04a	2.18844	16.44355	foret mixte	national park
+nn04b	2.17964	16.48804	mixed forest-closed	national park
+nn04c	2.16229	16.53257	mixed forest-closed	national park
+nn04d	2.17934	16.58042	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - active 2017-2018
+nn04e	2.19772	16.62334	mixed forest-open	logging - active 2017-2018
+nn04f	2.17061	16.66842	mixed forest-closed	logging - active 2017-2018
+nn05a	2.13443	16.47903	mixed forest-closed	national park
+nn05b	2.13462	16.51483	mixed forest-closed	national park
+nn05c	2.13495	16.56912	mixed forest-closed	logging - active 2017-2018
+nn05d	2.13482	16.60523	mixed forest-closed	logging - active 2017-2018
+nn05e	2.13474	16.62245	swamp forest	logging - active 2017-2018
+nn05f	2.13458	16.70373	mixed forest-closed	logging - active 2017-2018
+nn06a	2.079	16.45282	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - long inactive
+nn06b	2.09361	16.50449	mixed forest-closed	national park
+nn06c	2.10295	16.54042	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn06d	2.07075	16.58705	mixed forest-closed de marantacees	logging - active 2017-2018
+nn06e	2.08936	16.63186	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - active 2017-2018
+nn06f	2.07061	16.67719	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - active 2017-2018
+nn07a	2.06203	16.46085	mixed forest-closed	logging - long inactive
+nn07b	2.06195	16.5235	mixed forest-closed	logging - long inactive
+nn07c	2.06339	16.557376	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
+nn08a	2.00846	16.47898	mixed forest-open	logging - long inactive
+nn08b	2.01739	16.52424	mixed forest-closed	logging - long inactive
+nn08c	1.9896	16.56747	swamp forest	logging - long inactive
+nn09a	1.95362	16.45216	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - long inactive
+nn09b	1.9535	16.49688	mixed forest-closed	logging - long inactive
+nn09c	1.9533	16.55073	mixed forest-closed	logging - long inactive
+nn10a	1.8902	16.46101	mixed forest-open	logging - long inactive
+nn10b	1.90823	16.50537	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	logging - long inactive
+Tree1	2.24763	16.40841	mixed forest-closed	national park
+Tree2	2.23941	16.40858	mixed forest-open	national park
+Tree3	2.22483	16.40247	"Gilbertiodendron (mono-dominant); very tall canopy, sparse understory"	national park
