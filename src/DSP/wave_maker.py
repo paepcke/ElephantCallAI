@@ -40,6 +40,7 @@ class WavMaker(object):
         Constructor
         '''
         self.log = LoggingService(logfile=logfile)
+        files_done = 0
         for infile in infiles:
             if not os.path.exists(infile):
                 self.log.warn(f"File {infile} does not exist.")
@@ -62,6 +63,8 @@ class WavMaker(object):
                                    )
             perc_zeroed = gater.percent_zeroed
             self.log.info(f"Done processing {os.path.basename(infile)}; removed {round(perc_zeroed)} percent")
+            files_done += 1
+            self.log.info(f"\nBatch gated {files_done} wav files.")
             
 # ---------------- Main -------------
 if __name__ == '__main__':
