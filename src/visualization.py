@@ -242,7 +242,10 @@ def test_generate_labels(wav, labels, spectrogram_info):
     print (np.sum(test_label_1 - test_label_2))
 
 
-def main(args=parser.parse_args()):
+def main(args=None):
+    if args == None:
+        args = parser.parse_args()
+
     wavfile = args.wav
     labelWav = args.labelWav
     spectrogram_info = {'NFFT': args.NFFT,
