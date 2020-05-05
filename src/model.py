@@ -1241,7 +1241,7 @@ def main(mode, model, train_loader, test_loader, save_path):
         model = torch.load(model, map_location=parameters.device)
         print(model)
 
-        for inputs, labels in dloaders['valid']:
+        for inputs, labels, _ in dloaders['valid']:
             inputs = inputs.float()
             labels = labels.float()
 
@@ -1342,7 +1342,7 @@ if __name__ == '__main__':
         print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
         print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
         print ("3) model.py model_id - train a given model")
-    elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
+    elif len(sys.argv) > 1 and sys.argv[1] == 'visualization':
         save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[2]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
         main("visualization", sys.argv[2], train_loader, test_loader, save_path)
     else:
