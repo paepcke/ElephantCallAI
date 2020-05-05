@@ -3,8 +3,21 @@ Created on Jan 15, 2020
 
 @author: paepcke
 
-TODO: 
-  o Allow passing in log level and log file name
+Singleton-instance class to share logging among
+modules. Usage:
+
+from logging_service import LoggingService
+
+Constructor:
+            ...
+        self.log = LoggingService(logfile=logfile)
+        self.log.info("Constructing output file names...")
+        self.log.err("Constructing output file names...")
+        self.log.warn("Constructing output file names...")
+        self.log.debug("Constructing output file names...")
+
+Easily specify rotating logs. See __init__() for all option.
+
 '''
 import logging
 from logging.handlers import RotatingFileHandler

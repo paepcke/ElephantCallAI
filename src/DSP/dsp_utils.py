@@ -78,11 +78,33 @@ class DSPUtils(object):
     #-------------------
     
     @classmethod
-    def get_spectrogram_data(cls, threshold_db, cutoff_freq):
+    def get_spectrogram_data(cls, threshold_db, cutoff_freq, src_dir='/tmp'):
         #**************
-        spectrogram = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram.npy')
-        freq_labels = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram_freq_labels.npy')
-        time_labels = np.load('/tmp/filtered_wav_-40dB_10Hz_20200423_153323_gated_spectrogram_time_labels.npy')
+        files = os.listdir(src_dir)
+        spec_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram.npy')
+        freq_lbl_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram_freq_labels.npy')
+        time_lbl_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram_time_labels.npy')        
+        try:
+            spect_file = next(filter(spec_pat.match, files))
+            spect_path = os.path.join(src_dir, spect_file)
+        except StopIteration:
+            raise IOError("Spectrogram file not found.")
+        try:
+            freq_lbl_file = next(filter(freq_lbl_pat.match, files))
+            freq_lbl_path = os.path.join(src_dir, freq_lbl_file)            
+        except StopIteration:
+            raise IOError("Frequency labels file not found.")
+        try:
+            time_lbl_file = next(filter(time_lbl_pat.match, files))
+            time_lbl_path = os.path.join(src_dir, time_lbl_file)            
+        except StopIteration:
+            raise IOError("Time labels file not found.")
+        
+
+        spectrogram = np.load(spect_path)
+        freq_labels = np.load(freq_lbl_path)
+        time_labels = np.load(time_lbl_path)
+        #*********
         return({'spectrogram' : spectrogram,
                 'freq_labels' : freq_labels,
                 'time_labels' : time_labels
@@ -436,8 +458,6 @@ if __name__ == '__main__':
     d2 = SignalTreatmentDescriptor(-40,300,20)
     assert (d1.equality_sig_proc(d2))
     assert (not d1.__eq__(d2))
-    
-    
     
     
     print('SignalTreatmentDescriptor tests OK')

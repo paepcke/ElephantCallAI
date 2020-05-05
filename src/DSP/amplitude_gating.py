@@ -57,7 +57,8 @@ class AmplitudeGater(object):
     classdocs
     '''
     
-    spectrogram_freq_cap = 300 # Hz.
+    spectrogram_freq_cap = 150 # Hz.
+    DEFAULT_BUTTERWORTH_ORDER = 4
     
     #------------------------------------
     # Constructor 
@@ -184,9 +185,32 @@ class AmplitudeGater(object):
             normed_samples = self.normalize(samples_float)
         else:
             normed_samples = samples_float.copy()
+
+        self.log.info("Taking abs val of values...")
+        samples_abs = np.abs(normed_samples)
+        self.log.info("Done taking abs val of values.")
+
+
+        # Before doing anything else, cut frequencies that
+        # would not hold elephant call; gets rid of them
+        # damn birds:
+
+        self.log.info(f"Cutting frequencies above {self.spectrogram_freq_cap}Hz...")
+        normed_filtered_abs_samples = \
+            self.butter_lowpass_filter(samples_abs,
+                                       self.spectrogram_freq_cap,
+                                       order=self.DEFAULT_BUTTERWORTH_ORDER
+                                       )
+        self.log.info(f"Done cutting frequencies above {self.spectrogram_freq_cap}Hz.")
+#         Plotter(4000).plot(range(1000),samples_float[:1000],
+#                      title='Samples after butterworth'
+#                      )
+#         self.log.info("Exiting early intentionally")
+#         sys.exit()
+        #****************
          
         # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
-        gated_samples  = self.amplitude_gate(normed_samples, 
+        gated_samples  = self.amplitude_gate(normed_filtered_abs_samples, 
                                              amplitude_cutoff,
                                              envelope_cutoff_freq=envelope_cutoff_freq,
                                              spectrogram_freq_cap=spectrogram_freq_cap,
@@ -227,12 +251,12 @@ class AmplitudeGater(object):
     #-------------------    
         
     def amplitude_gate(self, 
-                       sample_npa, 
+                       samples_abs, 
                        threshold_db,
-                       order=4, 
-                       envelope_cutoff_freq=100,
+                       order=None, 
+                       envelope_cutoff_freq=10,
                        spectrogram_dest=None,
-                       spectrogram_freq_cap=300, # Hz 
+                       spectrogram_freq_cap=150, # Hz 
                        ):
         '''
         Given an array of raw audio samples, 
@@ -273,12 +297,13 @@ class AmplitudeGater(object):
                 the true times in the recording.   
              
         
-        @param sample_npa: raw audio
-        @type sample_npa: np.array(int)
+        @param samples_abs: raw audio
+        @type samples_abs: np.array(int)
         @param threshold_db: voltage below which signal is set to zero;
             specified as dB below peak voltage: db FS.
         @type threshold_db: negative int
-        @param order: polynomial of Butterworth filter
+        @param order: polynomial of Butterworth filter. Default
+            can be set with AmplitudeGater.DEFAULT_BUTTERWORTH_ORDER
         @type order: int
         @param envelope_cutoff_freq: frequency in Hz for the envelope
         @type envelope_cutoff_freq: int
@@ -293,9 +318,8 @@ class AmplitudeGater(object):
         # Don't want to open the gate *during* a burst.
         # So make a low-pass filter that only roughly envelops
 
-        self.log.info("Taking abs val of values...")
-        samples_abs = np.abs(sample_npa)
-        self.log.info("Done taking abs val of values.")
+        if order is None:
+            order = AmplitudeGater.DEFAULT_BUTTERWORTH_ORDER
 
         self.log.info(f"Applying low pass filter (cutoff {envelope_cutoff_freq})...")
         envelope = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
@@ -340,7 +364,7 @@ class AmplitudeGater(object):
         self.log.info("Zeroing sub-threshold values...")
 
         mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
-        gated_samples = sample_npa * mask_for_where_non_zero
+        gated_samples = samples_abs * mask_for_where_non_zero
         
         self.percent_zeroed = 100 * gated_samples[gated_samples==0].size / gated_samples.size
         self.log.info(f"Zeroed {self.percent_zeroed:.2f}% of signal.")

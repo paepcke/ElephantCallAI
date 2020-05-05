@@ -657,18 +657,18 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--overlaps',
                         type=int,
                         nargs='+',
-                        help='percentage overlap of prediction with label to count as success; repeatable; default: 10%.',
-                        default=10);
+                        help='percentage overlap of prediction with label to count as success; repeatable; default: 1perc.',
+                        default=[1]);
     parser.add_argument('-t', '--threshold_dbs',
                         type=int,
                         nargs='+',
-                        default=-20,
-                        help='Repeatable: db above which voltages are cut off; default: -20dB FS')
+                        default=[-40],
+                        help='Repeatable: db above which voltages are cut off; default: -40dB FS')
     parser.add_argument('-f', '--cutoff_freqs',
                         type=int,
                         nargs='+',
-                        default=100,
-                        help='Repeatable: cutoff frequencies for lowpass envelope filter; default: 100Hz')
+                        default=[10],
+                        help='Repeatable: cutoff frequencies for lowpass envelope filter; default: 10Hz')
     parser.add_argument('-s', '--spectrogram',
                         default=None,
                         action='store_true',

@@ -44,7 +44,7 @@ class ExperimentExplorer(object):
                 # Piece of file name that indicates the file
                 # is a saved experiment:
                 experiment_indicator = PrecRecFileTypes.PICKLE.value
-                re_pat = re.compile(f".*{experiment_indicator}.*")
+                re_pat = re.compile(f".*{experiment_indicator}*")
                 for file in files_in_dir:
                     if re.match(re_pat, file):
                         self.experiment_pointers.append(os.path.join(experiment_pointer,file))
@@ -86,7 +86,7 @@ class ExperimentExplorer(object):
             raise TypeError(f"Value '{experiment_id}' must be string or Experiment instance")
 
         #********
-        spectrogram_info = DSPUtils.get_spectrogram_data(-45, 50)
+        spectrogram_info = DSPUtils.get_spectrogram_data(-40, 5)
         #****** Must find framerate:
         #plotter = Plotter(experiment.framerate)
         plotter = Plotter(4000)
@@ -196,5 +196,7 @@ class ExperimentExplorer(object):
 # ------------------ Main ---------------
 if __name__ == '__main__':
     # exp_explorer = ExperimentExplorer('/tmp')
-    exp_explorer = ExperimentExplorer('/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/src/DSP/ExperimentResults/Results_20200422_182516')
-    exp = exp_explorer.plot_spectrogram('-45dB_50Hz_1perc')
+    #exp_explorer = ExperimentExplorer('/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/src/DSP/ExperimentResults/Results_20200426_182831')
+    exp_explorer = ExperimentExplorer('/tmp/')
+    exp = exp_explorer.plot_spectrogram('-40dB_5Hz_1perc')
+    Plotter.block_till_figs_dismissed()
