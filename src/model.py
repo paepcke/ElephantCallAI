@@ -1253,9 +1253,9 @@ def main(mode, model, train_loader, test_loader, save_path):
             print('Accuracy on the test set for this batch is {:4f}'.format(float(num_correct(outputs.view(-1, 1), labels.view(-1, 1))) / outputs.view(-1, 1).shape[0]))
 
             for i in range(len(inputs)):
-                features = inputs[i].detach().numpy()
-                output = torch.sigmoid(outputs[i]).detach().numpy()
-                label = labels[i].detach().numpy()
+                features = inputs[i].cpu().detach().numpy()
+                output = torch.cpu().sigmoid(outputs[i]).detach().numpy()
+                label = labels[i].cpu().detach().numpy()
 
                 visualize(features, output, label)
 
