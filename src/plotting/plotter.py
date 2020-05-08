@@ -72,14 +72,19 @@ class Plotter(object):
         Given a long spectrogram (frequency strengths (rows) and time (columns)),
         plot a (series of) spectrogram snippets. 
         
-        Two options: caller can provide time_intervals_to_cover.
+        Three options: 
+        
+        Option 1: caller can provide time_intervals_to_cover.
         That must be a tuple of pairs. Each pair is the start and 
         end second of one spectrogram to display. These snippets do not
         need to be adjacent.
         
-        If no time_intervals_to_cover times are provided, the time-length
+        Option 2: If time_intervals_to_cover is None, the time-length
         of the spectrogram is partitioned into 18 (6x3) time
         periods, equally spaced over the entire time period.
+        
+        Option 3: If an empty array is passed for time_intervals_to_cover,
+        then the entire spectrogram is plotted.
         
         Result is a matrix of plots, with the true labels
         for frequencies and times.
@@ -89,7 +94,7 @@ class Plotter(object):
         @type freq_time: np.array(real, real)
         @param time_intervals_to_cover: a list of 2-tuples whose values are  
              time intervals in seconds.
-        @type time_intervals_to_cover: [({int | float}, {int | fload})]
+        @type time_intervals_to_cover: [({int | float}, {int | float})]
         '''
         
         # Define the grid of spectroram plots:
@@ -100,6 +105,15 @@ class Plotter(object):
         num_plots = plot_grid_height * plot_grid_width
         max_spectrogram_time = time_labels[-1]
         
+        if type(time_intervals_to_cover) == list \
+            and len(time_intervals_to_cover) == 0:
+            # Show the whole spectrogram:
+            time_intervals_to_cover = [(0, max_spectrogram_time)]
+            time_label_indices_to_cover = [(0,len(time_labels)-1)]
+            plot_grid_width = 1
+            plot_grid_height = 1
+            num_plots = 1
+        
         # Find index pairs into time_labels that contain 
         # the passed-in time intervals. We'll fill the following
         # with start-stop index pairs:
@@ -109,7 +123,7 @@ class Plotter(object):
             # Case 1: caller specified particular time intervals:
             num_spectrograms = len(time_intervals_to_cover)
             # Number of 3-column spectrogram rows we'll need:
-            plot_grid_height = np.ceil(num_spectrograms / plot_grid_width)
+            plot_grid_height = int(np.ceil(num_spectrograms / plot_grid_width))
             # Find the requested times in the time labels:
             for (min_sec, max_sec) in time_intervals_to_cover:
                 # Get a two-el array with indices into
@@ -195,8 +209,13 @@ class Plotter(object):
                                  constrained_layout=True)
 
         fig.show()
-
-        flat_axes = axes.flatten()
+        
+        # For multi-panel plots axes will be a
+        # 2d array:
+        if type(axes) == np.ndarray:
+            flat_axes = axes.flatten()
+        else:
+            flat_axes = [axes]
         plot_position = 0
         for (min_sec_index, max_sec_index) in time_label_indices_to_cover:
             
@@ -244,6 +263,10 @@ class Plotter(object):
             new_xticklabels = []
             for xtick_txt_obj in ax.get_xticklabels():
                 label_txt = xtick_txt_obj.get_text()
+                # Negative tick labels use en-dash, rather
+                # than minus sign. Replace if needed:
+                if label_txt[0].encode('utf-8') == b'\xe2\x88\x92':
+                    label_txt = f"-{label_txt[1:]}"
                 time_in_secs = float(label_txt)
                 time_in_smpt = str(timedelta(seconds=time_in_secs))
                 new_txt = f"{label_txt}\n{time_in_smpt}"
