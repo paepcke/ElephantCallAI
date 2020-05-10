@@ -66,7 +66,8 @@ class Plotter(object):
                          time_labels,
                          freq_time,
                          time_intervals_to_cover=None,
-                         title='Spectrogram (secs)'
+                         title='Spectrogram (secs)',
+                         block=False
                          ):
         '''
         Given a long spectrogram (frequency strengths (rows) and time (columns)),
@@ -89,12 +90,19 @@ class Plotter(object):
         Result is a matrix of plots, with the true labels
         for frequencies and times.
         
+        @param freq_labels: labels for the frequency axis 
+        @type freq_labels: np.array
+        @param time_labels: labels for the time axis
+        @type time_labels: np.array
         @param freq_time: matrix whose rows are frequency energy,
             and whose columns are time
         @type freq_time: np.array(real, real)
         @param time_intervals_to_cover: a list of 2-tuples whose values are  
              time intervals in seconds.
         @type time_intervals_to_cover: [({int | float}, {int | float})]
+        @param block: whether or not to wait with return
+            till user dismisses the figure window.
+        @type block: bool
         '''
         
         # Define the grid of spectroram plots:
@@ -187,8 +195,10 @@ class Plotter(object):
                                        freq_labels,
                                        plot_grid_width,
                                        plot_grid_height,
-                                       title=self.title)
+                                       title=title)
         
+        if block:
+            self.block_till_figs_dismissed()
         
     #------------------------------------
     # plot_spectrogram_excerpts
@@ -207,6 +217,7 @@ class Plotter(object):
         fig, axes = plt.subplots(ncols=plot_grid_width,
                                  nrows=plot_grid_height,
                                  constrained_layout=True)
+        fig.suptitle(title)
 
         fig.show()
         
