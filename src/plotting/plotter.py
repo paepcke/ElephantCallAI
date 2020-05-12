@@ -9,8 +9,9 @@ from matplotlib.text import Text
 from matplotlib.font_manager import FontProperties
 
 import numpy as np
-from scipy.signal.filter_design import freqz
+from scipy.signal.filter_design import freqz, sosfreqz
 from datetime import timedelta
+from docutils.nodes import title
 
 class Plotter(object):
     '''
@@ -290,29 +291,78 @@ class Plotter(object):
     # plot_frequency_response
     #-------------------
     
-    def plot_frequency_response(self, b, a, cutoff, order):
+    def plot_frequency_response(self, 
+                                filter_coeffs, 
+                                cutoffs, 
+                                title=None):
         '''
-        b,a come from call to get_butter_lowpass_parms()
+        Plot response to a low/high/bandpass filter.
+        Filter coefficients from from calling iirfilter().
+        If that function was called such that it returned
+        nominator/denominator of the transfer function, namely
+        a and b, hen filter_coeffs should be a tuple (a,b)
+        if the function was called requesting second order segments,
+        (sos), then filter_coeffs should be the sos.
         
-        @param b:
-        @type b:
-        @param a:
-        @type a:
-        @param cutoff: frequency (Hz) at which filter is supposed to cut off
-        @type cutoff: int
-        @param order: order of the filter: 1st, 2nd, etc.; i.e. number of filter elements.
-        @type order: int
+        @param filter_coeffs: definiting filter characteristics
+        @type filter_coeffs: {(np_arr, np_arr) | np_arr}
+        @param cutoffs: frequencies (Hz) at which filter is supposed to cut off
+        @type cutoffs: {int | [int]}
+        @param title: optional title of the figure. If None,
+            a title is created from the cutoff freqs.
+        @type str
         '''
-    
-        w, h = freqz(b, a, worN=8000)
-        plt.subplot(1, 1, 1)
-        plt.plot(0.5 * self.framerate * w/np.pi, np.abs(h), 'b')
-        plt.plot(cutoff, 0.5*np.sqrt(2), 'ko')
-        plt.axvline(cutoff, color='k')
-        plt.xlim(0, 0.5*self.framerate)
-        plt.title(f"Lowpass Filter Frequency Response (order: {order}, cutoff: {cutoff} Hz")
-        plt.xlabel('Frequency [Hz]')
-        plt.grid()
+        if type(cutoffs) != list:
+            cutoffs = [cutoffs]
+        if type(filter_coeffs) == tuple:
+            (a,b) = filter_coeffs
+            w, h = freqz(b, a, worN=8000)
+        else:
+            w, h = sosfreqz(filter_coeffs, worN=8000)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        ax.plot(0.5 * self.framerate * w/np.pi, np.abs(h), 'b') # Blue
+        ax.plot(cutoffs[0], 0.5*np.sqrt(2), 'ko')
+        ax.axvline(cutoffs[0], color='k')        
+        if len(cutoffs) > 1:
+            ax.plot(cutoffs[1], 0.5*np.sqrt(2), 'ko')
+            ax.axvline(cutoffs[1], color='k')
+        # Since x axis will be log, cannot start
+        # x vals at 0. To make best use of the 
+        # horizontal space, start plotting at 
+        # 5Hz below the low cutoff freq:
+        ax.set_xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*self.framerate)
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        if title is not None:
+            fig.suptitle(title)
+        else:
+            fig.suptitle(f"Filter Frequency Response cutoff(s): {cutoffs} Hz")
+        ax.set_xlabel('Log frequency [Hz]')
+        ax.grid()
+        fig.show()
+
+        
+#         plt.plot(cutoffs[0], 0.5*np.sqrt(2), 'ko')
+#         plt.axvline(cutoffs[0], color='k')        
+#         if len(cutoffs) > 1:
+#             plt.plot(cutoffs[1], 0.5*np.sqrt(2), 'ko')
+#             plt.axvline(cutoffs[1], color='k')
+#         # Since x axis will be log, cannot start
+#         # x vals at 0. To make best use of the 
+#         # horizontal space, start plotting at 
+#         # 5Hz below the low cutoff freq:
+#         plt.xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*self.framerate)
+#         plt.xscale('log')
+#         plt.yscale('log')
+#         if title is not None:
+#             plt.title = title
+#         else:
+#             plt.title(f"Filter Frequency Response cutoff(s): {cutoffs} Hz")
+#         plt.xlabel('Log frequency [Hz]')
+#         plt.grid()
+#         plt.show()
 
     #------------------------------------
     # over_plot
@@ -376,7 +426,7 @@ class PlotterTasks(object):
       o 'gated_wave_excerpt',
       o 'samples_plus_envelope',
       o 'spectrogram_excerpts',
-      o 'low_pass_filter'
+      o 'filter_response'
     by calling 'PlotterTasks.add_task(<plotName>, **kwargs) 
     '''
     

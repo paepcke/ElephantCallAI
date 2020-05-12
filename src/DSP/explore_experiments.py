@@ -198,5 +198,6 @@ if __name__ == '__main__':
     # exp_explorer = ExperimentExplorer('/tmp')
     #exp_explorer = ExperimentExplorer('/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/src/DSP/ExperimentResults/Results_20200426_182831')
     exp_explorer = ExperimentExplorer('/tmp/')
-    exp = exp_explorer.plot_spectrogram('-40dB_5Hz_1perc')
+    #exp = exp_explorer.plot_spectrogram('-40dB_5Hz_1perc')
+    exp = exp_explorer.plot_spectrogram('-20dB_10Hz_1perc')
     Plotter.block_till_figs_dismissed()

@@ -35,7 +35,8 @@ import os
 import sys
 
 from scipy.io import wavfile
-from scipy.signal import butter, lfilter, stft 
+from scipy.signal import butter, lfilter, stft, istft 
+from scipy.signal import iirfilter, sosfilt
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -57,8 +58,12 @@ class AmplitudeGater(object):
     classdocs
     '''
     
-    spectrogram_freq_cap = 150 # Hz.
-    DEFAULT_BUTTERWORTH_ORDER = 4
+    spectrogram_freq_cap = 50 # Hz.
+    DEFAULT_FILTER_ORDER = 5
+    FFT_WIDTH = 2**12  # 4096
+    FRONT_END_HIGH_PASS_FREQ = 10 # Hz
+    #****FRONT_END_LOW_PASS_FREQ = 40 # Hz
+    FRONT_END_LOW_PASS_FREQ = 50 # Hz
     
     #------------------------------------
     # Constructor 
@@ -103,7 +108,9 @@ class AmplitudeGater(object):
         @type outfile: str
         
         @param amplitude_cutoff: dB attenuation from maximum
-            amplitude below which voltage is set to zero
+            amplitude below which voltage is set to zero. If
+            value of zero is passed in, no noise gating done.
+            Only frequency gating.
         @type amplitude_cutoff: int
 
         @param envelope_cutoff_freq: Butterworth -3dB filter frequency
@@ -195,31 +202,25 @@ class AmplitudeGater(object):
         # would not hold elephant call; gets rid of them
         # damn birds:
 
-        self.log.info(f"Cutting frequencies above {self.spectrogram_freq_cap}Hz...")
-        normed_filtered_abs_samples = \
-            self.butter_lowpass_filter(samples_abs,
-                                       self.spectrogram_freq_cap,
-                                       order=self.DEFAULT_BUTTERWORTH_ORDER
-                                       )
-        self.log.info(f"Done cutting frequencies above {self.spectrogram_freq_cap}Hz.")
-#         Plotter(4000).plot(range(1000),samples_float[:1000],
-#                      title='Samples after butterworth'
-#                      )
-#         self.log.info("Exiting early intentionally")
-#         sys.exit()
-        #****************
+        self.log.info(f"Filtering unwanted frequencies ...")
+        freq_gated_samples = self.frequency_gate(samples_abs)
+        self.log.info(f"Done filtering unwanted frequencies.")
          
-        # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
-        gated_samples  = self.amplitude_gate(normed_filtered_abs_samples, 
-                                             amplitude_cutoff,
-                                             envelope_cutoff_freq=envelope_cutoff_freq,
-                                             spectrogram_freq_cap=spectrogram_freq_cap,
-                                             spectrogram_dest=spectrogram_outfile
-                                             )
- 
-        # Result back to int16:
+        if amplitude_cutoff != 0:
+            # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
+            gated_samples  = self.amplitude_gate(freq_gated_samples, 
+                                                 amplitude_cutoff,
+                                                 envelope_cutoff_freq=envelope_cutoff_freq,
+                                                 spectrogram_freq_cap=spectrogram_freq_cap,
+                                                 spectrogram_dest=spectrogram_outfile
+                                                 )
+     
+        else:
+            gated_samples = freq_gated_samples
+            
+            # Result back to int16:
+
         gated_samples = gated_samples.astype(np.int16)
-               
         if outfile is not None and not testing:
             # Write out the result:
             wavfile.write(outfile, self.framerate, gated_samples)
@@ -245,7 +246,33 @@ class AmplitudeGater(object):
             
         print('Done')
         
+    #------------------------------------
+    # frequency_gate 
+    #-------------------
+    
+    def frequency_gate(self, samples_raw):
+        '''
+        Input absolute values of time domain voltages.
         
+        @param samples_raw:
+        @type samples_raw:
+        @param spectrogram_dest:
+        @type spectrogram_dest:
+        '''
+        self.log.info(f"Applying front end band pass filter ({self.FRONT_END_HIGH_PASS_FREQ}Hz to {self.FRONT_END_LOW_PASS_FREQ}Hz)")
+        samples_band_passed = self.freq_filter(
+            samples_raw, 
+            [self.FRONT_END_HIGH_PASS_FREQ, 
+             self.FRONT_END_LOW_PASS_FREQ],
+            pass_spec='bandpass',
+            title="Frontend freq filter: "\
+                  f"{self.FRONT_END_HIGH_PASS_FREQ}Hz to {self.FRONT_END_LOW_PASS_FREQ}Hz"
+            )
+        self.log.info("Done applying front end bandpass pass filter.")
+
+        return samples_band_passed
+
+
     #------------------------------------
     # amplitude_gate
     #-------------------    
@@ -303,7 +330,7 @@ class AmplitudeGater(object):
             specified as dB below peak voltage: db FS.
         @type threshold_db: negative int
         @param order: polynomial of Butterworth filter. Default
-            can be set with AmplitudeGater.DEFAULT_BUTTERWORTH_ORDER
+            can be set with AmplitudeGater.DEFAULT_FILTER_ORDER
         @type order: int
         @param envelope_cutoff_freq: frequency in Hz for the envelope
         @type envelope_cutoff_freq: int
@@ -319,11 +346,21 @@ class AmplitudeGater(object):
         # So make a low-pass filter that only roughly envelops
 
         if order is None:
-            order = AmplitudeGater.DEFAULT_BUTTERWORTH_ORDER
+            order = AmplitudeGater.DEFAULT_FILTER_ORDER
 
-        self.log.info(f"Applying low pass filter (cutoff {envelope_cutoff_freq})...")
-        envelope = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
-        self.log.info("Done applying low pass filter.")        
+        #***********
+        # Since we are now putting a bandpass filter
+        # ahead of this point, we no longer need to use
+        # the envelope.
+#         self.log.info(f"Applying low pass filter (cutoff {envelope_cutoff_freq})...")
+#         envelope = self.freq_filter(samples_abs, 
+#                                     envelope_cutoff_freq, 
+#                                     pass_spec='lowpass',
+#                                     title=f"Envelope lowpass filter: {envelope_cutoff_freq}Hz"
+#                                     )
+#         self.log.info("Done applying low pass filter.")
+        envelope = samples_abs
+        #***********        
 
         if PlotterTasks.has_task('samples_plus_envelope') is not None:
             # Show a 1 second wide window:
@@ -339,14 +376,6 @@ class AmplitudeGater(object):
             self.plotter.over_plot(envelope[start_point_in_samples:start_point_in_samples+duration_in_samples], 
                                    f"Env Order {order}",
                                    xlabel=f"Time in samples at {self.framerate} samples/sec")
-         
-            #order = 5
-            #envOrd3 = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
-            #self.over_plot(envOrd3[1000:1100], f'Order {order}')
-     
-            #order = 6
-            #envOrd1 = self.butter_lowpass_filter(samples_abs, envelope_cutoff_freq, order)
-            #self.over_plot(envOrd1[1000:1100], f'Order {order}')
 
         # Compute the threshold below which we
         # set amplitude to 0. It's threshold_db of max
@@ -354,6 +383,7 @@ class AmplitudeGater(object):
         # that max val == 1.0
 
         max_voltage = np.amax(envelope)
+        
         self.log.info(f"Max voltage: {max_voltage}")
         
         # Compute threshold_db of max voltage:
@@ -495,17 +525,106 @@ class AmplitudeGater(object):
                 )
 
         return (new_freq_labels, new_freq_time)
+
+    #------------------------------------
+    # save_spectrogram 
+    #-------------------
+    
+    def save_spectrogram(self, 
+                         spectrogram, 
+                         spectrogram_dest,
+                         freq_labels,
+                         time_labels
+                         ):
+        # Save the spectrogram to file:
+        self.log.info(f"Saving spectrogram to {spectrogram_dest}...")
+        np.save(spectrogram_dest, spectrogram)
+        freq_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest, 
+                                                          PrecRecFileTypes.FREQ_LABELS)
+        time_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest,
+                                                          PrecRecFileTypes.TIME_LABELS)
+        np.save(freq_labels_file, freq_labels)
+        np.save(time_labels_file, time_labels)
+        self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
+
+    #------------------------------------
+    # freq_filter 
+    #-------------------
+    
+    def freq_filter(self, data, cutoffs, pass_spec='bandpass', title=None):
+        '''
+        Given a voltage sequence and one or two 
+        frequency cutoffs, return a filtered version
+        of the sequence. If cutoffs is an array of 
+        two frequencies, a bandpass filter is constructed.
+        Else, pass_spec must be either 'lowpass', or 
+        'highpass'. It is an error to specify low/high pass,
+        and pass more than one cutoff frequency.
         
+        The filter will be DEFAULT_FILTER_ORDER 
+        Chebyshev II.
+         
+        @param data: the signal to filter
+        @type data: np_array
+        @param cutoffs: one or two cutoff frequecies
+        @type cutoffs: {int | [int] | [int,int]}
+        @param title: title for performance plot, if 
+            'filter_response' was added to the PlotterTasks
+            beforehand. If plot was requested, and title
+            is None, a title is constructed by plot_frequency_reponse()
+        @type title: {None | str}
+        '''
+        nyq = 0.5 * self.framerate
+        if type(cutoffs) == list and len(cutoffs) == 1:
+            cutoffs = cutoffs[0]
+        if type(cutoffs) == list:
+            # Two critical freqs were passed:
+            if pass_spec != 'bandpass':
+                raise ValueError(f"Asked for {pass_spec}, but passed two critical freqs.")
+            if len(cutoffs) != 2:
+                raise ValueError("Asked for bandpass filter, but did not specify two critical freqs")
+            normal_cutoffs = [cutoffs[0] / nyq, cutoffs[1] / nyq]
+        else:
+            # Only one critical freq. pass_spec must
+            # be lowpass or highpass:
+            if pass_spec not in ('lowpass', 'highpass'):
+                raise ValueError(f"Passed one critical freq, but pass_spec was '{pass_spec}' instead of lowpass or highpass")
+            normal_cutoffs = cutoffs / nyq
+            
+        # Get DEFAULT_FILTER_ORDER order segments version of 
+        # a filter, with minimum attenuation in 
+        # the stopband of 60 in dB:
+        sos = iirfilter(self.DEFAULT_FILTER_ORDER, 
+                        normal_cutoffs, 
+                        rs=60,
+                        btype=pass_spec, 
+                        analog=False, 
+                        ftype='cheby2', 
+                        output='sos')
+
+
+        if PlotterTasks.has_task('filter_response') is not None:
+            self.plotter.plot_frequency_response(sos, cutoffs, title)
+        new_sig = sosfilt(sos, data)
+        
+        return new_sig
 
     #------------------------------------
     # butter_lowpass_filter
     #-------------------    
 
-    def butter_lowpass_filter(self, data, cutoff, order=5):
-        b, a = self.get_butter_lowpass_parms(cutoff, order=order)
+    def butter_lowpass_filter(self, data, cutoff, order=4):
+        '''
+        Not used.
+        '''
+
+        nyq = 0.5 * self.framerate
+        normal_cutoff = cutoff / nyq
+        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+
         envelope = lfilter(b, a, data)
         
-        if PlotterTasks.has_task('low_pass_filter') is not None:
+        if PlotterTasks.has_task('filter_response') is not None:
             self.plotter.plot_frequency_response(b, a, cutoff, order)
             # Plot a piece of envelope, roughly from the middle:
             mid_env_index = round(envelope.size/2)
@@ -518,16 +637,6 @@ class AmplitudeGater(object):
                               )
         
         return envelope
-
-    #------------------------------------
-    # get_butter_lowpass_parms
-    #-------------------    
-
-    def get_butter_lowpass_parms(self, cutoff, order=5):
-        nyq = 0.5 * self.framerate
-        normal_cutoff = cutoff / nyq
-        b, a = butter(order, normal_cutoff, btype='low', analog=False)
-        return b, a
 
     #------------------------------------
     # suppress_small_voltages
@@ -776,7 +885,7 @@ class AmplitudeGater(object):
         with open(filename, 'w') as fd:
             for (indx, val) in enumerate(snippet):
                 fd.write(f"{indx},{val}\n")
-        
+
     #------------------------------------
     # make_spectrogram
     #-------------------
@@ -808,13 +917,33 @@ class AmplitudeGater(object):
         
         '''
         
-        fft_width = 2**12  # 4096
         self.log.info("Creating spectrogram...")
-        (freq_labels, time_labels, complex_freq_by_time) = stft(data, self.framerate, nperseg=fft_width)
+        (freq_labels, time_labels, complex_freq_by_time) = stft(data, 
+                                                                self.framerate, 
+                                                                nperseg=self.FFT_WIDTH
+                                                                #nperseg=int(self.framerate)
+                                                                )
         self.log.info("Done creating spectrogram.")
                 
         return (freq_labels, time_labels, complex_freq_by_time)
         
+    #------------------------------------
+    # make_inverse_spectrogram 
+    #-------------------
+    
+    def make_inverse_spectrogram(self, spectrogram):
+    
+        self.log.info("Inverting spectrogram to time domain...")
+        (_time, voltage) = istft(spectrogram, 
+                                 self.framerate, 
+                                 nperseg=self.FFT_WIDTH,
+                                 #nperseg=int(self.framerate)
+                                 )
+        self.log.info("Done inverting spectrogram to time domain.")
+
+        # Return just the voltages:
+        return voltage.astype(np.int16)
+
 
     #------------------------------------
     # find_busy_array_section
@@ -960,10 +1089,13 @@ if __name__ == '__main__':
                         default=False,
                         help="Set to prevent amplitudes to be  normalized to range from -32k to 32k; default is to normalize"
                         )
-                        
+
     parser.add_argument('--plot',
                         nargs='+',
-                        choices=['gated_wave_excerpt','samples_plus_envelope','spectrogram_excerpts','low_pass_filter'],
+                        choices=['gated_wave_excerpt',
+                                 'samples_plus_envelope',
+                                 'spectrogram_excerpts',
+                                 'filter_response'],
                         help="Plots to produce; repeatable; default: no plots"
                         )
 
@@ -978,12 +1110,12 @@ if __name__ == '__main__':
     args = parser.parse_args();
 
     cutoff = args.cutoff
-    if cutoff >= 0:
+    if cutoff > 0:
         print(f"Amplitude cutoff must be negative, not {cutoff}")
         sys.exit(1)
 
     # Register the plots to produce:
-    if len(args.plot) > 0:
+    if args.plot is not None and len(args.plot) > 0:
         for plot_name in args.plot:
             PlotterTasks.add_task(plot_name)
         #(root,extension) = os.path.splitext(args.outfile)
