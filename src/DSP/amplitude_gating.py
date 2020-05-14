@@ -70,7 +70,7 @@ class AmplitudeGater(object):
     #-------------------    
 
     def __init__(self,
-                 wav_file_path,
+                 infiles,
                  outfile=None,
                  amplitude_cutoff=-40,   # dB of peak
                  envelope_cutoff_freq=10, # Hz
@@ -100,9 +100,9 @@ class AmplitudeGater(object):
            
         PlotterTasks.add_task(<plotName>, **kwargs)
 
-        @param wav_file_path: path to .wav file to be gated
+        @param infiles: path to .wav file to be gated
             Can leave at None, if testing is True
-        @type wav_file_path: str
+        @type infiles: str
         
         @param outfile: where gated, normalized .wav will be written.
         @type outfile: str
@@ -159,7 +159,7 @@ class AmplitudeGater(object):
         if not testing:
             try:
                 self.log.info("Reading .wav file...")        
-                (self.framerate, samples) = wavfile.read(wav_file_path)
+                (self.framerate, samples) = wavfile.read(infiles)
                 self.log.info("Done reading .wav file.")        
             except Exception as e:
                 print(f"Cannot read .wav file: {repr(e)}")
@@ -239,7 +239,7 @@ class AmplitudeGater(object):
             self.log.info(f"Plotting a 100 long series of result from {start_indx}...")
             self.plotter.plot(np.arange(start_indx, end_indx),
                               gated_samples[start_indx:end_indx],
-                              title=f"Amplitude-Gated {os.path.basename(wav_file_path)}",
+                              title=f"Amplitude-Gated {os.path.basename(infiles)}",
                               xlabel='Sample Index', 
                               ylabel='Voltage'
                               )
@@ -281,7 +281,7 @@ class AmplitudeGater(object):
                        samples_abs, 
                        threshold_db,
                        order=None, 
-                       envelope_cutoff_freq=10,
+                       envelope_cutoff_freq=10, # Not used any more (see comment below)
                        spectrogram_dest=None,
                        spectrogram_freq_cap=150, # Hz 
                        ):
@@ -436,7 +436,7 @@ class AmplitudeGater(object):
         if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts') is not None:
             # The matrix is large, and plotting takes forever,
             # so define a matrix excerpt:
-            self.plotter.plot_spectrogram(new_freq_labels, 
+            self.plotter.plot_spectrogram_from_audio(new_freq_labels, 
                                           time_labels,
                                           capped_spectrogram)
 
@@ -462,8 +462,8 @@ class AmplitudeGater(object):
         
         freq_bands is an array of frequency intervals. The
         following would only retain rows for frequencies 
-             10 <= f < 20,
               0 <= f < 5,  
+             10 <= f < 20,
          and  f >= 40:
         
            [(None, 5), (10,20), (40,None)]
@@ -471,8 +471,13 @@ class AmplitudeGater(object):
         So: note that these extracts are logical OR.
             Contributions from each of these three
             intervals will be present, even though the 
-            (10,20) would squeeze out the last due to its
-            upper bound of 20.
+            (10,20) would squeeze out the last pair,
+            due to its upper bound of 20.
+            
+        Note: Rows will be removed from the spectrogram. Its
+              width will not change. But if the spectrogram
+              were to be turned into a wav file, that file 
+              would be shorter than the original.
          
         @param freq_labels: array of frequencies highest first
         @type freq_labels: np.array[float]
@@ -916,7 +921,26 @@ class AmplitudeGater(object):
         @rtype: (np.array, np.array, np.array)
         
         '''
-        
+        #*************
+        # How Jonathan creates spectrograms: 
+#         self.log.info("TEMPORARY: Creating spectrogram USING ML...")
+#         from matplotlib import mlab as ml
+#         hop = 800
+#         NFFT= 4096
+#         chunk_size = 1000
+#         start_chunk = 0
+#         len_chunk = (chunk_size - 1) * hop + NFFT
+#         [spectrum, freqs, t] = ml.specgram(data[start_chunk:start_chunk + len_chunk],
+#                                            NFFT=NFFT,
+#                                            Fs=8000,
+#                                            noverlap=(NFFT-hop),
+#                                            window=ml.window_hanning,
+#                                            pad_to=4096)
+# 
+#         #[spectrum, freqs, t] = ml.specgram(data, NFFT=NFFT, Fs=8000, noverlap=(NFFT-hop), window=ml.window_hanning,pad_to=4096)
+#         return (freqs, t, spectrum)
+#         self.log.info("TEMPORARY: Creating spectrogram USING ML...")
+        #*************
         self.log.info("Creating spectrogram...")
         (freq_labels, time_labels, complex_freq_by_time) = stft(data, 
                                                                 self.framerate, 

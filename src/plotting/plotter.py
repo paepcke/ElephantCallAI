@@ -59,10 +59,10 @@ class Plotter(object):
         fig.show()
 
     #------------------------------------
-    # plot_spectrogram
+    # plot_spectrogram_from_audio
     #-------------------
     
-    def plot_spectrogram(self,
+    def plot_spectrogram_from_audio(self,
                          freq_labels,
                          time_labels,
                          freq_time,

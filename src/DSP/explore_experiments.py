@@ -70,10 +70,10 @@ class ExperimentExplorer(object):
         self.txt_tables = self.make_txt_tables(self.experiments)
 
     #------------------------------------
-    # plot_spectrogram
+    # plot_spectrogram_from_audio
     #-------------------
     
-    def plot_spectrogram(self, experiment_id):
+    def plot_spectrogram_from_audio(self, experiment_id):
         
         if isinstance(experiment_id, str):
             # Got a signal_treatment as identifier:
@@ -91,7 +91,7 @@ class ExperimentExplorer(object):
         #plotter = Plotter(experiment.framerate)
         plotter = Plotter(4000)
         #******
-        plotter.plot_spectrogram(spectrogram_info['freq_labels'],
+        plotter.plot_spectrogram_from_audio(spectrogram_info['freq_labels'],
                                  spectrogram_info['time_labels'],
                                  spectrogram_info['spectrogram']
                                  )
@@ -198,6 +198,6 @@ if __name__ == '__main__':
     # exp_explorer = ExperimentExplorer('/tmp')
     #exp_explorer = ExperimentExplorer('/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/src/DSP/ExperimentResults/Results_20200426_182831')
     exp_explorer = ExperimentExplorer('/tmp/')
-    #exp = exp_explorer.plot_spectrogram('-40dB_5Hz_1perc')
-    exp = exp_explorer.plot_spectrogram('-20dB_10Hz_1perc')
+    #exp = exp_explorer.plot_spectrogram_from_audio('-40dB_5Hz_1perc')
+    exp = exp_explorer.plot_spectrogram_from_audio('-20dB_10Hz_1perc')
     Plotter.block_till_figs_dismissed()

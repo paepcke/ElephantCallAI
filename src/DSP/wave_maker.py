@@ -41,28 +41,32 @@ class WavMaker(object):
         '''
         self.log = LoggingService(logfile=logfile)
         files_done = 0
-        for infile in infiles:
-            if not os.path.exists(infile):
-                self.log.warn(f"File {infile} does not exist.")
+        for infiles in infiles:
+            if not os.path.exists(infiles):
+                self.log.warn(f"File {infiles} does not exist.")
                 continue
             # Get '/tmp/foo' and '.txt' from /tmp/foo.txt:
-            (dir_plus_basename, ext) = os.path.splitext(infile)
+            (dir_plus_basename, ext) = os.path.splitext(infiles)
             if ext != '.wav':
-                self.log.warn(f"File {infile} apparently not a .wav file.")
+                self.log.warn(f"File {infiles} apparently not a .wav file.")
                 continue
             # Get 'foo' from '/my/directory/foo
             in_basename = os.path.basename(dir_plus_basename)
             # Final out: /my/outdir/foo_gated.wav
             outfile = os.path.join(outdir, f"{in_basename}_gated.wav")
             
-            self.log.info(f"Processing {infile}...")
-            gater = AmplitudeGater(infile,
-                                   outfile=outfile,
-                                   amplitude_cutoff=threshold_db,
-                                   envelope_cutoff_freq=cutoff_freq,
-                                   )
+            self.log.info(f"Processing {infiles}...")
+            try:
+                gater = AmplitudeGater(infiles,
+                                       outfile=outfile,
+                                       amplitude_cutoff=threshold_db,
+                                       envelope_cutoff_freq=cutoff_freq,
+                                       )
+            except Exception as e:
+                self.log.err(f"Processing failed for '{infiles}: {repr(e)}")
+                continue
             perc_zeroed = gater.percent_zeroed
-            self.log.info(f"Done processing {os.path.basename(infile)}; removed {round(perc_zeroed)} percent")
+            self.log.info(f"Done processing {os.path.basename(infiles)}; removed {round(perc_zeroed)} percent")
             files_done += 1
             self.log.info(f"\nBatch gated {files_done} wav files.")
             
