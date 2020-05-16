@@ -19,6 +19,8 @@ from elephant_utils.logging_service import LoggingService
 sys.path.append(os.path.dirname(__file__))
 from plotting.plotter import Plotter
 
+from visualization import visualize
+
 
 class Spectrogrammer(object):
     '''
@@ -45,11 +47,13 @@ class Spectrogrammer(object):
                  infiles,
                  clean_spectrogram,
                  max_f,
+                 label_mask_files=None,
                  start_sec=0,
                  end_sec=None,
                  normalize=False,
                  framerate=8000,
                  plot=True,
+                 model_input_plot=False,
                  nfft=None,
                  ):
         '''
@@ -88,12 +92,23 @@ class Spectrogrammer(object):
                     sys.exit(1)
             else:
                 # Infile is a .npy spectrogram file:
+                label_mask = None
                 self.log.info(f"Loading spectrogram file {infile}...")
                 spect = np.load(infile)
                 self.log.info(f"Done loading spectrogram file {infile}.")
+
                 self.log.info("Computing freq and time ticks...")
                 (freq_labels, time_labels) = self.make_time_freq_seqs(max_f, spect)
+                self.log.info("Done computing freq and time ticks.")
                 
+                if label_mask_files is not None:
+                    # One or more .npy label masks was provided. See
+                    # any of them match the .npy infile by name pattern:
+                    label_file = self.get_label_filename(infile)
+                    if label_file in label_mask_files:
+                        self.log.info("Reading label mask...")
+                        label_mask = np.load(label_file)
+
             if clean_spectrogram:
                 self.log.info(f"Cleaning spectrogram...")
                 clean_spect = self.process_spectrogram(spect)
@@ -109,6 +124,13 @@ class Spectrogrammer(object):
                     plot_grid_width=1, 
                     plot_grid_height=1, 
                     title=f"{os.path.basename(infile)}")
+                
+            if model_input_plot:
+                self.plot_spectrogram_from_numpy(clean_spect, 
+                                                 labels=label_mask,
+                                                 title=os.path.basename(infile), 
+                                                 vert_lines=None, 
+                                                 filters=None)
 
     #------------------------------------
     # process_wav_file 
@@ -338,6 +360,37 @@ class Spectrogrammer(object):
             
             plt.show()
         return (spectrum,freqs,t_bins,im)
+    
+    #------------------------------------
+    # plot_spectrogram_from_numpy 
+    #-------------------
+    
+    def plot_spectrogram_from_numpy(self,
+                                    features, 
+                                    outputs=None, 
+                                    labels=None, 
+                                    binary_preds=None, 
+                                    title=None, 
+                                    vert_lines=None,
+                                    filters=[]
+                                    ):
+        new_features = np.copy(features)
+        if filters is not None:
+            if type(filters) != list:
+                filters = [filters]
+            for _filter in filters:
+                new_features = eval(_filter(new_features),
+                   {"__builtins__":None},    # No built-ins at all
+                   {}                        # No additional func needed
+                   )
+        
+        visualize(new_features,
+                  outputs=outputs,
+                  labels=labels,
+                  binary_preds=binary_preds,
+                  title=title,
+                  vert_lines=vert_lines
+                  )
 
     #------------------------------------
     # normalize
@@ -437,7 +490,43 @@ class Spectrogrammer(object):
         time_scale = list(np.arange(num_times))
         return(freq_scale, time_scale)
                         
+    #------------------------------------
+    # get_label_filename 
+    #-------------------
+    
+    def get_label_filename(self, spect_numpy_filename):
+        '''
+        Given the file name of a numpy spectrogram 
+        file of the forms:
+           nn03a_20180817_neg-features_10.npy
+           nn03a_20180817_features_10.npy
+           
+        create the corresponding numpy label mask file
+        name:
+           nn03a_20180817_label_10.npy
+           
         
+           
+        @param spect_numpy_filename:
+        @type spect_numpy_filename:
+        '''
+        # Check extension:
+        (_fullname, ext) = os.path.splitext(spect_numpy_filename)
+        if ext != '.npy':
+            raise ValueError("File needs to be a .npy file.")
+        
+        # Maybe a dir is included, maybe not:
+        dirname  = os.path.dirname(spect_numpy_filename)
+        filename = os.path.basename(spect_numpy_filename)
+
+        try:
+            (loc_code, date, _file_content_type, id_num_plus_rest) = filename.split('_')
+        except ValueError:
+            raise ValueError(f"File name {spect_numpy_filename} does not have exactly four components.")
+        label_filename = f"{loc_code}_{date}_labels_{id_num_plus_rest}"
+        full_new_name = os.path.join(dirname, label_filename)
+        return full_new_name
+
 
 # ---------------------------- Main ---------------------
 if __name__ == '__main__':
@@ -506,12 +595,23 @@ if __name__ == '__main__':
                         action='store_true', 
                         help='Plot charts as appropriate'
                         )
-
+    
+    parser.add_argument('-m', '--modelplot', 
+                        default=False,
+                        action='store_true', 
+                        help='Plot spectrogram as classifier will see it.'
+                        )
 
     parser.add_argument('-o', '--outfile', 
                         default=None, 
                         help='Outfile for cleaned spectrogram; only needed with -c'
                         )
+
+    parser.add_argument('--labelfiles',
+                        nargs='+',
+                        help="Input .txt/.npy file(s)"
+                        )
+    
 
     parser.add_argument('infiles',
                         nargs='+',
@@ -527,6 +627,8 @@ if __name__ == '__main__':
                    normalize=args.normalize,
                    framerate=args.framerate,
                    plot=args.plot,
+                   model_input_plot=args.modelplot,
+                   label_mask_files=args.labelfiles,
                    nfft=args.nfft
                    )
     # Keep charts up till user kills the windows:

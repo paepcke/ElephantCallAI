@@ -32,8 +32,8 @@ class WavMaker(object):
     def __init__(self, 
                  infiles,
                  outdir='/tmp/',
-                 threshold_db=-40,
-                 cutoff_freq=10,
+                 threshold_db=-46,
+                 cutoff_freq=10,    # Not used any more
                  logfile=None
                  ):
         '''
@@ -86,14 +86,14 @@ if __name__ == '__main__':
                         default='/tmp');
     parser.add_argument('-t', '--threshold',
                         type=int,
-                        default=-40,
-                        help='dB off peak voltage below which signal is zeroed; default -40',
+                        default=-46,
+                        help='dB off peak voltage below which signal is zeroed; default -46',
                         );
-    parser.add_argument('-f', '--cutoff_freq',
-                        type=int,
-                        default=10,
-                        help='envelope frequency; default 10Hz',
-                        );
+#     parser.add_argument('-f', '--cutoff_freq',
+#                         type=int,
+#                         default=10,
+#                         help='envelope frequency; default 10Hz',
+#                         );
     parser.add_argument('infiles',
                         nargs='+',
                         help='Repeatable: .wav input files')
@@ -106,6 +106,5 @@ if __name__ == '__main__':
     WavMaker(args.infiles,
              outdir=args.outdir,
              threshold_db=args.threshold,
-             cutoff_freq=args.cutoff_freq,
              logfile=args.logfile
              )

@@ -382,12 +382,14 @@ class AmplitudeGater(object):
         # value. Note that for a normalized array
         # that max val == 1.0
 
-        max_voltage = np.amax(envelope)
-        
-        self.log.info(f"Max voltage: {max_voltage}")
+        # max_voltage = np.amax(envelope)
+        rms = np.sqrt(np.mean(envelope**2))
+        # self.log.info(f"Max voltage: {max_voltage}")
+        self.log.info(f"Signal RMS: {rms}")
         
         # Compute threshold_db of max voltage:
-        Vthresh = max_voltage * 10**(threshold_db/20)
+        #Vthresh = max_voltage * 10**(threshold_db/20)
+        Vthresh = rms * 10**(threshold_db/20)
         self.log.info(f"Cutoff threshold amplitude: {Vthresh}")
 
         # Zero out all amplitudes below threshold:
