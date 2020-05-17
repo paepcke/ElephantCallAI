@@ -70,10 +70,10 @@ class AmplitudeGater(object):
     #-------------------    
 
     def __init__(self,
-                 infiles,
+                 infile,
                  outfile=None,
                  amplitude_cutoff=-40,   # dB of peak
-                 envelope_cutoff_freq=10, # Hz
+                 envelope_cutoff_freq=10, # Hz  (Not used)
                  spectrogram_freq_cap=150, # Hz
                  normalize=True,
                  logfile=None,
@@ -100,9 +100,9 @@ class AmplitudeGater(object):
            
         PlotterTasks.add_task(<plotName>, **kwargs)
 
-        @param infiles: path to .wav file to be gated
+        @param infile: path to .wav file to be gated
             Can leave at None, if testing is True
-        @type infiles: str
+        @type infile: str
         
         @param outfile: where gated, normalized .wav will be written.
         @type outfile: str
@@ -146,8 +146,8 @@ class AmplitudeGater(object):
                 with open(outfile, 'wb') as _fd:
                     pass
             except Exception as e:
-                print(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
-                sys.exit(1)
+                raise IOError(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
+                
 
         AmplitudeGater.log = LoggingService(logfile=logfile)
         
@@ -159,11 +159,10 @@ class AmplitudeGater(object):
         if not testing:
             try:
                 self.log.info("Reading .wav file...")        
-                (self.framerate, samples) = wavfile.read(infiles)
+                (self.framerate, samples) = wavfile.read(infile)
                 self.log.info("Done reading .wav file.")        
             except Exception as e:
-                print(f"Cannot read .wav file: {repr(e)}")
-                sys.exit(1)
+                raise IOError(f"Cannot read .wav file: {repr(e)}")
 
         self.plotter = Plotter(self.framerate)
 
@@ -223,7 +222,9 @@ class AmplitudeGater(object):
         gated_samples = gated_samples.astype(np.int16)
         if outfile is not None and not testing:
             # Write out the result:
+            self.log.info(f"Writing {outfile}...")
             wavfile.write(outfile, self.framerate, gated_samples)
+            self.log.info(f"Done writing {outfile}...")
         
         if PlotterTasks.has_task('gated_wave_excerpt'):
             
@@ -239,7 +240,7 @@ class AmplitudeGater(object):
             self.log.info(f"Plotting a 100 long series of result from {start_indx}...")
             self.plotter.plot(np.arange(start_indx, end_indx),
                               gated_samples[start_indx:end_indx],
-                              title=f"Amplitude-Gated {os.path.basename(infiles)}",
+                              title=f"Amplitude-Gated {os.path.basename(infile)}",
                               xlabel='Sample Index', 
                               ylabel='Voltage'
                               )
@@ -1149,15 +1150,18 @@ if __name__ == '__main__':
     
     # AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
     #                plot_result=True)
-    AmplitudeGater(args.wavefile,
-                   args.outfile,
-                   amplitude_cutoff=cutoff,
-                   envelope_cutoff_freq=args.envelope,
-                   spectrogram_freq_cap=args.spectrofilter,
-                   spectrogram_outfile=args.outfilespectrogram,
-                   normalize=not args.raw,
-                   logfile=args.logfile,
-                   )
+    try:
+        AmplitudeGater(args.wavefile,
+                       args.outfile,
+                       amplitude_cutoff=cutoff,
+                       envelope_cutoff_freq=args.envelope,
+                       spectrogram_freq_cap=args.spectrofilter,
+                       spectrogram_outfile=args.outfilespectrogram,
+                       normalize=not args.raw,
+                       logfile=args.logfile,
+                       )
+    except Exception as e:
+        print(f"Failed to process {args.wavefile}: {repr(e)}")
     
     Plotter.block_till_figs_dismissed()    
     sys.exit(0)
