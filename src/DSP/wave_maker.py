@@ -2,12 +2,13 @@
 '''
 Created on May 4, 2020
 
-Takes full paths to one or more Elephant .wav
-files. Generates noise gated .wav files. 
+Batch-creates noise gated elephant files.
+Results are placed into a command line specified
+destination dir. On request, associated text files
+are copied to that destination as well. 
 
-Fixed parameters:
-  o Uses 1% overlap.
-
+Input paths may be a mix of .wav files, and directories.
+All .wav files in the subdirs are recursively included.
 
 @author: paepcke
 '''

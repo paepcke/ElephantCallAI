@@ -186,16 +186,25 @@ class AmplitudeGater(object):
             return
 
         samples_float = samples.astype(float)
+        
+        # Free memory:
+        samples = None
+        
         # Normalize:
         if normalize:
             normed_samples = self.normalize(samples_float)
         else:
             normed_samples = samples_float.copy()
+            
+        # Free memory:
+        samples_float = None
 
         self.log.info("Taking abs val of values...")
         samples_abs = np.abs(normed_samples)
         self.log.info("Done taking abs val of values.")
-
+        
+        # Free memory:
+        normed_samples = None
 
         # Before doing anything else, cut frequencies that
         # would not hold elephant call; gets rid of them
@@ -205,6 +214,9 @@ class AmplitudeGater(object):
         freq_gated_samples = self.frequency_gate(samples_abs)
         self.log.info(f"Done filtering unwanted frequencies.")
          
+        # Free memory:
+        samples_abs = None
+        
         if amplitude_cutoff != 0:
             # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
             gated_samples  = self.amplitude_gate(freq_gated_samples, 
