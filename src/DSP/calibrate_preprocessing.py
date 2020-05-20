@@ -41,12 +41,18 @@ class PreprocessingCalibration(object):
                  outfile_dir='/tmp',
                  spectrogram=None,
                  logfile=None):
-
+        
         if not isinstance(overlap_percentages, list):
             overlap_percentages = [overlap_percentages]
             
         AmplitudeGater.log = LoggingService(logfile=logfile)
         self.log = AmplitudeGater.log
+
+        #*********
+        import logging
+        self.log.logging_level = logging.ERROR
+        #*********
+
         self.log.info("Constructing output file names...")
         outfile_names_deque = self.construct_outfile_names(thresholds_db, 
                                                            cutoff_freqs,
@@ -77,7 +83,9 @@ class PreprocessingCalibration(object):
                                              outfile_names_deque,
                                              spectrogram_freq_cap=spectrogram_freq_cap,
                                              spectrogram=self.spectrogram)
-        
+        #*************
+        #self.log.err(f"Returned from generate_outfile. Exp: '{experiments}'")
+        #*************
         # Overwrite the outfiles initialized above:
 #         file1 = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057.wav'
 #         file1_gated = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057_gated.wav'
@@ -153,6 +161,9 @@ class PreprocessingCalibration(object):
                 this_experiment['experiment_res'] = prec_recall_res
 
                 if not started_tsv_output:
+                    #**********
+                    #self.log.err("Preparing for exp file")
+                    #**********
                     # Derive the experiment outfile name from the
                     # gated file name:
                     exp_res_file = DSPUtils.prec_recall_file_name(gated_outfile_name,
@@ -163,7 +174,14 @@ class PreprocessingCalibration(object):
                                                 outfile=exp_res_file)
                     # Next experiment should get appended to the same tsv file:
                     started_tsv_output = True
+                    #**********
+                    self.log.err(f"Exp tsv File: {exp_res_file}")
+                    #**********
+                    
                 else:
+                    #**********
+                    self.log.err(f"Writing to: {exp_res_file}")
+                    #**********
                     this_experiment.to_flat_tsv(include_col_header=False,
                                                 append=True, 
                                                 outfile=exp_res_file)
@@ -203,7 +221,9 @@ class PreprocessingCalibration(object):
         precrec_computer = PrecRecComputer(experiment['signal_treatment'], 
                                            filtered_wavfile, 
                                            experiment['labelfile'], 
-                                           overlap_perc)
+                                           overlap_perc,
+                                           print_res=False     #***********
+                                           )
         self.log.info(f"Done compute prec/recall for {filtered_wavfile}.")
         # PrecRecComputer can take a deque of overlap_perc 
         # requirements, and therefore for generality holds

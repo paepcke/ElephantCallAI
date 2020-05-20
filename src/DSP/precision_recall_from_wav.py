@@ -54,6 +54,13 @@ class PrecRecComputer(object):
         Constructor
         '''
         PrecRecComputer.log = LoggingService(logfile=self.logfile)
+        
+        #*********
+        import logging
+        self.log.logging_level = logging.ERROR
+        #*********
+
+        
         self.log = PrecRecComputer.log
 
         if not isinstance(overlap_percentages, list):

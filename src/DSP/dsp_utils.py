@@ -51,6 +51,11 @@ class DSPUtils(object):
         hold a single experiment object in pickle form:
         
          o filtered_wav_-50dB_500Hz_20200404_192128_exp<experiment_id>.pickle
+         
+        If generated filename already exists, adds a counter before 
+        the dot: 
+        
+          filtered_wav_-50dB_500Hz_20200404_192128_exp<experiment_id>_<n>.pickle
         
         @param root_info: example file name
         @type root_info: str
@@ -69,9 +74,23 @@ class DSPUtils(object):
             ext = '.tsv'
         elif file_type == PrecRecFileTypes.PICKLE:
             ext = f"{experiment_id}.pickle"
-            
+        
         new_file_path = f"{path_no_ext}{file_type.value}{ext}"
-        return new_file_path
+        counter = 0
+        
+        # Find a file name that does not already exists,
+        # guarding against race conditions. The 'x' mode
+        # atomically opens a file for writing, but only if 
+        # it does not exist. If it does, a FileExistsError
+        # is generated:
+        
+        while True:
+            try:
+                with open(new_file_path, 'x') as _fd: 
+                    return new_file_path
+            except FileExistsError:
+                counter += 1
+                new_file_path = f"{path_no_ext}{file_type.value}_{counter}{ext}"
 
     #------------------------------------
     # get_spectrogram_data

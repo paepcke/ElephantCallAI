@@ -162,7 +162,7 @@ class AmplitudeGater(object):
                 (self.framerate, samples) = wavfile.read(infile)
                 self.log.info("Done reading .wav file.")        
             except Exception as e:
-                raise IOError(f"Cannot read .wav file: {repr(e)}")
+                raise IOError(f"Cannot read .wav file {infile}: {repr(e)}")
 
         self.plotter = Plotter(self.framerate)
 
@@ -217,9 +217,16 @@ class AmplitudeGater(object):
         # Free memory:
         samples_abs = None
         
+        self.log.info(f"Computing abs val of filtered freqs...")
+        freq_gated_samples_abs = np.abs(freq_gated_samples)
+        self.log.info(f"Done computing abs val of filtered freqs.")
+        
+        # Free memory:
+        samples_abs = None
+        
         if amplitude_cutoff != 0:
             # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
-            gated_samples  = self.amplitude_gate(freq_gated_samples, 
+            gated_samples  = self.amplitude_gate(freq_gated_samples_abs, 
                                                  amplitude_cutoff,
                                                  envelope_cutoff_freq=envelope_cutoff_freq,
                                                  spectrogram_freq_cap=spectrogram_freq_cap,
@@ -409,7 +416,7 @@ class AmplitudeGater(object):
         self.log.info("Zeroing sub-threshold values...")
 
         mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
-        gated_samples = samples_abs * mask_for_where_non_zero
+        gated_samples = envelope * mask_for_where_non_zero
         
         self.percent_zeroed = 100 * gated_samples[gated_samples==0].size / gated_samples.size
         self.log.info(f"Zeroed {self.percent_zeroed:.2f}% of signal.")

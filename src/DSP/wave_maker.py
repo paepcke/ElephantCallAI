@@ -171,6 +171,7 @@ class WavMaker(object):
         '''
         if data_pairs is None:
             data_pairs = {}
+            
         for file_or_dir in files_or_dirs:
             if os.path.isdir(file_or_dir):
                 new_paths = [os.path.join(file_or_dir, file_name) for file_name in os.listdir(file_or_dir)]
@@ -179,6 +180,12 @@ class WavMaker(object):
                 continue
             # Strip off the location and time tags
             tags = os.path.basename(file_or_dir).split('_')
+            
+            # Guard against file names without an underscore:
+            if len(tags) < 2:
+                self.log.err(f"Unrecognized filename convention: {file_or_dir}; skipping")
+                continue
+            
             data_id = tags[0] + '_' + tags[1]
             (_file_stem, file_type) = file_or_dir.split('.')
     
