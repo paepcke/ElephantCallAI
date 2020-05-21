@@ -44,8 +44,11 @@ then
 fi
 
 # Grab the column header of the first file:
-COL_HEAD=$(head -1 $1)
-if [ -z $COL_HEAD ]
+# NOTE: the quotes around $1 and $COL_HEAD
+#       are needed for .tsv files, which
+#       linux otherwise takes as arg sequences.
+COL_HEAD=$(head -1 "$1")
+if [ -z "$COL_HEAD" ]
 then
     # First file was empty; error:
     echo "No column header in first file: $1" >/dev/stderr
