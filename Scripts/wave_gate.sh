@@ -23,6 +23,12 @@ then
     exit 1
 fi
 
+# Recursively find all files .wav/.txt files, including
+# the ones on the command line, and the ones below dirs
+# listed on the cmd line:
+
+FILES_OR_DIRS=$(find "$@" -type f \( -name "*.wav" -o -name "*.txt" \) -print)
+
 LOGFILE=/tmp/wav_gating.log
 echo "Logging to $LOGFILE"
 
@@ -63,12 +69,6 @@ if [ -e $logfile ]
 then
     rm $logfile
 fi
-
-# Recursively collect all files with a .txt or .wav
-# extension. In contrast to the -regex alternative,
-# this -o method works on Mac and Linux:
-
-FILES_OR_DIRS=$(find "$@" -type f -name  "*.txt" -o -name "*.wav" -print)
 
 echo "Wav gating starting: `date`" > $logfile
 if [[ $PLATFORM == 'macos' ]]
