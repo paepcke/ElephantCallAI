@@ -190,11 +190,19 @@ class AmplitudeGater(object):
         # Free memory:
         samples = None
         
+        #************
+        print(f"Pid {os.getpid()}: gating: about to norm")
+        #************
+
         # Normalize:
         if normalize:
             normed_samples = self.normalize(samples_float)
         else:
             normed_samples = samples_float.copy()
+
+        #************
+        print(f"Pid {os.getpid()}: gating: done norm")
+        #************
             
         # Free memory:
         samples_float = None
@@ -210,10 +218,19 @@ class AmplitudeGater(object):
         # would not hold elephant call; gets rid of them
         # damn birds:
 
+        #************
+        print(f"Pid {os.getpid()}: gating: about to freq gate")
+        #************
+
+
         self.log.info(f"Filtering unwanted frequencies ...")
         freq_gated_samples = self.frequency_gate(samples_abs)
         self.log.info(f"Done filtering unwanted frequencies.")
          
+        #************
+        print(f"Pid {os.getpid()}: gating: done freq gate")
+        #************
+
         # Free memory:
         samples_abs = None
         
@@ -226,12 +243,20 @@ class AmplitudeGater(object):
         
         if amplitude_cutoff != 0:
             # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
+            #************
+            print(f"Pid {os.getpid()}: gating: calling amplitude_gate")
+            #************
+            
             gated_samples  = self.amplitude_gate(freq_gated_samples_abs, 
                                                  amplitude_cutoff,
                                                  envelope_cutoff_freq=envelope_cutoff_freq,
                                                  spectrogram_freq_cap=spectrogram_freq_cap,
                                                  spectrogram_dest=spectrogram_outfile
                                                  )
+
+            #************
+            print(f"Pid {os.getpid()}: gating: return from amplitude_gate)")
+            #************
      
         else:
             gated_samples = freq_gated_samples
@@ -402,10 +427,17 @@ class AmplitudeGater(object):
         # value. Note that for a normalized array
         # that max val == 1.0
 
+        #************
+        print(f"Pid {os.getpid()}: compute RMS")
+        #************
+
         # max_voltage = np.amax(envelope)
-        rms = np.sqrt(np.mean(envelope**2))
-        # self.log.info(f"Max voltage: {max_voltage}")
+        rms = np.sqrt(np.mean(np.square(envelope)))
         self.log.info(f"Signal RMS: {rms}")
+
+        #************
+        print(f"Pid {os.getpid()}: done compute RMS")
+        #************
         
         # Compute threshold_db of max voltage:
         #Vthresh = max_voltage * 10**(threshold_db/20)
@@ -415,12 +447,20 @@ class AmplitudeGater(object):
         # Zero out all amplitudes below threshold:
         self.log.info("Zeroing sub-threshold values...")
 
+        #************
+        print(f"Pid {os.getpid()}: mask ops")
+        #************
+
         mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
         gated_samples = envelope * mask_for_where_non_zero
         
         self.percent_zeroed = 100 * gated_samples[gated_samples==0].size / gated_samples.size
         self.log.info(f"Zeroed {self.percent_zeroed:.2f}% of signal.")
         
+        #************
+        print(f"Pid {os.getpid()}: done mask ops")
+        #************
+
         if spectrogram_dest:
             
             # Get a combined frequency x time matrix. The matrix values will
@@ -461,6 +501,10 @@ class AmplitudeGater(object):
             self.plotter.plot_spectrogram_from_audio(new_freq_labels, 
                                           time_labels,
                                           capped_spectrogram)
+
+        #************
+        print(f"Pid {os.getpid()}: exit amp gating")
+        #************
 
         return gated_samples
 

@@ -76,13 +76,21 @@ class PreprocessingCalibration(object):
         #****************************
         # Exchange commented/uncommented region for testing
         # just this method:
-        
+
+        #************
+        print(f"Pid {os.getpid()}: about to generate_outfiles")
+        #************
+
         experiments = self.generate_outfiles(in_wav_file, 
                                              thresholds_db, 
                                              cutoff_freqs,
                                              outfile_names_deque,
                                              spectrogram_freq_cap=spectrogram_freq_cap,
                                              spectrogram=self.spectrogram)
+        #************
+        print(f"Pid {os.getpid()}: done generate_outfiles")
+        #************
+        
         #*************
         #self.log.err(f"Returned from generate_outfile. Exp: '{experiments}'")
         #*************
@@ -132,6 +140,10 @@ class PreprocessingCalibration(object):
             # Add additional info to each experiment
             experiment['in_wav_file'] = in_wav_file
             experiment['labelfile'] = labelfile
+            
+            #************
+            print(f"Pid {os.getpid()}: one experiment loop")
+            #************
     
             # Gated signal file created by this experiment:
             gated_outfile_name = experiment['gated_outfile']
@@ -141,6 +153,11 @@ class PreprocessingCalibration(object):
                 # each overlap percentage computation will
                 # be one experiment:
                 this_experiment = experiment.copy()
+                
+                #************
+                print(f"Pid {os.getpid()}: in overlap loop")
+                #************
+                
                 
                 # Update the signal treatment from the original
                 # experiment to reflect this overlap percentage
@@ -161,27 +178,30 @@ class PreprocessingCalibration(object):
                 this_experiment['experiment_res'] = prec_recall_res
 
                 if not started_tsv_output:
-                    #**********
-                    #self.log.err("Preparing for exp file")
-                    #**********
+                    #************
+                    print(f"Pid {os.getpid()}: preparing tsv")
+                    #************
+
                     # Derive the experiment outfile name from the
                     # gated file name:
                     exp_res_file = DSPUtils.prec_recall_file_name(gated_outfile_name,
                                                                  PrecRecFileTypes.EXPERIMENT)
                     # Start fresh file, and add column header:
+                    
+                    #************
+                    print(f"Pid: {os.getpid()}): new exp file {exp_res_file}")
+                    #************
+                    
                     this_experiment.to_flat_tsv(include_col_header=True,
                                                 append=False, 
                                                 outfile=exp_res_file)
                     # Next experiment should get appended to the same tsv file:
                     started_tsv_output = True
-                    #**********
-                    self.log.err(f"Exp tsv File: {exp_res_file}")
-                    #**********
                     
                 else:
-                    #**********
-                    self.log.err(f"Writing to: {exp_res_file}")
-                    #**********
+                    #************
+                    print(f"Pid {os.getpid()}: continue write to {exp_res_file}")
+                    #************
                     this_experiment.to_flat_tsv(include_col_header=False,
                                                 append=True, 
                                                 outfile=exp_res_file)
@@ -195,6 +215,11 @@ class PreprocessingCalibration(object):
                 this_experiment.save(exp_pickle_file)
 
         self.log.info("Done generating precision/recall measures.")
+        
+        #************
+        print(f"Pid {os.getpid()}: exiting __init__")
+        #************
+
                 
     #------------------------------------
     # generate_prec_recall
@@ -276,6 +301,10 @@ class PreprocessingCalibration(object):
         '''
 
         experiments = deque()
+        #************
+        print(f"Pid {os.getpid()}: in generate_outfiles: thres {thresholds_db}. cutoffs: {cutoff_freqs}")
+        #************
+
         for threshold in thresholds_db:
             for cutoff_freq in cutoff_freqs:
                 outfile = outfile_names.popleft()
@@ -301,6 +330,9 @@ class PreprocessingCalibration(object):
                                     		 'experiment_res'        : None   # Get from AmplitudeGater
                                             })
                     # Compute one noise gated wav outfile:
+                    #************
+                    print(f"Pid {os.getpid()}: about to gate")
+                    #************
                     _gater = AmplitudeGater(in_wav_file,
                                             outfile=outfile,
                                             amplitude_cutoff=threshold,
@@ -308,6 +340,10 @@ class PreprocessingCalibration(object):
                                             spectrogram_freq_cap=spectrogram_freq_cap,
                                             spectrogram_outfile=spectrogram_outfile if self.spectrogram else None
                                             )
+                    #************
+                    print(f"Pid {os.getpid()}: done gating")
+                    #************
+
                     experiment['percent_zeroed'] = _gater.percent_zeroed
                     experiments.append(experiment)
                 except FrequencyError as e:
