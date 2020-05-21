@@ -56,8 +56,11 @@ then
 fi
 
 # First output line: column header, which is common
-# with all the other given experiment files:
-echo $COL_HEAD
+# with all the other given experiment files. Note
+# we cannot use "echo $COL_HEAD here, b/c for
+# .tsv files this would replace the tabs with
+# spaces:
+head -1 "$1"
 
 # In a loop: output all but the first line of
 # each file:
