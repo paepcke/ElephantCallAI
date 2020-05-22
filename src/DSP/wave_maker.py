@@ -38,7 +38,8 @@ class WavMaker(object):
                  outdir='/tmp/',
                  threshold_db=-46,
                  copy_label_files=True,
-                 cutoff_freq=10,    # Not used any more
+                 low_freq=10,
+                 high_freq=50,
                  logfile=None
                  ):
         '''
@@ -86,7 +87,8 @@ class WavMaker(object):
                 gater = AmplitudeGater(infile,
                                        outfile=outfile,
                                        amplitude_cutoff=threshold_db,
-                                       # envelope_cutoff_freq=cutoff_freq,
+                                       low_freq=low_freq,
+                                       high_freq=high_freq
                                        )
             except Exception as e:
                 self.log.err(f"Processing failed for '{infile}: {repr(e)}")
@@ -221,11 +223,16 @@ if __name__ == '__main__':
                         default=-46,
                         help='dB off peak voltage below which signal is zeroed; default -46',
                         );
-#     parser.add_argument('-f', '--cutoff_freq',
-#                         type=int,
-#                         default=10,
-#                         help='envelope frequency; default 10Hz',
-#                         );
+    parser.add_argument('-m', '--low_freq',
+                        type=int,
+                        default=10,
+                        help='low end of front end bandpass filter; default 10Hz'
+                        );
+    parser.add_argument('-i', '--high_freq',
+                        type=int,
+                        default=50,
+                        help='high end of front end bandpass filter; default 50Hz'
+                        );
     parser.add_argument('infiles',
                         nargs='+',
                         help='Repeatable: .wav input files')

@@ -35,13 +35,26 @@ class PreprocessingCalibration(object):
                  in_wav_file,
                  labelfile,
                  overlap_percentages,
-                 thresholds_db, 
-                 cutoff_freqs,
+                 thresholds_db,
+                 low_freqs,
+                 high_freqs,
                  spectrogram_freq_cap=AmplitudeGater.spectrogram_freq_cap,
                  outfile_dir='/tmp',
                  spectrogram=None,
                  logfile=None):
-        
+
+        # Make sure the corresponding low/high freqs
+        # to try for the bandpass filter are suitable:
+        # All low freqs must be less than all high freqs,
+        # b/c all pairings will be tried:
+        #   low_freqs: [10,20] and high_freqs: [50,60]
+        # results in
+        #    10/50, 10/60, 20/50, 20/60 being tried.
+        for lowf in low_freqs:
+            for highf in high_freqs:
+                if lowf >= highf:
+                    raise ValueError(f"All low freqs must be less than all high freqs; offenders: [{lowf},{highf}]")
+
         if not isinstance(overlap_percentages, list):
             overlap_percentages = [overlap_percentages]
             
@@ -55,7 +68,8 @@ class PreprocessingCalibration(object):
 
         self.log.info("Constructing output file names...")
         outfile_names_deque = self.construct_outfile_names(thresholds_db, 
-                                                           cutoff_freqs,
+                                                           low_freqs,
+                                                           high_freqs,
                                                            outfile_dir)
         names_as_str = self.list_outfiles_from_deque(outfile_names_deque)
         self.log.info(f"Output files will be: {names_as_str}")
@@ -83,51 +97,14 @@ class PreprocessingCalibration(object):
 
         experiments = self.generate_outfiles(in_wav_file, 
                                              thresholds_db, 
-                                             cutoff_freqs,
+                                             low_freqs,
+                                             high_freqs,
                                              outfile_names_deque,
                                              spectrogram_freq_cap=spectrogram_freq_cap,
                                              spectrogram=self.spectrogram)
         #************
         print(f"Pid {os.getpid()}: done generate_outfiles")
         #************
-        
-        #*************
-        #self.log.err(f"Returned from generate_outfile. Exp: '{experiments}'")
-        #*************
-        # Overwrite the outfiles initialized above:
-#         file1 = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057.wav'
-#         file1_gated = '/tmp/filtered_wav_-40dB_500Hz_20200413_222057_gated.wav'
-#         file2 = '/tmp/filtered_wav_-30dB_1000Hz_20200413_222057.wav'
-#         file2_gated = '/tmp/filtered_wav_-30dB_1000Hz_20200413_222057_gated.wav'
-#   
-#         exp1 = Experiment({'signal_treatment' : SignalTreatmentDescriptor(-40,500),
-#                            'in_wav_file' : file1,
-#                            'labelfile'  : None, 
-#                            'gated_outfile' : '/tmp/filtered_wav_-30dB_1000Hz_20200421_080940_gated.wav',
-#                            'spectrogram_outfile' : None,
-#                            'threshold_db' : -40,
-#                            'cutoff_freq' : 500,
-#                            'spectrogram_freq_cap' : spectrogram_freq_cap,
-#                            'percent_zeroed' : None,
-#                            'experiment_res' : None
-#                            }
-#                              
-#                           )
-#         exp2 = Experiment({'signal_treatment' : SignalTreatmentDescriptor(-30,1000),
-#                            'in_wav_file' : file2,
-#                            'labelfile'  : None,                            
-#                            'gated_outfile'  : file2_gated,
-#                            'spectrogram_outfile' : None,
-#                            'threshold_db' : -30,
-#                            'cutoff_freq' : 1000,
-#                            'spectrogram_freq_cap' : spectrogram_freq_cap,
-#                            'percent_zeroed' : None,
-#                            'experiment_res' : None
-#                            }
-#                           )
-#           
-#         experiments = deque([exp1,exp2])
-        #****************************
         
         # Remember whether we started writing
         # experiment files to a .tsv yet:
@@ -266,7 +243,8 @@ class PreprocessingCalibration(object):
     def generate_outfiles(self, 
                           in_wav_file, 
                           thresholds_db, 
-                          cutoff_freqs,
+                          low_freqs,
+                          high_freqs,
                           outfile_names,
                           spectrogram_freq_cap=AmplitudeGater.spectrogram_freq_cap,
                           spectrogram=None):
@@ -282,9 +260,12 @@ class PreprocessingCalibration(object):
             signals to zero. Values are in dB below peak. Thus
             always negative numbers.
         @type thresholds_db: [int]
-        @param cutoff_freqs: frequencies for the low-pass filter
-            in each experiment.
-        @type cutoff_freqs: [int]
+        @param low_freqs: low frequencies to try for the font end
+            bandpass filter.
+        @type low_freqs: [int]
+        @param high_freqs: high frequencies to try for the font end
+            bandpass filter.
+        @type high_freqs: [int]
         @param overlap_percentages: list of the minimum percentage
             overlap of detected with labeled burst required
         @type overlap_percentages: [float]
@@ -302,54 +283,60 @@ class PreprocessingCalibration(object):
 
         experiments = deque()
         #************
-        print(f"Pid {os.getpid()}: in generate_outfiles: thres {thresholds_db}. cutoffs: {cutoff_freqs}")
+        print(f"Pid {os.getpid()}: in generate_outfiles: thres {thresholds_db}. lowfs: {low_freqs}. highfs: {high_freqs}")
         #************
 
         for threshold in thresholds_db:
-            for cutoff_freq in cutoff_freqs:
-                outfile = outfile_names.popleft()
-                # Create a corresponding file name for spectrograms:
-                spectrogram_outfile = DSPUtils.prec_recall_file_name(outfile,
-                                                                     PrecRecFileTypes.SPECTROGRAM)
-                self.log.info(f"Generating [{threshold}dB, {cutoff_freq}Hz]...")
-                try:
-                    # Generate an Experiment instance to
-                    # which caller can later add precision/recall
-                    # results:
-                    signal_treatment = SignalTreatmentDescriptor(threshold,cutoff_freq)
-                    experiment = Experiment({'signal_treatment'      : signal_treatment,
-                                             'in_wav_file'           : in_wav_file,
-                                             'labelfile'             : None,            # Filled in later
-                            	    		 'gated_outfile'         : outfile,
-                                    		 'spectrogram_outfile'   : spectrogram_outfile,
-                                    		 'threshold_db'          : threshold,
-                                    		 'cutoff_freq'           : cutoff_freq,
-                                    		 'spectrogram_freq_cap'  : spectrogram_freq_cap,
-                                             'min_required_overlap'  : None,  # Added when overlaps are run
-                                             'percent_zeroed'        : None,  # Get that from AmplitudeGater
-                                    		 'experiment_res'        : None   # Get from AmplitudeGater
-                                            })
-                    # Compute one noise gated wav outfile:
-                    #************
-                    print(f"Pid {os.getpid()}: about to gate")
-                    #************
-                    _gater = AmplitudeGater(in_wav_file,
-                                            outfile=outfile,
-                                            amplitude_cutoff=threshold,
-                                            envelope_cutoff_freq=cutoff_freq,
-                                            spectrogram_freq_cap=spectrogram_freq_cap,
-                                            spectrogram_outfile=spectrogram_outfile if self.spectrogram else None
-                                            )
-                    #************
-                    print(f"Pid {os.getpid()}: done gating")
-                    #************
-
-                    experiment['percent_zeroed'] = _gater.percent_zeroed
-                    experiments.append(experiment)
-                except FrequencyError as e:
-                    self.log.err(f"Bad frequency; skipping it: {repr(e)}")
-                    continue
-                self.log.info(f"Done generating [{threshold}dB, {cutoff_freq}Hz] into {os.path.basename(outfile)}...")
+            for low_freq in low_freqs:
+                for high_freq in high_freqs:
+                    outfile = outfile_names.popleft()
+                    # Create a corresponding file name for spectrograms:
+                    if spectrogram:
+                        spectrogram_outfile = DSPUtils.prec_recall_file_name(outfile,
+                                                                             PrecRecFileTypes.SPECTROGRAM)
+                    else:
+                        spectrogram_outfile = None
+                    self.log.info(f"Generating [{threshold}dB, {low_freq}Hz, {high_freq}Hz]...")
+                    try:
+                        # Generate an Experiment instance to
+                        # which caller can later add precision/recall
+                        # results:
+                        signal_treatment = SignalTreatmentDescriptor(threshold,low_freq,high_freq)
+                        experiment = Experiment({'signal_treatment'      : signal_treatment,
+                                                 'in_wav_file'           : in_wav_file,
+                                                 'labelfile'             : None,            # Filled in later
+                                	    		 'gated_outfile'         : outfile,
+                                        		 'spectrogram_outfile'   : spectrogram_outfile,
+                                        		 'threshold_db'          : threshold,
+                                        		 'low_freq'              : low_freq,
+                                                 'high_freq'             : high_freq,
+                                        		 'spectrogram_freq_cap'  : spectrogram_freq_cap,
+                                                 'min_required_overlap'  : None,  # Added when overlaps are run
+                                                 'percent_zeroed'        : None,  # Get that from AmplitudeGater
+                                        		 'experiment_res'        : None   # Get from AmplitudeGater
+                                                })
+                        # Compute one noise gated wav outfile:
+                        #************
+                        print(f"Pid {os.getpid()}: about to gate")
+                        #************
+                        _gater = AmplitudeGater(in_wav_file,
+                                                outfile=outfile,
+                                                amplitude_cutoff=threshold,
+                                                low_freq=low_freq,
+                                                high_freq=high_freq,
+                                                spectrogram_freq_cap=spectrogram_freq_cap,
+                                                spectrogram_outfile=spectrogram_outfile
+                                                )
+                        #************
+                        print(f"Pid {os.getpid()}: done gating")
+                        #************
+    
+                        experiment['percent_zeroed'] = _gater.percent_zeroed
+                        experiments.append(experiment)
+                    except FrequencyError as e:
+                        self.log.err(f"Bad frequency; skipping it: {repr(e)}")
+                        continue
+                    self.log.info(f"Done generating [{threshold}dB, {low_freq}Hz, {high_freq}Hz] into {os.path.basename(outfile)}...")
         self.log.info("Done generating outfiles.")
         return experiments
 
@@ -359,19 +346,22 @@ class PreprocessingCalibration(object):
     
     def construct_outfile_names(self, 
                                 thresholds_db, 
-                                cutoff_freqs, 
+                                low_freqs,
+                                high_freqs, 
                                 outfile_dir):
         '''
         Construct a file names that contain the 
-        passed-in parameters. Note that thresholds_db
-        and cutoff_freqs are lists. So multiple names
+        passed-in parameters. Note that thresholds_db,
+        low_freqs, and high_freqs are lists. So multiple names
         are constructed.
         
         @param thresholds_db: list of dB below which
             signals were clamped to 0
         @type thresholds_db: [int]
-        @param cutoff_freqs: list of envelope frequencies
-        @type cutoff_freqs: [int]
+        @param low_freqs: list of low bandpass frequencies
+        @type low_freqs: [int]
+        @param high_freqs: list of high bandpass frequencies
+        @type high_freqs: [int]
         @param outfile_dir: directory for which the paths 
             are to be constructed
         @type outfile_dir: str
@@ -381,13 +371,14 @@ class PreprocessingCalibration(object):
         
         out_files = deque()
         for threshold in thresholds_db:
-            for cutoff_freq in cutoff_freqs:
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                outfile = os.path.join(outfile_dir,
-                                       f"filtered_wav_{threshold}dB_{cutoff_freq}Hz_{timestamp}.wav")
-                # Add info that this is a gated wav file:
-                outfile = DSPUtils.prec_recall_file_name(outfile, PrecRecFileTypes.GATED_WAV)
-                out_files.append(outfile)
+            for low_freq in low_freqs:
+                for high_freq in high_freqs:
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    outfile = os.path.join(outfile_dir,
+                                           f"filtered_wav_{threshold}dB_{low_freq}Hz_{high_freq}Hz_{timestamp}.wav")
+                    # Add info that this is a gated wav file:
+                    outfile = DSPUtils.prec_recall_file_name(outfile, PrecRecFileTypes.GATED_WAV)
+                    out_files.append(outfile)
 
         return out_files
     
@@ -431,7 +422,8 @@ class Experiment(OrderedDict):
                     	 'gated_outfile'         : str,
                          'spectrogram_outfile'   : str,
                          'threshold_db'          : int,
-                         'cutoff_freq'           : int,
+                         'low_freq'              : int,
+                         'high_freq'             : int,
                          'min_required_overlap'  : float,
                          'spectrogram_freq_cap'  : int,
                          'percent_zeroed'        : float,
@@ -720,11 +712,16 @@ if __name__ == '__main__':
                         nargs='+',
                         default=[-40],
                         help='Repeatable: db above which voltages are cut off; default: -40dB FS')
-    parser.add_argument('-f', '--cutoff_freqs',
+    parser.add_argument('-m', '--lowfreqs',
                         type=int,
                         nargs='+',
                         default=[10],
-                        help='Repeatable: cutoff frequencies for lowpass envelope filter; default: 10Hz')
+                        help='Repeatable: low frequency of front end bandpass filter; default: 10Hz')
+    parser.add_argument('-i', '--highfreqs',
+                        type=int,
+                        nargs='+',
+                        default=[50],
+                        help='Repeatable: high frequency of front end bandpass filter; default: 10Hz')
     parser.add_argument('-s', '--spectrogram',
                         default=None,
                         action='store_true',
@@ -752,7 +749,8 @@ if __name__ == '__main__':
                              args.labelfile,
                              args.overlaps,
                              args.threshold_dbs,
-                             args.cutoff_freqs,
+                             args.lowfreqs,
+                             args.highfreqs,
                              outfile_dir=args.outdir,
                              spectrogram=args.spectrogram,
                              logfile=args.logfile

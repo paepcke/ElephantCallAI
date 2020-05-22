@@ -36,26 +36,26 @@ class DSPUtils(object):
                               experiment_id=None):
         '''
         Given root info like one of:
-          o filtered_wav_-50dB_500Hz_20200404_192128.npy
-          o filtered_wav_-50dB_500Hz_20200404_192128
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128.npy
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128
           
         return a new name with identifying info after the
         basename:
         
-          o filtered_wav_-50dB_500Hz_20200404_192128_spectrogram.npy
-          o filtered_wav_-50dB_500Hz_20200404_192128_time_labels.npy
-          o filtered_wav_-50dB_500Hz_20200404_192128_freq_labels.npy
-          o filtered_wav_-50dB_500Hz_20200404_192128_gated.wav
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128_spectrogram.npy
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128_time_labels.npy
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128_freq_labels.npy
+          o filtered_wav_-50dB_10Hz_50Hz_20200404_192128_gated.wav
         
         The experiment_id argument is for type PICKLE. Such files
         hold a single experiment object in pickle form:
         
-         o filtered_wav_-50dB_500Hz_20200404_192128_exp<experiment_id>.pickle
+         o filtered_wav_-50dB_10Hz_50Hz_20200404_192128_exp<experiment_id>.pickle
          
         If generated filename already exists, adds a counter before 
         the dot: 
         
-          filtered_wav_-50dB_500Hz_20200404_192128_exp<experiment_id>_<n>.pickle
+          filtered_wav_-50dB_10Hz_50Hz_20200404_192128_exp<experiment_id>_<n>.pickle
         
         @param root_info: example file name
         @type root_info: str
@@ -148,7 +148,8 @@ class SignalTreatmentDescriptor(object):
     '''
     
     props = OrderedDict({'threshold_db' : int,
-                         'cutoff_freq'  : int,
+                         'low_freq'  : int,
+                         'high_freq'  : int,
                          'min_required_overlap' : int
                          })
 
@@ -156,14 +157,16 @@ class SignalTreatmentDescriptor(object):
     # Constructor 
     #-------------------
 
-    def __init__(self, threshold_db, cutoff_freq, min_required_overlap=None):
+    def __init__(self, threshold_db, low_freq, high_freq, min_required_overlap=None):
         '''
         
         @param threshold_db: signal strength below which signal
             is set to 0.
         @type threshold_db: int
-        @param cutoff_freq: frequency for the envelope creation
-        @type cutoff_freq: int
+        @param low_freq: lowest frequency accepted by front end bandpass filter
+        @type low_freq: int
+        @param high_freq: highest frequency accepted by front end bandpass filter
+        @type high_freq: int
         @param min_required_overlap: percentage of overlap minimally
             required for a burst to count as discovered.
         @type min_required_overlap: float
@@ -175,9 +178,14 @@ class SignalTreatmentDescriptor(object):
             raise ValueError("Threshold dB must be int, or str convertible to int")
         
         try:
-            self.cutoff_freq = int(cutoff_freq)
+            self.low_freq = int(low_freq)
         except (ValueError, TypeError):
-            raise ValueError("Cutoff freq must be int, or str convertible to int")
+            raise ValueError("Bandpass freqs must be int, or str convertible to int")
+
+        try:
+            self.high_freq = int(high_freq)
+        except (ValueError, TypeError):
+            raise ValueError("Bandpass freqs must be int, or str convertible to int")
         
         if min_required_overlap in (None, 'none', 'None', 'noneperc'):
             self.min_required_overlap = None
@@ -195,10 +203,10 @@ class SignalTreatmentDescriptor(object):
     def from_str(cls, stringified_instance):
         '''
         Reverse of what __str__() produces:
-          "SignalTreatmentDescriptor(-30,300,20)" ==> an instance
+          "SignalTreatmentDescriptor(-30,10,50,20)" ==> an instance
           
         Alternatively, the method will also deal with 
-        a flat string: "-20dB_300Hz_10perc".
+        a flat string: "-20dB_10Hz_5Hz_10perc".
         
         @param cls:
         @type cls:
@@ -226,8 +234,8 @@ class SignalTreatmentDescriptor(object):
     @classmethod
     def from_flat_str(cls, str_repr):
         '''
-        Assume passed-in string is like "-30dB_300Hz_10perc",
-        or "-30dB_300Hz_Noneperc". Create an instance from
+        Assume passed-in string is like "-30dB_10Hz_50Hz_10perc",
+        or "-30dB_10Hz_50Hz_Noneperc". Create an instance from
         that info.
         
         @param str_repr:
@@ -236,7 +244,8 @@ class SignalTreatmentDescriptor(object):
         # Already an instance?
         
         (threshold_db_str, 
-         cutoff_freq_str, 
+         low_freq_str,
+         high_freq_str, 
          min_overlap_str) = str_repr.split('_')
         
         # Extract the (always negative) threshold dB:
@@ -250,19 +259,30 @@ class SignalTreatmentDescriptor(object):
             if len(threshold_db) == 0:
                 raise ValueError(err_msg)
         
-        # Cutoff freq is just a number.
-        # Usually integer, but allow float:
-        p = re.compile(r'(^[0-9.]*)')
-        err_msg = f"Cannot parse cutoff frequency from '{str_repr}'"
+        # Low bandpass freq is int:
+        p = re.compile(r'(^[0-9]*)')
+        err_msg = f"Cannot parse low bandpass frequency from '{str_repr}'"
         
         try:
-            cutoff_freq = p.search(cutoff_freq_str).group(1)
+            low_freq = p.search(low_freq_str).group(1)
         except AttributeError:
             raise ValueError(err_msg)
         else:
-            if len(cutoff_freq) == 0:
+            if len(low_freq) == 0:
                 raise ValueError(err_msg)
+
+        # High bandpass freq is int:
+        p = re.compile(r'(^[0-9]*)')
+        err_msg = f"Cannot parse high bandpass frequency from '{str_repr}'"
         
+        try:
+            high_freq = p.search(high_freq_str).group(1)
+        except AttributeError:
+            raise ValueError(err_msg)
+        else:
+            if len(high_freq) == 0:
+                raise ValueError(err_msg)
+
         # Overlap:
         p = re.compile(r"(^[0-9]*|none)perc")
         err_msg = f"Cannot parse min_required_overlap from '{str_repr}'"
@@ -274,7 +294,7 @@ class SignalTreatmentDescriptor(object):
             if len(min_required_overlap) == 0:
                 raise ValueError(err_msg)
             
-        return(SignalTreatmentDescriptor(threshold_db,cutoff_freq,min_required_overlap))
+        return(SignalTreatmentDescriptor(threshold_db,low_freq,high_freq,min_required_overlap))
 
     #------------------------------------
     # __str__
@@ -287,7 +307,7 @@ class SignalTreatmentDescriptor(object):
            SignalTreatmentDescriptor('-40dB_300Hz_10perc')
         '''
         the_str = \
-          f"SignalTreatmentDescriptor({self.threshold_db},{self.cutoff_freq},{self.min_required_overlap})"
+          f"SignalTreatmentDescriptor({self.threshold_db},{self.low_freq},{self.high_freq},{self.min_required_overlap})"
         return the_str
 
     #------------------------------------
@@ -305,7 +325,7 @@ class SignalTreatmentDescriptor(object):
         '''
         
         '''
-        descriptor = f"{self.threshold_db}dB_{self.cutoff_freq}Hz"
+        descriptor = f"{self.threshold_db}dB_{self.low_freq}Hz_{self.high_freq}Hz"
         if self.min_required_overlap is not None:
             descriptor += f"_{self.min_required_overlap}perc"
         else:
@@ -341,7 +361,8 @@ class SignalTreatmentDescriptor(object):
         @type other:
         '''
         return self.threshold_db == other.threshold_db and \
-            self.cutoff_freq == other.cutoff_freq
+            self.low_freq == other.low_freq and \
+            self.high_freq == other.high_freq
 
     #------------------------------------
     # __eq__
@@ -361,7 +382,8 @@ class SignalTreatmentDescriptor(object):
 
     def __ne__(self, other):
         if self.threshold_db != other.threshold_db or \
-           self.cutoff_freq != other.cutoff_freq or \
+           self.low_freq != other.low_freq or \
+           self.high_freq != other.high_freq or \
            self.min_required_overlap != other.min_required_overlap:
             return True
         else:
@@ -372,56 +394,69 @@ class SignalTreatmentDescriptor(object):
 if __name__ == '__main__':
     
     # Just some testing; doesn't normally run as main:
-    new_file = DSPUtils.prec_recall_file_name('filtered_wav_-50dB_500Hz_20200404_192128.npy', 
-                                               PrecRecFileTypes.FREQ_LABELS) 
-    assert (new_file == 'filtered_wav_-50dB_500Hz_20200404_192128_freq_labels.npy'),\
-            f"Bad freq_label file: {new_file}" 
+    fname = 'filtered_wav_-50dB_10Hz_50Hz_20200404_192128.npy'
+    
+    if os.path.exists(fname):
+        os.remove(fname)
+        
+    new_file = DSPUtils.prec_recall_file_name(fname, 
+                                               PrecRecFileTypes.FREQ_LABELS)
+    
+    assert (new_file == f"{os.path.splitext(fname)[0]}_freq_labels.npy"), \
+            f"Bad freq_label file: {new_file}"
+    os.remove(new_file) 
 
-    new_file = DSPUtils.prec_recall_file_name('filtered_wav_-50dB_500Hz_20200404_192128', 
+    new_file = DSPUtils.prec_recall_file_name(fname, 
                                                PrecRecFileTypes.FREQ_LABELS) 
             
-    assert (new_file == 'filtered_wav_-50dB_500Hz_20200404_192128_freq_labels.npy'),\
-            f"Bad freq_label file: {new_file}" 
-
-    new_file = DSPUtils.prec_recall_file_name('filtered_wav_-50dB_500Hz_20200404_192128.npy', 
+    assert (new_file == f"{os.path.splitext(fname)[0]}_freq_labels.npy"), \
+            f"Bad freq_label file: {new_file}"
+             
+    os.remove(new_file)
+    
+    new_file = DSPUtils.prec_recall_file_name(fname,
                                                PrecRecFileTypes.TIME_LABELS) 
 
-    assert (new_file == 'filtered_wav_-50dB_500Hz_20200404_192128_time_labels.npy'),\
-            f"Bad freq_label file: {new_file}" 
+    assert (new_file == f"{os.path.splitext(fname)[0]}_time_labels.npy"),\
+            f"Bad freq_label file: {new_file}"
+            
+    os.remove(new_file) 
 
-    new_file = DSPUtils.prec_recall_file_name('filtered_wav_-50dB_500Hz_20200404_192128.npy', 
-                                               PrecRecFileTypes.GATED_WAV) 
+    new_file = DSPUtils.prec_recall_file_name(fname,
+                                              PrecRecFileTypes.GATED_WAV) 
 
-    assert (new_file == 'filtered_wav_-50dB_500Hz_20200404_192128_gated.wav'),\
-            f"Bad freq_label file: {new_file}" 
+    assert (new_file == f"{os.path.splitext(fname)[0]}_gated.wav"),\
+            f"Bad freq_label file: {new_file}"
 
+    os.remove(new_file)
 
-    new_file = DSPUtils.prec_recall_file_name('/foo/bar/filtered_wav_-50dB_500Hz_20200404_192128.npy', 
-                                               PrecRecFileTypes.GATED_WAV) 
+#     new_file = DSPUtils.prec_recall_file_name('/foo/bar/filtered_wav_-50dB_10Hz_50Hz_20200404_192128.npy', 
+#                                                PrecRecFileTypes.GATED_WAV) 
+# 
+#     assert (new_file == '/foo/bar/filtered_wav_-50dB_10Hz_50Hz_20200404_192128_gated.wav'),\
+#             f"Bad freq_label file: {new_file}" 
 
-    assert (new_file == '/foo/bar/filtered_wav_-50dB_500Hz_20200404_192128_gated.wav'),\
-            f"Bad freq_label file: {new_file}" 
-
+#    os.remove(new_file)
 
     print('File name manipulation tests OK')    
                                           
     # Test SignalTreatmentDescriptor:
     # To string:
     
-    s1 = "SignalTreatmentDescriptor(-30,300,20)"
-    d = SignalTreatmentDescriptor(-30, 300, 20)
+    s1 = "SignalTreatmentDescriptor(-30,10,50,20)"
+    d = SignalTreatmentDescriptor(-30, 10, 50, 20)
     assert str(d) == s1
 
-    s2 = "SignalTreatmentDescriptor(-40,400,None)"
-    d = SignalTreatmentDescriptor(-40, 400)
+    s2 = "SignalTreatmentDescriptor(-40,20,50,None)"
+    d = SignalTreatmentDescriptor(-40, 20, 50)
     assert str(d) == s2
 
     try:    
-        d = SignalTreatmentDescriptor('foo', 500, 10)
+        d = SignalTreatmentDescriptor('foo', 10, 50, 10)
     except ValueError:
         pass
     else:
-        raise ValueError(f"String 'foo,500,10' should have raised an ValueError")
+        raise ValueError(f"String 'foo,10,50,10' should have raised an ValueError")
     
     # Test SignalTreatmentDescriptor:
     # From string:
@@ -433,48 +468,48 @@ if __name__ == '__main__':
     assert (str(d) == s2)
     
     try:
-        d = SignalTreatmentDescriptor.from_str('foo_300Hz_30perc')
+        d = SignalTreatmentDescriptor.from_str('foo_10Hz_50Hz_30perc')
     except ValueError:
         pass
     else:
-        raise AssertionError("Should have ValueError from 'foo_300Hz_30perc'")
+        raise AssertionError("Should have ValueError from 'foo_10Hz_50Hz_30perc'")
 
     # SignalTreatmentDescriptor
     # Adding min overlap after the fact:
     
-    d = SignalTreatmentDescriptor(-40, 400)
-    assert (str(d) == "SignalTreatmentDescriptor(-40,400,None)")
+    d = SignalTreatmentDescriptor(-40, 30, 60)
+    assert (str(d) == "SignalTreatmentDescriptor(-40,30,60,None)")
     d.add_overlap(10)
-    assert (str(d) == "SignalTreatmentDescriptor(-40,400,10)")
+    assert (str(d) == "SignalTreatmentDescriptor(-40,30,60,10)")
     
     # SignalTreatmentDescriptor
     # to_flat_str
     
-    s3 = '-30dB_300Hz_20perc'
+    s3 = '-30dB_10Hz_50Hz_20perc'
     d = SignalTreatmentDescriptor.from_flat_str(s3)
     assert(d.to_flat_str() == s3)
     
-    s4 = '-40dB_400Hz_noneperc'
+    s4 = '-40dB_10Hz_50Hz_noneperc'
     d = SignalTreatmentDescriptor.from_flat_str(s4)
     assert(d.to_flat_str() == s4)
     
-    s5 = '-40dB_400Hz_10perc'
+    s5 = '-40dB_10Hz_50Hz_10perc'
     d = SignalTreatmentDescriptor.from_flat_str(s5)
     assert(d.to_flat_str() == s5)
     
     # SignalTreatmentDescriptor
     # Equality
     
-    d1 = SignalTreatmentDescriptor(-40,300,10)
-    d2 = SignalTreatmentDescriptor(-40,300,10)
+    d1 = SignalTreatmentDescriptor(-40,10,50,10)
+    d2 = SignalTreatmentDescriptor(-40,10,50,10)
     assert (d1.__eq__(d2))
     
-    d1 = SignalTreatmentDescriptor(-40,300,None)
-    d2 = SignalTreatmentDescriptor(-40,300,10)
+    d1 = SignalTreatmentDescriptor(-40,10,50,None)
+    d2 = SignalTreatmentDescriptor(-40,10,50,10)
     assert (not d1.__eq__(d2))
     
-    d1 = SignalTreatmentDescriptor(-40,300,10)
-    d2 = SignalTreatmentDescriptor(-40,300,20)
+    d1 = SignalTreatmentDescriptor(-40,10,50,10)
+    d2 = SignalTreatmentDescriptor(-40,10,50,20)
     assert (d1.equality_sig_proc(d2))
     assert (not d1.__eq__(d2))
     
