@@ -1187,7 +1187,8 @@ if __name__ == '__main__':
                         help="Input .wav file"
                         )
     parser.add_argument('outfile',
-                        help="Path to where result .wav file will be written; if None, nothing other than plotting is output",
+                        help="Path to where result .wav file will be written; \n" + \
+                             "if None, <wavefile>_gated.wav. ",
                         default=None
                         )
     
@@ -1197,6 +1198,13 @@ if __name__ == '__main__':
     if cutoff > 0:
         print(f"Amplitude cutoff must be negative, not {cutoff}")
         sys.exit(1)
+
+    # If outfile not provided use the wavefile, with "_gated"
+    # added at the end: foo.wav ==> foo_gated.wav:
+    outfile = args.outfile
+    if outfile is None:
+        (path,ext) = os.path.splitext(args.wavefile)
+        outfile = f"{path}_gated{ext}"
 
     # Register the plots to produce:
     if args.plot is not None and len(args.plot) > 0:
@@ -1209,7 +1217,7 @@ if __name__ == '__main__':
     #                plot_result=True)
     try:
         AmplitudeGater(args.wavefile,
-                       args.outfile,
+                       outfile,
                        amplitude_cutoff=cutoff,
                        low_freq=args.lowfreq,
                        high_freq=args.highfreq,
