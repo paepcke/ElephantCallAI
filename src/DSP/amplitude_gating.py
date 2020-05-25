@@ -1182,7 +1182,12 @@ if __name__ == '__main__':
                                  'filter_response'],
                         help="Plots to produce; repeatable; default: no plots"
                         )
-
+    
+    parser.add_argument('-d', '--dir',
+                        help="Path to where gated output is written; default: same as input wav file",
+                        default=None
+                        )
+    
     parser.add_argument('wavefile',
                         help="Input .wav file"
                         )
@@ -1205,6 +1210,12 @@ if __name__ == '__main__':
     if outfile is None:
         (path,ext) = os.path.splitext(args.wavefile)
         outfile = f"{path}_gated{ext}"
+        
+    outdir = args.dir
+    if outdir is not None:
+        # Replace input wav file dir with specified outdir:
+        filename = os.path.basename(outfile)
+        outfile = os.path.join(outdir, filename)
 
     # Register the plots to produce:
     if args.plot is not None and len(args.plot) > 0:
