@@ -71,24 +71,19 @@ class WavMaker(object):
         for file_info in files_info_todo:
             
             # Reconstruct the full .wav file path
-            infile = os.path.join(file_info['dir'], file_info['wav'])
+            infile = os.path.join(file_info['outdir'], file_info['wav'])
             if not os.path.isfile(infile):
                 # At this point we should only be seeing existing .wav files:
                 self.log.warn(f"File {infile} does not exist or is a directory.")
                 continue
 
-            # Create output filename
-            in_basename = file_info['wav']
-            # Final out: /my/outdir/foo_gated.wav
-            outfile = os.path.join(outdir, f"{in_basename}_gated.wav")
-            
             self.log.info(f"Processing {infile}...")
             try:
                 gater = AmplitudeGater(infile,
-                                       outfile=outfile,
                                        amplitude_cutoff=threshold_db,
                                        low_freq=low_freq,
-                                       high_freq=high_freq
+                                       high_freq=high_freq,
+                                       outdir=outdir
                                        )
             except Exception as e:
                 self.log.err(f"Processing failed for '{infile}: {repr(e)}")
@@ -97,7 +92,7 @@ class WavMaker(object):
             self.log.info(f"Done processing {os.path.basename(infile)}; removed {round(perc_zeroed)} percent")
             if copy_label_files:
                 try:
-                    full_label_path = os.path.join(file_info['dir'],
+                    full_label_path = os.path.join(file_info['outdir'],
                                                    file_info['txt'])
                     shutil.copy(full_label_path, outdir)
                 except KeyError:

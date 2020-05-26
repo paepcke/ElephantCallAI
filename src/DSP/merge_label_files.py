@@ -30,7 +30,7 @@ class LabelMerger(object):
         for label_dir in dir_paths:
             # Find all label files
             if not os.path.exists(label_dir):
-                print(f"Label dir {label_dir} does not exist; skipping.")
+                print(f"Label outdir {label_dir} does not exist; skipping.")
                 continue
                 
             label_files = os.listdir(label_dir)
