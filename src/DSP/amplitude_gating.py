@@ -71,7 +71,6 @@ class AmplitudeGater(object):
 
     def __init__(self,
                  infile,
-                 outfile=None,
                  amplitude_cutoff=-40,   # dB of peak
                  low_freq=10, #
                  high_freq=50, #
@@ -80,6 +79,7 @@ class AmplitudeGater(object):
                  logfile=None,
                  framerate=None,  # Only used for testing.
                  spectrogram_outfile=None,
+                 outdir=None,
                  testing=False
                  ):
         '''
@@ -104,9 +104,6 @@ class AmplitudeGater(object):
         @param infile: path to .wav file to be gated
             Can leave at None, if testing is True
         @type infile: str
-        
-        @param outfile: where gated, normalized .wav will be written.
-        @type outfile: str
         
         @param amplitude_cutoff: dB attenuation from maximum
             amplitude below which voltage is set to zero. If
@@ -135,6 +132,10 @@ class AmplitudeGater(object):
         @param logging_period: number of seconds between reporting
             envelope placement progress.
         @type logging_period: int
+
+        @param outdir: where gated, normalized .wav will be written.
+            If None: same outdir as input wav file.
+        @type: outdir str
         
         @param testing: whether or not unittests are being run. If
             true, __init__() does not initiate any action, allowing
@@ -142,15 +143,20 @@ class AmplitudeGater(object):
         @type testing: bool
         '''
 
+        if outdir is None:
+            outdir = os.path.dirname(infile)
         # Make sure the outfile can be opened for writing,
         # before going into lengthy computations:
-        
-        if outfile is not None:
-            try:
-                with open(outfile, 'wb') as _fd:
-                    pass
-            except Exception as e:
-                raise IOError(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
+
+        # Replace input wav file outdir with specified outdir:
+        filename = os.path.basename(infile)
+        outfile = f"{os.path.join(outdir, filename)}_gated.wav"
+
+        try:
+            with open(outfile, 'wb') as _fd:
+                pass
+        except Exception as e:
+            raise IOError(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
                 
 
         AmplitudeGater.log = LoggingService(logfile=logfile)
@@ -188,7 +194,7 @@ class AmplitudeGater(object):
         samples = None
         
         #************
-        print(f"Pid {os.getpid()}: gating: about to norm")
+        #print(f"Pid {os.getpid()}: gating: about to norm")
         #************
 
         # Normalize:
@@ -198,7 +204,7 @@ class AmplitudeGater(object):
             normed_samples = samples_float.copy()
 
         #************
-        print(f"Pid {os.getpid()}: gating: done norm")
+        #print(f"Pid {os.getpid()}: gating: done norm")
         #************
             
         # Free memory:
@@ -216,7 +222,7 @@ class AmplitudeGater(object):
         # damn birds:
 
         #************
-        print(f"Pid {os.getpid()}: gating: about to freq gate")
+        #print(f"Pid {os.getpid()}: gating: about to freq gate")
         #************
 
 
@@ -227,7 +233,7 @@ class AmplitudeGater(object):
         self.log.info(f"Done filtering unwanted frequencies.")
          
         #************
-        print(f"Pid {os.getpid()}: gating: done freq gate")
+        #print(f"Pid {os.getpid()}: gating: done freq gate")
         #************
 
         # Free memory:
@@ -243,7 +249,7 @@ class AmplitudeGater(object):
         if amplitude_cutoff != 0:
             # Noise gate: Chop off anything with amplitude above amplitude_cutoff:
             #************
-            print(f"Pid {os.getpid()}: gating: calling amplitude_gate")
+            #print(f"Pid {os.getpid()}: gating: calling amplitude_gate")
             #************
             
             gated_samples  = self.amplitude_gate(freq_gated_samples_abs, 
@@ -253,7 +259,7 @@ class AmplitudeGater(object):
                                                  )
 
             #************
-            print(f"Pid {os.getpid()}: gating: return from amplitude_gate)")
+            #print(f"Pid {os.getpid()}: gating: return from amplitude_gate)")
             #************
      
         else:
@@ -304,7 +310,7 @@ class AmplitudeGater(object):
         @param high_freq: highest frequency of front end bandpass filter
         @type high_freq: int
         '''
-        self.log.info(f"Applying front end band pass filter ({self.FRONT_END_HIGH_PASS_FREQ}Hz to {self.FRONT_END_LOW_PASS_FREQ}Hz)")
+        self.log.info(f"Applying front end band pass filter ({low_freq}Hz to {high_freq}Hz)")
         samples_band_passed = self.freq_filter(
             samples_raw, 
             [low_freq, high_freq],
@@ -416,7 +422,7 @@ class AmplitudeGater(object):
         # that max val == 1.0
 
         #************
-        print(f"Pid {os.getpid()}: compute RMS")
+        #print(f"Pid {os.getpid()}: compute RMS")
         #************
 
         # max_voltage = np.amax(envelope)
@@ -424,7 +430,7 @@ class AmplitudeGater(object):
         self.log.info(f"Signal RMS: {rms}")
 
         #************
-        print(f"Pid {os.getpid()}: done compute RMS")
+        #print(f"Pid {os.getpid()}: done compute RMS")
         #************
         
         # Compute threshold_db of max voltage:
@@ -436,7 +442,7 @@ class AmplitudeGater(object):
         self.log.info("Zeroing sub-threshold values...")
 
         #************
-        print(f"Pid {os.getpid()}: mask ops")
+        #print(f"Pid {os.getpid()}: mask ops")
         #************
 
         mask_for_where_non_zero = 1 * np.ma.masked_greater(envelope, Vthresh).mask
@@ -446,7 +452,7 @@ class AmplitudeGater(object):
         self.log.info(f"Zeroed {self.percent_zeroed:.2f}% of signal.")
         
         #************
-        print(f"Pid {os.getpid()}: done mask ops")
+        #print(f"Pid {os.getpid()}: done mask ops")
         #************
 
         if spectrogram_dest:
@@ -491,7 +497,7 @@ class AmplitudeGater(object):
                                           capped_spectrogram)
 
         #************
-        print(f"Pid {os.getpid()}: exit amp gating")
+        #print(f"Pid {os.getpid()}: exit amp gating")
         #************
 
         return gated_samples
@@ -1183,7 +1189,7 @@ if __name__ == '__main__':
                         help="Plots to produce; repeatable; default: no plots"
                         )
     
-    parser.add_argument('-d', '--dir',
+    parser.add_argument('-d', '--outdir',
                         help="Path to where gated output is written; default: same as input wav file",
                         default=None
                         )
@@ -1191,31 +1197,13 @@ if __name__ == '__main__':
     parser.add_argument('wavefile',
                         help="Input .wav file"
                         )
-    parser.add_argument('outfile',
-                        help="Path to where result .wav file will be written; \n" + \
-                             "if None, <wavefile>_gated.wav. ",
-                        default=None
-                        )
-    
+
     args = parser.parse_args();
 
     cutoff = args.cutoff
     if cutoff > 0:
         print(f"Amplitude cutoff must be negative, not {cutoff}")
         sys.exit(1)
-
-    # If outfile not provided use the wavefile, with "_gated"
-    # added at the end: foo.wav ==> foo_gated.wav:
-    outfile = args.outfile
-    if outfile is None:
-        (path,ext) = os.path.splitext(args.wavefile)
-        outfile = f"{path}_gated{ext}"
-        
-    outdir = args.dir
-    if outdir is not None:
-        # Replace input wav file dir with specified outdir:
-        filename = os.path.basename(outfile)
-        outfile = os.path.join(outdir, filename)
 
     # Register the plots to produce:
     if args.plot is not None and len(args.plot) > 0:
@@ -1228,13 +1216,13 @@ if __name__ == '__main__':
     #                plot_result=True)
     try:
         AmplitudeGater(args.wavefile,
-                       outfile,
                        amplitude_cutoff=cutoff,
                        low_freq=args.lowfreq,
                        high_freq=args.highfreq,
                        spectrogram_freq_cap=args.spectrofilter,
                        spectrogram_outfile=args.outfilespectrogram,
                        normalize=not args.raw,
+                       outdir=args.outdir,
                        logfile=args.logfile,
                        )
     except Exception as e:

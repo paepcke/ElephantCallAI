@@ -61,9 +61,10 @@ class PreprocessingCalibration(object):
         AmplitudeGater.log = LoggingService(logfile=logfile)
         self.log = AmplitudeGater.log
 
+        self.outfile_dir = outfile_dir
         #*********
-        import logging
-        self.log.logging_level = logging.ERROR
+        #import logging
+        #self.log.logging_level = logging.ERROR
         #*********
 
         self.log.info("Constructing output file names...")
@@ -92,7 +93,7 @@ class PreprocessingCalibration(object):
         # just this method:
 
         #************
-        print(f"Pid {os.getpid()}: about to generate_outfiles")
+        #print(f"Pid {os.getpid()}: about to generate_outfiles")
         #************
 
         experiments = self.generate_outfiles(in_wav_file, 
@@ -103,7 +104,7 @@ class PreprocessingCalibration(object):
                                              spectrogram_freq_cap=spectrogram_freq_cap,
                                              spectrogram=self.spectrogram)
         #************
-        print(f"Pid {os.getpid()}: done generate_outfiles")
+        #print(f"Pid {os.getpid()}: done generate_outfiles")
         #************
         
         # Remember whether we started writing
@@ -119,7 +120,7 @@ class PreprocessingCalibration(object):
             experiment['labelfile'] = labelfile
             
             #************
-            print(f"Pid {os.getpid()}: one experiment loop")
+            #print(f"Pid {os.getpid()}: one experiment loop")
             #************
     
             # Gated signal file created by this experiment:
@@ -132,7 +133,7 @@ class PreprocessingCalibration(object):
                 this_experiment = experiment.copy()
                 
                 #************
-                print(f"Pid {os.getpid()}: in overlap loop")
+                #print(f"Pid {os.getpid()}: in overlap loop")
                 #************
                 
                 
@@ -156,7 +157,7 @@ class PreprocessingCalibration(object):
 
                 if not started_tsv_output:
                     #************
-                    print(f"Pid {os.getpid()}: preparing tsv")
+                    #print(f"Pid {os.getpid()}: preparing tsv")
                     #************
 
                     # Derive the experiment outfile name from the
@@ -166,7 +167,7 @@ class PreprocessingCalibration(object):
                     # Start fresh file, and add column header:
                     
                     #************
-                    print(f"Pid: {os.getpid()}): new exp file {exp_res_file}")
+                    #print(f"Pid: {os.getpid()}): new exp file {exp_res_file}")
                     #************
                     
                     this_experiment.to_flat_tsv(include_col_header=True,
@@ -177,7 +178,7 @@ class PreprocessingCalibration(object):
                     
                 else:
                     #************
-                    print(f"Pid {os.getpid()}: continue write to {exp_res_file}")
+                    #print(f"Pid {os.getpid()}: continue write to {exp_res_file}")
                     #************
                     this_experiment.to_flat_tsv(include_col_header=False,
                                                 append=True, 
@@ -194,7 +195,7 @@ class PreprocessingCalibration(object):
         self.log.info("Done generating precision/recall measures.")
         
         #************
-        print(f"Pid {os.getpid()}: exiting __init__")
+        #print(f"Pid {os.getpid()}: exiting __init__")
         #************
 
                 
@@ -283,7 +284,7 @@ class PreprocessingCalibration(object):
 
         experiments = deque()
         #************
-        print(f"Pid {os.getpid()}: in generate_outfiles: thres {thresholds_db}. lowfs: {low_freqs}. highfs: {high_freqs}")
+        #print(f"Pid {os.getpid()}: in generate_outfiles: thres {thresholds_db}. lowfs: {low_freqs}. highfs: {high_freqs}")
         #************
 
         for threshold in thresholds_db:
@@ -317,18 +318,18 @@ class PreprocessingCalibration(object):
                                                 })
                         # Compute one noise gated wav outfile:
                         #************
-                        print(f"Pid {os.getpid()}: about to gate")
+                        #print(f"Pid {os.getpid()}: about to gate")
                         #************
                         _gater = AmplitudeGater(in_wav_file,
-                                                outfile=outfile,
                                                 amplitude_cutoff=threshold,
                                                 low_freq=low_freq,
                                                 high_freq=high_freq,
                                                 spectrogram_freq_cap=spectrogram_freq_cap,
-                                                spectrogram_outfile=spectrogram_outfile
+                                                spectrogram_outfile=spectrogram_outfile,
+                                                outdir=self.outfile_dir
                                                 )
                         #************
-                        print(f"Pid {os.getpid()}: done gating")
+                        #print(f"Pid {os.getpid()}: done gating")
                         #************
     
                         experiment['percent_zeroed'] = _gater.percent_zeroed
