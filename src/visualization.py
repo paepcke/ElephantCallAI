@@ -153,7 +153,7 @@ def visualize_wav(wav, labels, spectrogram_info):
                     NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning)
 
         # Cutout the high frequencies that are not of interest
-        spectrum = spectrum[(freqs < 400)]
+        spectrum = spectrum[(freqs < 150)]
         print (spectrum.shape)
         # Get the corresponding labels
         # Calculate the relative start time w/r 
