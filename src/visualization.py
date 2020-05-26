@@ -37,6 +37,7 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
         
     #new_features = np.flipud(10*np.log10(features).T)
     # TODO: Delete above line?
+    # For some reason it requires things in shape freq x timeseries
     new_features = features.T
     min_dbfs = new_features.flatten().mean()
     max_dbfs = new_features.flatten().mean()
@@ -73,9 +74,10 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
             gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
     
     # Make the plot appear in a specified location on the screen
-    mngr = plt.get_current_fig_manager()
-    geom = mngr.window.geometry()  
-    mngr.window.wm_geometry("+400+150")
+    if plt.get_backend() == "TkAgg":
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()  
+        mngr.window.wm_geometry("+400+150")
 
     if title is not None:
         ax1.set_title(title)
@@ -240,8 +242,9 @@ def test_generate_labels(wav, labels, spectrogram_info):
     print (np.sum(test_label_1 - test_label_2))
 
 
-def main():
-    args = parser.parse_args()
+def main(args=None):
+    if args == None:
+        args = parser.parse_args()
 
     wavfile = args.wav
     labelWav = args.labelWav
