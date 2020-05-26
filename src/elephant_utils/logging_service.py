@@ -22,6 +22,9 @@ Easily specify rotating logs. See __init__() for all option.
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import sys
+import psutil
+
 
 # ----------------------------- Metaclass ---------------------
 class MetaLoggingSingleton(type):
@@ -181,7 +184,11 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         handler.setLevel(loggingLevel)
 
         # Create formatter
-        formatter = logging.Formatter("%(name)s: %(asctime)s;%(levelname)s: %(message)s")
+        #formatter = logging.Formatter("%(name)s: %(asctime)s;%(levelname)s: %(message)s")
+        prog_name = os.path.basename(sys.argv[0])
+
+        formatter = logging.Formatter(f"{prog_name}({os.getpid()}): %(asctime)s;%(levelname)s: %(message)s")
+
         handler.setFormatter(formatter)
         
         # Avoid double entries from the default logger:
