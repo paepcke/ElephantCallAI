@@ -149,8 +149,9 @@ class AmplitudeGater(object):
         # before going into lengthy computations:
 
         # Replace input wav file outdir with specified outdir:
-        filename = os.path.basename(infile)
-        outfile = f"{os.path.join(outdir, filename)}_gated.wav"
+        (path,ext) = os.path.splitext(infile)
+        fileroot   = os.path.basename(path)
+        outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
 
         try:
             with open(outfile, 'wb') as _fd:
