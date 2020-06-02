@@ -74,10 +74,10 @@ Example runs
 
 # Make predictions 
 # To customize change the model flag!
-python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr/model.pt --make_full_pred
+python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/selected_runs/Adversarial_training_17_nouab_and_bai_0.25_sampling_one_model/Call_model_17_norm_Negx1_Seed_8_2020-04-28_01:58:26/model_adversarial_iteration_9_.pt --make_full_pred
 
 # Calculate Stats 
-python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/Call_model_17_norm_full_24_hr/model.pt --full_stats
+python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/selected_runs/Adversarial_training_17_nouab_and_bai_0.25_sampling_one_model/Call_model_17_norm_Negx1_Seed_8_2020-04-28_01:58:26/model_adversarial_iteration_9_.pt --full_stats
 '''
 
 TEST = True
@@ -835,12 +835,11 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
 
 
 
-def main():
+def main(args):
     """
     Example runs:
 
     """
-    args = parser.parse_args()
     
     model, model_id = loadModel(args.model)
     # Put in eval mode!
@@ -1508,4 +1507,5 @@ def test_event_metric(test, compare, threshold=0.1, is_truth=False, call_length=
 
 
 if __name__ == '__main__':
-    main()
+    args = parser.parse_args()
+    main(args)

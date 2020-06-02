@@ -17,7 +17,7 @@ parser.add_argument('wav', help='name of wav file to visualize') # may not want 
 parser.add_argument('labelWav', help='The label file for the corresponding wav')
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms')
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
-parser.add_argument('--window', type=int, default=22, help='Deterimes the window size in seconds of the resulting spectrogram')
+parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
 def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):

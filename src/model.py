@@ -99,6 +99,8 @@ def get_model(idx):
         return Model16(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif idx == 17:
         return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif idx == 18:
+        return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -773,6 +775,7 @@ class Model16(nn.Module):
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
         if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
             self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
@@ -790,6 +793,9 @@ class Model16(nn.Module):
         return logits
 
 
+"""
+ResNet-18
+"""
 class Model17(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         super(Model17, self).__init__()
@@ -803,6 +809,35 @@ class Model17(nn.Module):
            nn.Linear(128, 256)) # This is hard coded to the size of the training windows
 
         if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log((1 - weight_init) / weight_init))
+            self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
+
+
+"""
+ResNet-18
+"""
+class Model18(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model18, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
             print ("Init:", -np.log((1 - weight_init) / weight_init))
             self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
 
@@ -975,7 +1010,7 @@ def get_f_score(logits, labels, threshold=0.5):
     return f_score
 
 
-def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs):
+def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_epochs, starting_epoch=0):
     since = time.time()
 
     dataset_sizes = {'train': len(dataloders['train'].dataset), 
@@ -989,7 +1024,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
     last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
 
     try:
-        for epoch in range(num_epochs):
+        for epoch in range(starting_epoch, num_epochs):
             for phase in ['train', 'valid']:
                 if phase == 'train':
                     model.train(True)
@@ -1085,6 +1120,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
             writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
             writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
             writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+            writer.add_scalar('valid_epoch_fscore', valid_epoch_fscore, epoch)
             writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
             scheduler.step()
@@ -1151,20 +1187,20 @@ def adversarial_discovery(dataloader, model, num_files_to_return=-1, threshold=0
             # Flag chunks with false pos in empty chunks.
             if gt_counts[example] == 0 and pred_counts[example] > min_length:
                 adversarial_examples.append(data_files[example])
-                # Visualize!
-                if parameters.VERBOSE:
+                # Visualize every 100 selected examples
+                if parameters.VERBOSE and example % 100 == 0:
                     print ("found an adversarial examples")
                     features = inputs[example].cpu().detach().numpy()
                     output = predictions[example].cpu().detach().numpy()
                     label = labels[example].cpu().detach().numpy()
+                    data_file_name = data_files[example]
 
-                    visualize(features, output, label)
+                    visualize(features, output, label, title=data_file_name)
 
         chunksIdx += 1
 
 
     return adversarial_examples
-
 
 
 def calc_num_chunks_calls(data_loader):
@@ -1195,33 +1231,17 @@ def calc_num_chunks_calls(data_loader):
     print ("Ratio slices with calls / total slices", float(num_call_slices) / total_slices)
 
 
-def main():    
-    ## Build Dataset
-    # "/home/jgs8/ElephantCallAI/elephant_dataset/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/"a
-    train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    #train_loader = get_loader("../elephant_dataset/Train/Full_24_hrs", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # Quatro
-    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # The validation loader should be the full 24hr trainind data use for adversarial discovery
-    #validation_loader 
-    test_loader = get_loader("../elephant_dataset/Test/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    # Quatro
-    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    
+def main(mode, model, train_loader, test_loader, save_path):
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    if sys.argv[1].lower() == 'help':
-        print ("Run types are as follows:")
-        print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
-        print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
-        print ("3) model.py model_id - train a given model")
-    elif len(sys.argv) > 1 and sys.argv[1]  == 'visualize':
+
+    if mode == "visualization":
         ## Data Visualization
         # model = torch.load(parameters.MODEL_SAVE_PATH + parameters.DATASET + '_model_' + sys.argv[2] + ".pt", map_location=parameters.device)
-        model = torch.load(sys.argv[2], map_location=parameters.device)
+        model = torch.load(model, map_location=parameters.device)
         print(model)
 
-        for inputs, labels in dloaders['valid']:
+        for inputs, labels, _ in dloaders['valid']:
             inputs = inputs.float()
             labels = labels.float()
 
@@ -1233,33 +1253,30 @@ def main():
             print('Accuracy on the test set for this batch is {:4f}'.format(float(num_correct(outputs.view(-1, 1), labels.view(-1, 1))) / outputs.view(-1, 1).shape[0]))
 
             for i in range(len(inputs)):
-                features = inputs[i].detach().numpy()
-                output = torch.sigmoid(outputs[i]).detach().numpy()
-                label = labels[i].detach().numpy()
+                features = inputs[i].cpu().detach().numpy()
+                output = torch.cpu().sigmoid(outputs[i]).detach().numpy()
+                label = labels[i].cpu().detach().numpy()
 
                 visualize(features, output, label)
 
-    elif len(sys.argv) > 1 and sys.argv[1] == 'adversarial':
+    
         # Load a model that was already trained and run through adversarial 
         # discovery. Could also just do this
-        model = torch.load(sys.argv[2], map_location=parameters.device)
+        model = torch.load(model, map_location=parameters.device)
 
         adversarial_files = adversarial_discovery(test_loader, model, min_length=parameters.ADVERSARIAL_THRESHOLD)
         print ("Discovered {} adversaries".format(len(adversarial_files)))
         # We want to save these to a given file for testing purposes
         # Get the model name from the path
         # Also include what the threshold was! 
-        tokens = sys.argv[2].split('/')
+        tokens = model.split('/')
         model_id = tokens[-2]
         with open(model_id + "_threshold_" + str(parameters.ADVERSARIAL_THRESHOLD) + ".txt", 'w') as f:
             for file in adversarial_files:
                 f.write('{}\n'.format(file))
-
     else:
         ## Training
-        model_id = int(sys.argv[1])
-
-        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        model_id = int(model)
 
         model = get_model(model_id)
 
@@ -1317,4 +1334,17 @@ def main():
         writer.close()
 
 if __name__ == '__main__':
-    main()
+    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+
+    if sys.argv[1].lower() == 'help':
+        print ("Run types are as follows:")
+        print ("1) model.py visualize model_path - for visualizing pre trained model predictions")
+        print ("2) model.py adversarial model_path - for testing a pre trained models adversarial discovery")
+        print ("3) model.py model_id - train a given model")
+    elif len(sys.argv) > 1 and sys.argv[1] == 'visualization':
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[2]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        main("visualization", sys.argv[2], train_loader, test_loader, save_path)
+    else:
+        save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[1]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+        main("training", sys.argv[1], test_loader, test_loader, save_path)
