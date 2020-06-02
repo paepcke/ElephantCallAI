@@ -253,7 +253,7 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     spectrum = spectrum.T
     return spectrum, data_labels
 
-def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
+def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info, num_random_call_positions=10):
     """ 
         Generate the data chunks for each elephant call in a given 
         audio recording, where a data chunk is defined as spectrogram
@@ -273,11 +273,12 @@ def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
         call_length = float(call['End Time (s)']) - float(call['Begin Time (s)'])
         end_time = start_time + call_length
 
-        feature_chunk, label_chunk = generate_chunk(start_time, end_time, raw_audio, label_vec, spectrogram_info)
-        
-        if (feature_chunk is not None):  
-            feature_set.append(feature_chunk)
-            label_set.append(label_chunk)
+        for _ in range(num_random_call_positions):
+            feature_chunk, label_chunk = generate_chunk(start_time, end_time, raw_audio, label_vec, spectrogram_info)
+            
+            if (feature_chunk is not None):  
+                feature_set.append(feature_chunk)
+                label_set.append(label_chunk)
 
     return feature_set, label_set
 
