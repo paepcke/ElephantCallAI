@@ -35,29 +35,28 @@ def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
+    dloaders = {'train':train_loader, 'valid':validation_loader}
+
+    save_path = save_path + '/' + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + \
+                                  "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
+    
+    if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+    start_time = time.time()
+    model, criterion, optimizer, scheduler, writer = initialize_training(model_id, save_path)
+
     for outer_iteration in range(parameters.ADVERSARIAL_LOOPS):
-        dloaders = {'train':train_loader, 'valid':validation_loader}
 
-        iteration_save_path = save_path + '/' + parameters.DATASET + '_model_' + str(model_id) + "_" + parameters.NORM + \
-                                      "_Negx" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
-                                        "_adversarial_iteration_" + str(outer_iteration)+ "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
-        #iteration_save_path = save_path + '/' + "Adversarial_iteration_" + str(outer_iteration)
-        if not os.path.exists(iteration_save_path):
-            os.makedirs(iteration_save_path)
-
-        start_time = time.time()
-        model, criterion, optimizer, scheduler, writer = initialize_training(model_id, iteration_save_path)
-        model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, parameters.NUM_EPOCHS)
+        model_wts = model_file.train_model(dloaders, model, criterion, optimizer, scheduler, writer, (outer_iteration + 1)*parameters.NUM_EPOCHS, starting_epoch=outer_iteration*parameters.NUM_EPOCHS)
 
         assert model_wts != None
 
         model.load_state_dict(model_wts)
-        model_save_path = iteration_save_path + '/' + "model.pt"
+        model_save_path = save_path + '/' + "model" + "_adversarial_iteration_" + str(outer_iteration) +"_.pt"
         torch.save(model, model_save_path)
         print('Saved best val acc model to path {}'.format(model_save_path))
 
-        print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
-        writer.close()
 
         # Evaluate on entire dataset
         # Add 1/4 * (num_data_points) to the training data
@@ -65,16 +64,10 @@ def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save
         num_adversarial = len(train_loader.dataset) * parameters.ADVERSARIAL_SAMPLES if parameters.ADVERSARIAL_SAMPLES != -1 else -1
         adversarial_files = model_file.adversarial_discovery(full_train_loader, model,
                                                          num_files_to_return=num_adversarial, min_length=parameters.ADVERSARIAL_THRESHOLD)
-        adversarial_save_path = iteration_save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt"
+        adversarial_save_path = save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt"
         with open(adversarial_save_path, 'w') as f:
             for file in adversarial_files:
                 f.write('{}\n'.format(file))
-
-        #np.save(save_path + "/" + "adversarial_examples_" + str(outer_iteration) + ".txt" , adversarial_files)
-
-        # Select randomly the same number as current num calls
-        # This is now done locally
-        # adversarial_files = np.random.choice()
         
 
         # Update training dataset with adversarial files
@@ -84,6 +77,9 @@ def outerLoop(model_id, train_loader, validation_loader, full_train_loader, save
         assert len(train_loader.dataset.features) == len(train_loader.dataset.labels)
         # Should keep track of ratio of neg-to-pos
         print("Length of features is now {} ".format(len(train_loader.dataset.features)))
+
+    print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
+    writer.close()
 
 
 if __name__ == "__main__":

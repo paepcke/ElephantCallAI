@@ -4,14 +4,16 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
-ADVERSARIAL_LOOPS = 1
+NUM_EPOCHS = 1000
+
+ADVERSARIAL_LOOPS = 10
 TRAIN_STOP_ITERATIONS = 30
 # Determines number of adversarial samples to discover.
 # This is a number (0, 1] that calculates how
 # many adversarial samples to find based on the size of the
 # current dataset. 
 # Note: -1 means find all adversarial samples!
-ADVERSARIAL_SAMPLES = -1
+ADVERSARIAL_SAMPLES = 0.5
 # How many incorrect slices for a chunk to be considered
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
@@ -20,7 +22,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "Focal_Chunk"
+LOSS = "CE"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.5 
 FOCAL_GAMMA = 15
@@ -139,6 +141,12 @@ HYPERPARAMETERS = {
         'lr_decay_step': 4,
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
+        },
+18: {
+        'lr': 1e-3,
+        'lr_decay_step': 4,
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
         }
 }
 
@@ -146,11 +154,10 @@ RANDOM_SEED = 8
 DATA_LOADER_SEED = 33
 
 BATCH_SIZE = 32
-NUM_EPOCHS = 1000
 
 #Local
-SAVE_PATH = '../models/'
-#SAVE_PATH = '/home/data/elephants/models/'
+# SAVE_PATH = '../models/'
+SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
