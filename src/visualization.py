@@ -20,7 +20,7 @@ parser.add_argument('--hop', type=int, default=641, help='Hop size used for crea
 parser.add_argument('--window', type=int, default=10, help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
-def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):
+def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries=None, title=None, vert_lines=None):
     """
     Visualizes the spectogram and associated predictions/labels. 
     features is the entire spectrogram that will be visualized
@@ -30,7 +30,9 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
 
     Inputs are numpy arrays
     """
-    if binary_preds is not None: # Add a forth plot that shows the binarized predictions
+    if binary_preds is not None and boundaries is not None:
+        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5,1)
+    if binary_preds is not None or boundaries is not None: # Add a forth plot that shows the binarized predictions
         fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1)
     else:
         fig, (ax1, ax2, ax3) = plt.subplots(3,1)
@@ -71,6 +73,21 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
         if vert_lines is not None:
             gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
             gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
+
+    if boundaries is not None:
+        bound_ax = None 
+        # Note will either have binary labels and labels or
+        # only one of the two
+        if binary_preds is not None and labels is not None:
+            bound_ax = ax5
+        else:
+            bound_ax = ax4
+
+        bound_ax.plot(np.arange(boundaries.shape[0]), boundaries)
+        if vert_lines is not None:
+            gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
+            gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
+
     
     # Make the plot appear in a specified location on the screen
     mngr = plt.get_current_fig_manager()

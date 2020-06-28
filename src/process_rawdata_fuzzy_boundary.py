@@ -15,10 +15,14 @@ import random
 from functools import partial
 import generate_spectrograms
 
+"""
+Example Runs Locally:
+
+python process_rawdata_fuzzy_boundary.py --data_dirs ../elephant_dataset/New_Data/Train_Data_file/wav_files --out ../elephant_dataset/Train
+
+"""
 
 parser = argparse.ArgumentParser()
-#parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Truth_Logs', 
-#     type=str, help='The top level directory with the data (e.g. Truth_Logs)')
 
 parser.add_argument('--data_dirs', dest='data_dirs', nargs='+', type=str,
     help='Provide the data_dirs with the files that you want to be processed')
@@ -44,6 +48,8 @@ parser.add_argument('--pad', dest='pad_to', type=int, default=4096,
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
+parser.add_argument('--fudge_factor', type=int, default=3, 
+    help="Determines how lenient for the boarders of the elephant calls. We assume that the boarders are somewhat random and thus do not need to be exact")
 parser.add_argument('--full_24_hr', action='store_true', 
     help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
 parser.add_argument('--seed', type=int, default=8,
@@ -59,25 +65,27 @@ parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Va
 
 VERBOSE = False
 
-
-def generate_labels(labels, spectrogram_info, len_wav):
+def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
     '''
         Given ground truth label file 'label' create the full 
         segmentation labeling for a .wav file. Namely, return
         a vector containing a 0/1 labeling for each time slice
         corresponding to the .wav file transformed into a spectrogram.
-        The key challenge here is that we want the labeling to match
-        up with the corresponding spectrogram without actually creating
-        the spectrogram 
+        Also create a mask that contains the boarder regions around
+        each call. These boarder regions we want to treat as "fudge"
+        regions where we are less strict on the classifier. The
+        variable fudge_factor specifies how many slices to "fudge"
+        on each side of a call boarder.
     '''
     # Formula is: frames = floor((wav - overlap) / hop)
     len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram_info['hop'])) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
+    boarder_mask = np.zeros_like(labelMatrix)
 
     # In the case where there is actually no GT label file because no elephant
     # calls occred in the recording, we simply output all zeros
     if labels is None:
-        return labelMatrix
+        return labelMatrix, boarder_mask
 
     labelFile = csv.DictReader(open(labels,'rt'), delimiter='\t')
     
@@ -97,9 +105,26 @@ def generate_labels(labels, spectrogram_info, len_wav):
         end_spec = min(math.ceil((end_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), labelMatrix.shape[0])
         labelMatrix[start_spec : end_spec] = 1
 
-    return labelMatrix
+        # Add the fudge factor with radius 'fudge_factor'
+        length = end_spec - start_spec
+        fudge_factor = spectrogram_info['fudge_factor']
+        # Fudge_factor should be chosen such that it is << len call.
+        assert(length > fudge_factor)
+        # Make sure to not go over the ends of the file
+        # Add 1 to the right fudge idx.
+        fudge_start_left = max(0, start_spec - fudge_factor)
+        fudge_start_right = start_spec + fudge_factor
+        fudge_end_left = end_spec - fudge_factor
+        fudge_end_right = min(boarder_mask.shape[0], end_spec + fudge_factor)
 
-def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
+        boarder_mask[fudge_start_left: fudge_start_right] = 1
+        boarder_mask[fudge_end_left: fudge_end_right] = 1
+
+    return labelMatrix, boarder_mask
+
+
+
+def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogram_info):
     """
         Generate n empty data chunks by uniformally sampling 
         time sections with no elephant calls present
@@ -129,6 +154,7 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
     # empty chunks
     empty_features = []
     empty_labels = []
+    empty_boundary_masks = []
     NFFT = spectrogram_info['NFFT']
     samplerate = spectrogram_info['samplerate']
     hop = spectrogram_info['hop']
@@ -160,6 +186,8 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         data_labels = label_vec[start : start + spectrum.shape[1]]
         # Make sure that no call exists in the chunk
         assert(np.sum(data_labels) == 0)
+        boundary_mask = boundary_mask_vec[start : start + spectrum.shape[1]]
+        assert(np.sum(boundary_mask) == 0)
 
         if VERBOSE:
             new_features = 10*np.log10(spectrum)
@@ -169,12 +197,13 @@ def generate_empty_chunks(n, raw_audio, label_vec, spectrogram_info):
         spectrum = spectrum.T
         empty_features.append(spectrum)
         empty_labels.append(data_labels)
+        empty_boundary_masks.append(boundary_mask)
 
-    return empty_features, empty_labels
+    return empty_features, empty_labels, empty_boundary_masks
 
 
 
-def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_info):
+def generate_chunk(start_time, end_time, raw_audio, truth_labels, boundary_mask_vec, spectrogram_info):
     '''
         Generate a data chunk around a given elephant call. The data
         chunk is of size "chunk_length" seconds and has the call
@@ -182,6 +211,9 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
 
         Parameters:
         - start_time and end_time in seconds
+        - truth_labels: Gives the ground truth elephant call labelings
+        - boundary_mask_vec: Gives the location of the "fuzzy" boundary regions around each call
+        where we want to allow for flexability in prediction
     '''
     # Convert the times to .wav frames to help ensure
     # robustness of approach
@@ -245,16 +277,17 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, spectrogram_in
     end_spec = start_spec + spectrum.shape[1] 
     
     data_labels = truth_labels[start_spec: end_spec]
+    boundary_mask = boundary_mask_vec[start_spec: end_spec]
 
     if VERBOSE:
         new_features = 10*np.log10(spectrum)
-        visualize(new_features.T, labels=data_labels)
+        visualize(new_features.T, labels=data_labels, boundaries=boundary_mask)
 
     # We want spectrograms to be time x freq
     spectrum = spectrum.T
-    return spectrum, data_labels
+    return spectrum, data_labels, boundary_mask
 
-def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
+def generate_elephant_chunks(raw_audio, labels, label_vec, boundary_mask_vec, spectrogram_info):
     """ 
         Generate the data chunks for each elephant call in a given 
         audio recording, where a data chunk is defined as spectrogram
@@ -268,19 +301,21 @@ def generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info):
     """
     feature_set = []
     label_set = []
+    boundary_mask_set = []
     # 2. Now iterate through label file, when find a call, pass to make chunk,
     for call in labels:
         start_time = float(call['File Offset (s)'])
         call_length = float(call['End Time (s)']) - float(call['Begin Time (s)'])
         end_time = start_time + call_length
 
-        feature_chunk, label_chunk = generate_chunk(start_time, end_time, raw_audio, label_vec, spectrogram_info)
+        feature_chunk, label_chunk, boundary_mask = generate_chunk(start_time, end_time, raw_audio, label_vec, boundary_mask_vec, spectrogram_info)
         
         if (feature_chunk is not None):  
             feature_set.append(feature_chunk)
             label_set.append(label_chunk)
+            boundary_mask_set.append(boundary_mask)
 
-    return feature_set, label_set
+    return feature_set, label_set, boundary_mask_set
 
 def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
     """
@@ -288,6 +323,11 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         negative examples. If num_neg = 0 then extract the 
         elephant calls, otherwise extract num_neg negative
         samples from the audio file.
+
+        Return:
+        feature_set - a list of the physical spectogram chunks
+        label_set - a list of the accompanying gt labels
+        boundary_mask_set - a list of the "fuzzy" boundary masks for each chunk 
     """
     # Just for the bai elephants
     # Need to loook into this
@@ -298,46 +338,25 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         print("FILE Failed", audio_file)
     # No calls to extract
     if label_file is None and num_neg == 0:
-        return [], []
+        return [], [], []
     elif label_file is not None and num_neg == 0: # We have a calls to extract
         labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
 
     # Generate the spectrogram index labelings
     spectrogram_info['samplerate'] = samplerate
-    label_vec = generate_labels(label_file, spectrogram_info, raw_audio.shape[0])
+    label_vec, boundary_mask_vec = generate_labels_fuzzy(label_file, spectrogram_info, raw_audio.shape[0])
 
     if num_neg == 0:
         print ("Extracting elephant calls from", audio_file)
-        feature_set, label_set = generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info)
+        feature_set, label_set, boundary_mask_set = generate_elephant_chunks(raw_audio, labels, label_vec, boundary_mask_vec, spectrogram_info)
     else:
         print ("Extracting negative chuncks from", audio_file)
-        feature_set, label_set = generate_empty_chunks(num_neg, raw_audio, label_vec, spectrogram_info)
+        # Note the boundary_mask_set here is just np.zeros!
+        feature_set, label_set, boundary_mask_set = generate_empty_chunks(num_neg, raw_audio, label_vec, boundary_mask_vec, spectrogram_info)
 
-    return feature_set, label_set
+    return feature_set, label_set, boundary_mask_set
 
-def extract_data_chunks(audio_file, label_file, spectrogram_info):
-    """
-        Extract an equal number of empty and elephant call
-        data chunks from a raw audio file. Each data chunk
-        is of a fixed size, and for data chunks with an 
-        elephant call we make a chunk around a given reference
-        call and then randomly place that call within the fram
-    """
-    print ("Processing", audio_file)
-    samplerate, raw_audio = wavfile.read(audio_file)
-    labels = csv.DictReader(open(label_file,'rt'), delimiter='\t')
-    # Generate the spectrogram index labelings
-    spectrogram_info['samplerate'] = samplerate
-    label_vec = generate_labels(label_file, spectrogram_info, raw_audio.shape[0])
 
-    feature_set, label_set = generate_elephant_chunks(raw_audio, labels, label_vec, spectrogram_info)
-
-    empty_features, empty_labels = generate_empty_chunks(len(feature_set) * spectrogram_info['neg_fact'],
-            raw_audio, label_vec, spectrogram_info)
-    feature_set.extend(empty_features)
-    label_set.extend(empty_labels)
-
-    return feature_set, label_set
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -348,7 +367,8 @@ if __name__ == '__main__':
                         'max_freq': args.max_freq,
                         'window': args.window, 
                         'pad_to': args.pad_to,
-                        'neg_fact': args.neg_fact}
+                        'neg_fact': args.neg_fact,
+                        'fudge_factor': args.fudge_factor}
 
     print(args)
 
@@ -467,18 +487,18 @@ if __name__ == '__main__':
 
         # Catch case where no calls exist so the gt file does not
         label_path = curren_dir + '/' + label_file if label_file is not None else None
-        feature_set, label_set = generate_data_chunks(curren_dir + '/' + audio_file, 
-                                        label_path, spectrogram_info)
+        feature_set, label_set, boundary_mask_set = generate_data_chunks(curren_dir + '/' + audio_file, label_path, spectrogram_info)
         call_counter.value += len(feature_set)
 
         # Save the individual files seperately for each location!
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
+            np.save(directory + '/' + data_id + "_boundary-masks_" + str(i), boundary_mask_set[i])
 
 
-    # Add now the random seed used to create it
-    out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' + str(args.seed)
+    # Add the random seed and the fudge factor
+    out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' + str(args.seed) + '_FudgeFact_' + str(args.fudge_factor)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
@@ -486,6 +506,7 @@ if __name__ == '__main__':
     print ("Processing Positive examples")
     print ("Num Files: ", len(file_pairs))
 
+    
     call_counter = Value("i", 0) # Shared thread variable to count the number of postive call examples
     pool = multiprocessing.Pool()
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
@@ -494,7 +515,13 @@ if __name__ == '__main__':
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
     print('Multiprocessed took {}'.format(time.time()-start_time))
-    
+    '''
+    # For visualizing don't multi process
+    # Let us not multip process this!!!
+    for file_pair in file_pairs:
+        wrapper_processPos(out_dir, file_pair)
+    '''
+
     num_calls = call_counter.value
     num_sound_files = len(file_pairs)
 
@@ -515,13 +542,14 @@ if __name__ == '__main__':
 
         # Catch case where no calls exist so the gt file does not
         label_path = curren_dir + '/' + label_file if label_file is not None else None
-        feature_set, label_set = generate_data_chunks(curren_dir + '/' + audio_file, 
+        feature_set, label_set, boundary_mask_set = generate_data_chunks(curren_dir + '/' + audio_file, 
                                         label_path, spectrogram_info, num_negative)
 
         # Save the individual files seperately for each location!
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_neg-features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_neg-labels_" + str(i), label_set[i])
+            np.save(directory + '/' + data_id + "_neg-boundary-masks_" + str(i), boundary_mask_set[i])
 
     # Generate num_neg_samples negative examples where we randomly 
     # sample "samples_per_file" examples from each file
