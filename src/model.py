@@ -968,7 +968,8 @@ class BCE_Equal_Boundary_Loss(nn.Module):
         # Hacky for now but basically see the predicted 0/1
         ones = torch.ones_like(inputs)
         zeros = torch.zeros_like(inputs)
-        predictions = torch.tensor(np.where(inputs > 0.5, ones, zeros)).to(parameters.device).float()
+        predictions = torch.where(inputs > 0.5, ones, zeros).to(parameters.device).float()
+        #predictions = torch.tensor(np.where(inputs > 0.5, ones, zeros)).to(parameters.device).float()
         #labels[boundary_masks] = 
         targets[boundary_masks] = predictions[boundary_masks]
 
@@ -1266,7 +1267,7 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
                     #labels = torch.tensor(labels).to(parameters.device)
                     inputs = inputs.to(parameters.device)
                     labels = labels.to(parameters.device)
-                    
+
                     optimizer.zero_grad()
 
                     # Forward pass
