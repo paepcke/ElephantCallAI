@@ -1490,6 +1490,7 @@ def main(mode, model, train_loader, test_loader, save_path):
         writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[model_id]['l2_reg'])
 
         # Try focal loss and boundar weighting
+        include_boundaries = False
         if parameters.LOSS.upper() == "CE":
             criterion = torch.nn.BCEWithLogitsLoss()
             print ("Using Binary Cross Entropy Loss")
@@ -1620,10 +1621,19 @@ if __name__ == '__main__':
         include_boundaries = True
         train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
 
+    # Probably make call repeats default to 1 for test data!
+    test_data_path = "/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+                "_CallRepeats_" + str(parameters.CALL_REPEATS)
+    if include_boundaries:
+        test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+    # During testing we do not want to use fuzzy boundaries
+    test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
     #train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x1_Seed_8", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    test_loader = train_loader
+    #test_loader = train_loader
 
     if sys.argv[1].lower() == 'help':
         print ("Run types are as follows:")
