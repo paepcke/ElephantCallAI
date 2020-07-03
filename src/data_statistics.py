@@ -43,6 +43,7 @@ def get_call_stats(label_file_path):
     highest_boxed_freq = 0
     num_above_100 = 0
     num_complete_above_100 = 0 # How many calls are completely above 100
+    avg_call_length = 0
 
     # Tracks the call with the
     # latest ending time seen so far
@@ -70,12 +71,15 @@ def get_call_stats(label_file_path):
         max_call_length = max(call_length, max_call_length)
         lowest_boxed_freq = min(low_freq, lowest_boxed_freq)
         highest_boxed_freq = max(high_freq, highest_boxed_freq)
+        avg_call_length += call_length
 
         if (high_freq > 100):
             num_above_100 += 1
 
         if (low_freq > 100):
             num_complete_above_100 += 1
+
+    avg_call_length = avg_call_length / float(num_calls)
 
     stats = {'num_calls': num_calls,
              'num_overlap': num_overlap,
@@ -84,7 +88,8 @@ def get_call_stats(label_file_path):
              'lowest_boxed_freq': lowest_boxed_freq,
              'highest_boxed_freq': highest_boxed_freq,
              'num_above_100': num_above_100, 
-             'num_complete_above_100': num_complete_above_100}
+             'num_complete_above_100': num_complete_above_100,
+             'avg_call_length': avg_call_length}
 
     return stats
 
@@ -103,8 +108,10 @@ def main():
              'lowest_boxed_freq': float("inf"),
              'highest_boxed_freq': 0,
              'num_above_100': 0, 
-             'num_complete_above_100': 0}
+             'num_complete_above_100': 0,
+             'avg_call_length': 0}
     # Iterate through all files with in data directories
+    file_counter = 0
     for dirName in allDirs:
         #Iterate through each dir and get files within
         currentDir = dataDir + '/' + dirName;
@@ -115,6 +122,7 @@ def main():
                 file_type = eachFile.split('.')[1]
                 
                 if (file_type == 'txt'):
+                    file_counter += 1
                     temp_stats = get_call_stats(currentDir + '/' + eachFile)
                     stats['num_calls'] += temp_stats['num_calls']
                     stats['num_overlap'] += temp_stats['num_overlap']
@@ -124,6 +132,10 @@ def main():
                     stats['highest_boxed_freq'] = max(temp_stats['highest_boxed_freq'], stats['highest_boxed_freq'])
                     stats['num_above_100'] += temp_stats['num_above_100']
                     stats['num_complete_above_100'] += temp_stats['num_complete_above_100']
+                    stats['avg_call_length'] += temp_stats['avg_call_length']
+
+    # Update the avg call length
+    stats['avg_call_length'] /= float(file_counter)
                 
     for item in stats.items():
         print (item[0], ':', item[1])

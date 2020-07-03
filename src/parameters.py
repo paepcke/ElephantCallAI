@@ -22,15 +22,28 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "CE"
+LOSS = "BOUNDARY"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.5 
 FOCAL_GAMMA = 15
 FOCAL_ALPHA = 0.25
 
 NEG_SAMPLES = 1
+CALL_REPEATS = 10
 NORM = "norm"
 SCALE = True
+
+# Flags for how to deal with boundaries!!
+# If > 0 then use boundaries else no boundaries
+BOUNDARY_FUDGE_FACTOR = 2
+INDIVIDUAL_BOUNDARIES = True
+# Determine how to incorperate the boundary
+# into the loss
+# WEIGHT = Re-weight the boundary slices
+# EQUAL = Make the ground truth label match the class predicted
+BOUNDARY_LOSS = 'WEIGHT'
+# How to weight the boundary slices in [0, 1]
+BOUNDARY_WEIGHT = 0.5
 
 HYPERPARAMETERS = {
 0: {
@@ -156,8 +169,8 @@ DATA_LOADER_SEED = 33
 BATCH_SIZE = 32
 
 #Local
-# SAVE_PATH = '../models/'
-SAVE_PATH = '/home/data/elephants/models/'
+SAVE_PATH = '../models/'
+#SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
