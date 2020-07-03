@@ -41,7 +41,7 @@ INDIVIDUAL_BOUNDARIES = True
 # into the loss
 # WEIGHT = Re-weight the boundary slices
 # EQUAL = Make the ground truth label match the class predicted
-BOUNDARY_LOSS = 'WEIGHT'
+BOUNDARY_LOSS = 'EQUAL'
 # How to weight the boundary slices in [0, 1]
 BOUNDARY_WEIGHT = 0.5
 
