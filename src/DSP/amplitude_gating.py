@@ -80,6 +80,7 @@ class AmplitudeGater(object):
                  framerate=None,  # Only used for testing.
                  spectrogram_outfile=None,
                  outdir=None,
+                 outfile=None,
                  testing=False
                  ):
         '''
@@ -137,6 +138,11 @@ class AmplitudeGater(object):
             If None: same outdir as input wav file.
         @type: outdir str
         
+        @param outfile: where gated, normalized .wav will be written.
+            If None: same outdir as input wav file, using infile root,
+            and adding '_gated'
+        @type: outfile str
+
         @param testing: whether or not unittests are being run. If
             true, __init__() does not initiate any action, allowing
             the unittests to call individual methods.
@@ -151,7 +157,8 @@ class AmplitudeGater(object):
         # Replace input wav file outdir with specified outdir:
         (path,ext) = os.path.splitext(infile)
         fileroot   = os.path.basename(path)
-        outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
+        if outfile is None:
+            outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
 
         try:
             with open(outfile, 'wb') as _fd:

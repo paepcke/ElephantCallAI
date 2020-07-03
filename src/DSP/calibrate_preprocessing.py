@@ -326,7 +326,7 @@ class PreprocessingCalibration(object):
                                                 high_freq=high_freq,
                                                 spectrogram_freq_cap=spectrogram_freq_cap,
                                                 spectrogram_outfile=spectrogram_outfile,
-                                                outdir=self.outfile_dir
+                                                outfile=outfile
                                                 )
                         #************
                         #print(f"Pid {os.getpid()}: done gating")
@@ -722,7 +722,7 @@ if __name__ == '__main__':
                         type=int,
                         nargs='+',
                         default=[50],
-                        help='Repeatable: high frequency of front end bandpass filter; default: 10Hz')
+                        help='Repeatable: high frequency of front end bandpass filter; default: 50Hz')
     parser.add_argument('-s', '--spectrogram',
                         default=None,
                         action='store_true',
@@ -756,3 +756,5 @@ if __name__ == '__main__':
                              spectrogram=args.spectrogram,
                              logfile=args.logfile
                              )
+    if len(args.plot) > 0:
+        input("Press ENTER to close the figures and exit...")
