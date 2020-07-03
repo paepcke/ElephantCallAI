@@ -33,12 +33,6 @@ parser.add_argument('--data_dirs', dest='data_dirs', nargs='+', type=str,
 
 parser.add_argument('--out', dest='out_dir', default='../elephant_dataset/Train',
      help='The output directory for the processed files. We need to specify this!')
-'''
-parser.add_argument('--train_dir', default='../elephant_dataset/Train_New', 
-     help='Directory for the training chunks for the new data')
-parser.add_argument('--test_dir', default='../elephant_dataset/Test_New',
-     help='Directory for the test chunks for the new data')
-'''
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') # was 3208!!
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms') # was 641!!
 parser.add_argument('--window', type=int, default=256, 
@@ -70,7 +64,7 @@ parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Va
      help='The output directory for the validation files. Only need this if creating validation files')
 '''
 
-VERBOSE = True
+VERBOSE = False
 
 def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
     '''

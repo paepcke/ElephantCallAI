@@ -966,7 +966,9 @@ class BCE_Equal_Boundary_Loss(nn.Module):
         # Fudge the ground truth predictions around the boundary. 
         # We assume the target labels are copies of dataset
         # Hacky for now but basically see the predicted 0/1
-        predictions = torch.tensor(np.where(inputs > 0.5, 1., 0.)).float()
+        ones = torch.ones_like(inputs)
+        zeros = torch.zeros_like(inputs)
+        predictions = torch.tensor(np.where(inputs > 0.5, ones, zeros)).to(parameters.device).float()
         #labels[boundary_masks] = 
         targets[boundary_masks] = predictions[boundary_masks]
 
@@ -1252,14 +1254,19 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
                         print ("Batch number {} of {}".format(i, len(dataloaders[phase])))
                     # Cast the variables to the correct type
                     # Need to see if this properly does copies etc.
-                    inputs = batch[0].float()
+                    #inputs = batch[0].float()
+                    inputs = batch[0].clone().float()
                     #inputs = inputs.float()
-                    inputs = torch.tensor(inputs).to(parameters.device)
+                    #inputs = inputs.clone()
+                    #inputs = torch.tensor(inputs).to(parameters.device)
 
-                    labels = batch[1].float()
+                    labels = batch[1].clone().float()
+                    #labels = batch[1].float()
                     #labels = labels.float()
-                    labels = torch.tensor(labels).to(parameters.device)
-
+                    #labels = torch.tensor(labels).to(parameters.device)
+                    inputs = inputs.to(parameters.device)
+                    labels = labels.to(parameters.device)
+                    
                     optimizer.zero_grad()
 
                     # Forward pass
@@ -1427,7 +1434,7 @@ def calc_num_chunks_calls(data_loader):
 def main(mode, model, train_loader, test_loader, save_path):
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    #mode = 'fuzzy'
+    mode = 'fuzzy'
 
     if mode == "visualization":
         ## Data Visualization
@@ -1604,7 +1611,7 @@ def main(mode, model, train_loader, test_loader, save_path):
 if __name__ == '__main__':
     #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    train_data_path = "../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_SEED_" + str(parameters.RANDOM_SEED) + \
+    train_data_path = "../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
                 "_CallRepeats_" + str(parameters.CALL_REPEATS)
     # Include boundary uncertainty in training
     include_boundaries = False
