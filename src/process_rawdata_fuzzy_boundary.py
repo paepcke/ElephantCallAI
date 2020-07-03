@@ -48,12 +48,19 @@ parser.add_argument('--pad', dest='pad_to', type=int, default=4096,
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
 parser.add_argument('--neg_fact', type=int, default=1, 
     help="Determines number of negative samples to sample as neg_fact x (pos samples)")
-parser.add_argument('--fudge_factor', type=int, default=3, 
-    help="Determines how lenient for the boarders of the elephant calls. We assume that the boarders are somewhat random and thus do not need to be exact")
 parser.add_argument('--full_24_hr', action='store_true', 
     help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
 parser.add_argument('--seed', type=int, default=8,
     help="Set the random seed used for creating the datasets. This is primarily important for determining the negative samples")
+parser.add_argument('--call_repeats', type=int, default=10,
+    help="For each call, determine the number of random positions that we sample for that call within its given chunk. Serves as a form of oversampling")
+parser.add_argument('--fudge_factor', type=int, default=0, 
+    help="Determines how lenient for the boarders of the elephant calls." \
+    "We assume that the boarders are somewhat random and thus do not need to be exact."\
+    "Default 0 means no boarder masks generated.")
+parser.add_argument('--overlap_boundaries', action='store_true', 
+    help="Flag indicating that we calculate 'fuzzy' call boundaries based on 0/1 boundaries rather than for each individual call." +\
+    "This allows us to potentially deal with strange issues of overlapping calls.")
 
 '''
 parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
@@ -63,7 +70,7 @@ parser.add_argument('--val_dir', dest='val_dir', default='../elephant_dataset/Va
      help='The output directory for the validation files. Only need this if creating validation files')
 '''
 
-VERBOSE = False
+VERBOSE = True
 
 def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
     '''
@@ -81,6 +88,7 @@ def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
     len_labels = math.floor((len_wav - (spectrogram_info['NFFT'] - spectrogram_info['hop'])) / spectrogram_info['hop'])
     labelMatrix = np.zeros(shape=(len_labels),dtype=int)
     boarder_mask = np.zeros_like(labelMatrix)
+    fudge_factor = spectrogram_info['fudge_factor']
 
     # In the case where there is actually no GT label file because no elephant
     # calls occred in the recording, we simply output all zeros
@@ -97,28 +105,44 @@ def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
         call_length = float(row['End Time (s)']) - float(row['Begin Time (s)'])
         end_time = start_time + call_length
         
-        # Figure out which spectrogram slices we are on
-        # to get columns that we want to span with the given
-        # slice. This math transforms .wav indeces to spectrogram
-        # indices
+        # This math transforms .wav indeces to spectrogram indices
         start_spec = max(math.ceil((start_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), 0)
         end_spec = min(math.ceil((end_time * samplerate - spectrogram_info['NFFT'] / 2.) / spectrogram_info['hop']), labelMatrix.shape[0])
         labelMatrix[start_spec : end_spec] = 1
 
-        # Add the fudge factor with radius 'fudge_factor'
         length = end_spec - start_spec
-        fudge_factor = spectrogram_info['fudge_factor']
-        # Fudge_factor should be chosen such that it is << len call.
-        assert(length > fudge_factor)
-        # Make sure to not go over the ends of the file
-        # Add 1 to the right fudge idx.
-        fudge_start_left = max(0, start_spec - fudge_factor)
-        fudge_start_right = start_spec + fudge_factor
-        fudge_end_left = end_spec - fudge_factor
-        fudge_end_right = min(boarder_mask.shape[0], end_spec + fudge_factor)
+        # Calculate boarder boundaries for case where we 
+        # are doing per call boarders
+        if spectrogram_info['individual_boarders']: 
+            # Fudge_factor should be chosen such that it is << len call.
+            assert(length > fudge_factor)
+            # Make sure to not go over the ends of the file
+            # Add 1 to the right fudge idx.
+            fudge_start_left = max(0, start_spec - fudge_factor)
+            fudge_start_right = start_spec + fudge_factor
+            fudge_end_left = end_spec - fudge_factor
+            fudge_end_right = min(boarder_mask.shape[0], end_spec + fudge_factor)
 
-        boarder_mask[fudge_start_left: fudge_start_right] = 1
-        boarder_mask[fudge_end_left: fudge_end_right] = 1
+            boarder_mask[fudge_start_left: fudge_start_right] = 1
+            boarder_mask[fudge_end_left: fudge_end_right] = 1
+
+    # Calculate call boundaries for the case where we merge
+    # overlapping calls
+    if not spectrogram_info['individual_boarders']:
+        in_call = False
+        for i in range(labelMatrix.shape[0]):
+            if not in_call and labelMatrix[i] == 1:
+                in_call = True
+                fudge_start_left = max(0, i - fudge_factor)
+                fudge_start_right = i + fudge_factor
+                boarder_mask[fudge_start_left: fudge_start_right] = 1
+            elif in_call and labelMatrix[i] == 0:
+                in_call = False
+                # Note we back the index up by 1
+                fudge_end_left = (i-1) - fudge_factor
+                fudge_end_right = min(boarder_mask.shape[0], (i-1) + fudge_factor)
+                boarder_mask[fudge_end_left: fudge_end_right] = 1
+
 
     return labelMatrix, boarder_mask
 
@@ -308,12 +332,13 @@ def generate_elephant_chunks(raw_audio, labels, label_vec, boundary_mask_vec, sp
         call_length = float(call['End Time (s)']) - float(call['Begin Time (s)'])
         end_time = start_time + call_length
 
-        feature_chunk, label_chunk, boundary_mask = generate_chunk(start_time, end_time, raw_audio, label_vec, boundary_mask_vec, spectrogram_info)
-        
-        if (feature_chunk is not None):  
-            feature_set.append(feature_chunk)
-            label_set.append(label_chunk)
-            boundary_mask_set.append(boundary_mask)
+        for _ in range(spectrogram_info['num_random_call_positions']):
+            feature_chunk, label_chunk, boundary_mask = generate_chunk(start_time, end_time, raw_audio, label_vec, boundary_mask_vec, spectrogram_info)
+            
+            if (feature_chunk is not None):  
+                feature_set.append(feature_chunk)
+                label_set.append(label_chunk)
+                boundary_mask_set.append(boundary_mask)
 
     return feature_set, label_set, boundary_mask_set
 
@@ -368,7 +393,9 @@ if __name__ == '__main__':
                         'window': args.window, 
                         'pad_to': args.pad_to,
                         'neg_fact': args.neg_fact,
-                        'fudge_factor': args.fudge_factor}
+                        'fudge_factor': args.fudge_factor,
+                        'num_random_call_positions': args.call_repeats,
+                        'individual_boarders': not args.overlap_boundaries}
 
     print(args)
 
@@ -494,11 +521,20 @@ if __name__ == '__main__':
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_labels_" + str(i), label_set[i])
-            np.save(directory + '/' + data_id + "_boundary-masks_" + str(i), boundary_mask_set[i])
+            # Only save boundary files if flag is set
+            if spectrogram_info['fudge_factor'] > 0:
+                np.save(directory + '/' + data_id + "_boundary-masks_" + str(i), boundary_mask_set[i])
 
 
-    # Add the random seed and the fudge factor
-    out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' + str(args.seed) + '_FudgeFact_' + str(args.fudge_factor)
+    # Add the random seed, the fudge factor, and the number of repeated calls
+    # test this out
+    out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' + str(args.seed) + '_CallRepeats_' + str(args.call_repeats)
+    if args.fudge_factor > 0:
+        out_dir += '_FudgeFact_' + str(args.fudge_factor) + '_Individual-Boarders_' + str(spectrogram_info['individual_boarders'])
+    
+    #out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' \
+    #            + str(args.seed) + '_FudgeFact_' + str(args.fudge_factor) + '_CallRepeats_' + str(args.call_repeats)
+
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 
@@ -515,12 +551,12 @@ if __name__ == '__main__':
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
     print('Multiprocessed took {}'.format(time.time()-start_time))
-    '''
+    
     # For visualizing don't multi process
     # Let us not multip process this!!!
-    for file_pair in file_pairs:
-        wrapper_processPos(out_dir, file_pair)
-    '''
+    #for file_pair in file_pairs:
+    #    wrapper_processPos(out_dir, file_pair)
+    
 
     num_calls = call_counter.value
     num_sound_files = len(file_pairs)
@@ -549,7 +585,8 @@ if __name__ == '__main__':
         for i in range(len(feature_set)):
             np.save(directory + '/' + data_id + "_neg-features_" + str(i), feature_set[i])
             np.save(directory + '/' + data_id + "_neg-labels_" + str(i), label_set[i])
-            np.save(directory + '/' + data_id + "_neg-boundary-masks_" + str(i), boundary_mask_set[i])
+            if spectrogram_info['fudge_factor'] > 0:
+                np.save(directory + '/' + data_id + "_neg-boundary-masks_" + str(i), boundary_mask_set[i])
 
     # Generate num_neg_samples negative examples where we randomly 
     # sample "samples_per_file" examples from each file

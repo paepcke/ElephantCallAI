@@ -17,7 +17,7 @@ from torch.autograd import Variable
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import precision_recall_curve
-from data import get_loader
+from data import get_loader, get_loader_fuzzy
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
@@ -941,6 +941,73 @@ class ChunkFocalLoss(nn.Module):
 
         return focal_loss
 
+class BCE_Equal_Boundary_Loss(nn.Module):
+    def __init__(self):
+        super(BCE_Equal_Boundary_Loss, self).__init__()
+        self.loss_func = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, inputs, targets, boundary_masks):
+        """
+            Modified binary cross entropy loss that takes into account
+            uncertainty around call boundaries. We augment the BCE loss
+            by essentially allowing the model to be imprecise around the
+            boarders. To do this we use the boundary_masks to change targets
+            at the boundary to match the prediction. Therefore, we are essentially
+            saying we do not care about being exact around the boundaries, we really
+            care about the middle or meat of the call. Although this could allow the
+            model to essentially predict anything around the boundaries, such as all
+            0s or even non continuous 1s, the hope is that learning to pick up on some
+            notion of the boundary being a set of 1s, then allows the model (especially
+            in the case of lstm based model) to more easily predict the middle section
+            as predicting 1s after already seeing some ones is easier than starting 
+            from nothing.
+        """
+        
+        # Fudge the ground truth predictions around the boundary. 
+        # We assume the target labels are copies of dataset
+        # Hacky for now but basically see the predicted 0/1
+        predictions = torch.tensor(np.where(inputs > 0.5, 1., 0.)).float()
+        #labels[boundary_masks] = 
+        targets[boundary_masks] = predictions[boundary_masks]
+
+        loss = self.loss_func(inputs, targets)
+
+        return loss
+
+class BCE_Weighted_Boundary_Loss(nn.Module):
+    def __init__(self, boundary_weight):
+        super(BCE_Weighted_Boundary_Loss, self).__init__()
+        self.loss_func = torch.nn.BCEWithLogitsLoss()
+        self.boundary_weight = boundary_weight
+
+    def forward(self, inputs, targets, boundary_masks):
+        """
+            Modified binary cross entropy loss that takes into account
+            uncertainty around call boundaries. We augment the BCE loss
+            by essentially allowing the model to be imprecise around the
+            boarders. To do this we use the boundary_masks to change targets
+            at the boundary to match the prediction. Therefore, we are essentially
+            saying we do not care about being exact around the boundaries, we really
+            care about the middle or meat of the call. Although this could allow the
+            model to essentially predict anything around the boundaries, such as all
+            0s or even non continuous 1s, the hope is that learning to pick up on some
+            notion of the boundary being a set of 1s, then allows the model (especially
+            in the case of lstm based model) to more easily predict the middle section
+            as predicting 1s after already seeing some ones is easier than starting 
+            from nothing.
+        """
+        
+        # Assign weighting to each slice, where the boundary slices
+        # get weight (boundary_weight) and non_boundary slices get original 1 weighting
+        loss_weights = (1 - boundary_masks) + (boundary_masks * self.boundary_weight)
+        loss_weights = loss_weights.to(parameters.device).float()
+        self.loss_func.weight = loss_weights
+
+        loss = self.loss_func(inputs, targets)
+
+        return loss
+
+
 def avg_confidence_weighting(pts, weight):
     """
         Computes the weighting for each chunk based
@@ -1003,6 +1070,10 @@ def get_f_score(logits, labels, threshold=0.5):
     with torch.no_grad():
         pred = sig(logits)
         binary_preds = pred > threshold
+        # Flatten the array for fscore
+        binary_preds = binary_preds.view(-1)
+        labels = labels.view(-1)
+
         # Cast to proper type!
         binary_preds = binary_preds.float()
         f_score = sklearn.metrics.f1_score(labels.data.cpu().numpy(), binary_preds.data.cpu().numpy())
@@ -1049,8 +1120,9 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     if (i % 1000 == 0) and parameters.VERBOSE:
                         print ("Batch number {} of {}".format(i, len(dataloders[phase])))
                     # Cast the variables to the correct type
+                    # Need to see if this properly does copies etc.
                     inputs = inputs.float()
-                    
+
                     labels = labels.float()
 
                     inputs, labels = Variable(inputs.to(parameters.device)), Variable(labels.to(parameters.device))
@@ -1068,6 +1140,7 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     logits = logits.squeeze()
                     labels = labels.squeeze()
 
+                    # Check to make sure that these are the same
                     loss = criterion(logits, labels)
 
                     # Backward pass
@@ -1114,6 +1187,126 @@ def train_model(dataloders, model, criterion, optimizer, scheduler, writer, num_
                     train_epoch_loss, train_epoch_acc, 
                     valid_epoch_loss, valid_epoch_acc, 
                     valid_epoch_fscore, valid_epoch_trig_recall, valid_epoch_trig_prec, (time.time()-since)/60))
+
+            ## Write important metrics to tensorboard
+            writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
+            writer.add_scalar('train_epoch_acc', train_epoch_acc, epoch)
+            writer.add_scalar('valid_epoch_loss', valid_epoch_loss, epoch)
+            writer.add_scalar('valid_epoch_acc', valid_epoch_acc, epoch)
+            writer.add_scalar('valid_epoch_fscore', valid_epoch_fscore, epoch)
+            writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
+
+            scheduler.step()
+
+            # Check whether to early stop due to decreasing validation acc
+            if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+                print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
+                break
+
+    except KeyboardInterrupt:
+        print("Early stopping due to keyboard intervention")
+
+    print('Best val Acc: {:4f}'.format(best_valid_acc))
+    print('Best val F-score: {:4f}'.format(best_valid_fscore))
+    return best_model_wts
+
+def train_model_fuzzy(dataloaders, model, criterion, optimizer, 
+                        scheduler, writer, num_epochs, starting_epoch=0, include_boundaries=False):
+    since = time.time()
+
+    dataset_sizes = {'train': len(dataloaders['train'].dataset), 
+                     'valid': len(dataloaders['valid'].dataset)}
+
+    best_valid_acc = 0.0
+    best_valid_fscore = 0.0
+    best_model_wts = None
+
+    # Check this
+    last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
+
+    try:
+        for epoch in range(starting_epoch, num_epochs):
+            for phase in ['train', 'valid']:
+                if phase == 'train':
+                    model.train(True)
+                else:
+                    model.train(False)
+
+                running_loss = 0.0
+                running_corrects = 0
+                running_samples = 0
+                running_non_zero = 0
+                running_fscore = 0.0
+                iterations = 0
+
+                running_trig_word_recall = 0.0
+                running_trig_word_precision = 0.0
+                running_trig_word_count = 0
+
+                i = 0
+                print ("Num batches:", len(dataloaders[phase]))
+                for batch in dataloaders[phase]:
+                #for inputs, labels, boundary_masks, _ in dataloaders[phase]:
+                    i += 1
+                    if (i % 1000 == 0) and parameters.VERBOSE:
+                        print ("Batch number {} of {}".format(i, len(dataloaders[phase])))
+                    # Cast the variables to the correct type
+                    # Need to see if this properly does copies etc.
+                    inputs = batch[0].float()
+                    #inputs = inputs.float()
+                    inputs = torch.tensor(inputs).to(parameters.device)
+
+                    labels = batch[1].float()
+                    #labels = labels.float()
+                    labels = torch.tensor(labels).to(parameters.device)
+
+                    optimizer.zero_grad()
+
+                    # Forward pass
+                    logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+                    # Are we zeroing out the hidden state in the model??
+
+                    if include_boundaries:
+                        boundary_masks = batch[2]
+                        loss = criterion(logits, labels, boundary_masks)
+                    else:
+                        loss = criterion(logits, labels)
+
+                    # Backward pass
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                    running_loss += loss.item()
+                    running_corrects += num_correct(logits, labels)
+                    running_non_zero += num_non_zero(logits, labels)
+                    running_samples += logits.shape[0] * logits.shape[1] #Counting the actual number slices
+                    running_fscore += get_f_score(logits, labels)
+                    iterations += 1
+
+                if phase == 'train':
+                    train_epoch_loss = running_loss / iterations
+                    train_epoch_acc = float(running_corrects) / running_samples
+                    train_non_zero = running_non_zero
+                else:
+                    valid_epoch_loss = running_loss / iterations
+                    valid_epoch_acc = float(running_corrects) / running_samples
+                    valid_epoch_fscore = running_fscore / iterations
+                    valid_non_zero = running_non_zero
+                    last_validation_accuracies.append(valid_epoch_acc)
+                    
+                if phase == 'valid' and valid_epoch_acc > best_valid_acc:
+                    best_valid_acc = valid_epoch_acc
+                    best_valid_fscore = valid_epoch_fscore
+                    best_model_wts = model.state_dict()
+
+            print ('Epoch [{}/{}] Train Non-Zero: {} Val Non-Zero: {}'.format(epoch, num_epochs - 1, train_non_zero, valid_non_zero))
+            print('Epoch [{}/{}] Training loss: {:.6f} acc: {:.4f} ' 
+                  'Validation loss: {:.6f} acc: {:.4f} f-score: {:.4f} time: {:.4f}'.format(
+                    epoch, num_epochs - 1,
+                    train_epoch_loss, train_epoch_acc, 
+                    valid_epoch_loss, valid_epoch_acc, 
+                    valid_epoch_fscore, (time.time()-since)/60))
 
             ## Write important metrics to tensorboard
             writer.add_scalar('train_epoch_loss', train_epoch_loss, epoch)
@@ -1234,6 +1427,7 @@ def calc_num_chunks_calls(data_loader):
 def main(mode, model, train_loader, test_loader, save_path):
     dloaders = {'train':train_loader, 'valid':test_loader}
 
+    #mode = 'fuzzy'
 
     if mode == "visualization":
         ## Data Visualization
@@ -1241,9 +1435,9 @@ def main(mode, model, train_loader, test_loader, save_path):
         model = torch.load(model, map_location=parameters.device)
         print(model)
 
-        for inputs, labels, _ in dloaders['valid']:
-            inputs = inputs.float()
-            labels = labels.float()
+        for batch in dloaders['valid']:
+            inputs = batch[0].float()
+            labels = batch[1].float()
 
             inputs, labels = Variable(inputs.to(parameters.device)), Variable(labels.to(parameters.device))
 
@@ -1254,8 +1448,9 @@ def main(mode, model, train_loader, test_loader, save_path):
 
             for i in range(len(inputs)):
                 features = inputs[i].cpu().detach().numpy()
-                output = torch.cpu().sigmoid(outputs[i]).detach().numpy()
+                output = torch.sigmoid(outputs[i]).cpu().detach().numpy()
                 label = labels[i].cpu().detach().numpy()
+                # Maybe also show the masks
 
                 visualize(features, output, label)
 
@@ -1274,6 +1469,79 @@ def main(mode, model, train_loader, test_loader, save_path):
         with open(model_id + "_threshold_" + str(parameters.ADVERSARIAL_THRESHOLD) + ".txt", 'w') as f:
             for file in adversarial_files:
                 f.write('{}\n'.format(file))
+    elif mode == 'fuzzy':
+        ## Training
+        model_id = int(model)
+        model = get_model(model_id)
+        model.to(parameters.device)
+
+        print(model)
+
+        writer = SummaryWriter(save_path)
+        writer.add_scalar('batch_size', parameters.BATCH_SIZE)
+        writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[model_id]['l2_reg'])
+
+        # Try focal loss and boundar weighting
+        if parameters.LOSS.upper() == "CE":
+            criterion = torch.nn.BCEWithLogitsLoss()
+            print ("Using Binary Cross Entropy Loss")
+        elif parameters.LOSS.upper() == "FOCAL":
+            criterion = FocalLoss(alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
+            print ("Using Focal Loss with parameters alpha: {}, gamma: {}, pi: {}".format(parameters.FOCAL_ALPHA, parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))
+        elif parameters.LOSS.upper() == "FOCAL_CHUNK":
+            weight_func = None
+            if parameters.CHUNK_WEIGHTING.lower() == "avg":
+                weight_func = avg_confidence_weighting
+            elif parameters.CHUNK_WEIGHTING.lower() == "count":
+                weight_func = incorrect_count_weighting
+            else:
+                print ("Unknown Chunk Weighting for Focal Loss")
+                return
+
+            criterion = ChunkFocalLoss(weight_func, alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
+            print ("Using Chunk Based Focal Loss with weighting function: {}, alpha: {}, gamma: {}, pi: {}".format(
+                    parameters.CHUNK_WEIGHTING, parameters.FOCAL_ALPHA, 
+                    parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))
+        elif parameters.LOSS.upper() == "BOUNDARY":
+            include_boundaries = True
+
+            if parameters.BOUNDARY_LOSS.upper() == "EQUAL":
+                criterion = BCE_Equal_Boundary_Loss()
+            elif parameters.BOUNDARY_LOSS.upper() == "WEIGHT":
+                criterion = BCE_Weighted_Boundary_Loss(boundary_weight=parameters.BOUNDARY_WEIGHT)
+            else:
+                print ("Unknown Boundary Loss Type")
+                return
+
+            print("Using Boundary Enhanced Loss with Individual-Boundaries: {}, Boundary_Size: {}, Boundary Loss Type: {}, Weighting: {}".format(
+                    parameters.INDIVIDUAL_BOUNDARIES, parameters.BOUNDARY_FUDGE_FACTOR,
+                    parameters.BOUNDARY_LOSS, parameters.BOUNDARY_WEIGHT))
+        else:
+            print("Unknown Loss")
+            return
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=parameters.HYPERPARAMETERS[model_id]['lr'], weight_decay=parameters.HYPERPARAMETERS[model_id]['l2_reg'])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, parameters.HYPERPARAMETERS[model_id]['lr_decay_step'], gamma=parameters.HYPERPARAMETERS[model_id]['lr_decay'])
+
+        start_time = time.time()
+        model_wts = None
+
+        model_wts = train_model_fuzzy(dloaders, model, criterion, optimizer, scheduler, 
+                        writer, parameters.NUM_EPOCHS, include_boundaries=include_boundaries)
+
+        if model_wts:
+            model.load_state_dict(model_wts)
+            save_path = save_path + "/" + "model.pt"
+            if not os.path.exists(parameters.SAVE_PATH):
+                os.makedirs(parameters.SAVE_PATH)
+            torch.save(model, save_path)
+            print('Saved best val acc model to path {}'.format(save_path))
+        else:
+            print('For some reason I don\'t have a model to save')
+
+        print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
+
+        writer.close()
     else:
         ## Training
         model_id = int(model)
@@ -1334,8 +1602,20 @@ def main(mode, model, train_loader, test_loader, save_path):
         writer.close()
 
 if __name__ == '__main__':
-    train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    train_data_path = "../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_SEED_" + str(parameters.RANDOM_SEED) + \
+                "_CallRepeats_" + str(parameters.CALL_REPEATS)
+    # Include boundary uncertainty in training
+    include_boundaries = False
+    if parameters.BOUNDARY_FUDGE_FACTOR > 0:
+        include_boundaries = True
+        train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
+    train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+    #train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x1_Seed_8", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
+    test_loader = train_loader
 
     if sys.argv[1].lower() == 'help':
         print ("Run types are as follows:")
@@ -1347,4 +1627,8 @@ if __name__ == '__main__':
         main("visualization", sys.argv[2], train_loader, test_loader, save_path)
     else:
         save_path = parameters.SAVE_PATH + parameters.DATASET + '_model_' + str(sys.argv[1]) + "_" + parameters.NORM + "_Negx" + str(parameters.NEG_SAMPLES) + "_Loss_" + parameters.LOSS + "_" + str(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()))
-        main("training", sys.argv[1], test_loader, test_loader, save_path)
+        main("training", sys.argv[1], train_loader, test_loader, save_path)
+
+
+
+
