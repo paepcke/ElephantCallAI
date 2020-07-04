@@ -1002,7 +1002,7 @@ class BCE_Weighted_Boundary_Loss(nn.Module):
         
         # Assign weighting to each slice, where the boundary slices
         # get weight (boundary_weight) and non_boundary slices get original 1 weighting
-        loss_weights = (1 - boundary_masks) + (boundary_masks * self.boundary_weight)
+        loss_weights = (1 - boundary_masks.long()) + (boundary_masks.long() * self.boundary_weight)
         loss_weights = loss_weights.to(parameters.device).float()
         self.loss_func.weight = loss_weights
 
@@ -1626,12 +1626,12 @@ if __name__ == '__main__':
                 "_CallRepeats_" + str(parameters.CALL_REPEATS)
     if include_boundaries:
         test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
-
+    
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     # During testing we do not want to use fuzzy boundaries
     test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     #train_loader = get_loader("../elephant_dataset/Train/Neg_Samples_x1_Seed_8", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     #test_loader = train_loader
 
