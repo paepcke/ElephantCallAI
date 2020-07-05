@@ -151,8 +151,13 @@ def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogra
     # which we can define a window with no elephant call
     # i.e. all start indeces such that the window (start, start + window_sz)
     # does not contain an elephant call
+    # In the case where we are considering uncertainty around boundaries,
+    # we add the label_vec and boundary_mask_vec to prevent having negative
+    # samples including uncertain boundaries
+
     valid_starts = []
     window_size = spectrogram_info['window']
+    updated_labels = label_vec + boundary_mask_vec
     # Step backwards and keep track of how far away the
     # last elephant call was
     last_elephant = 0  # For now is the size of the window
@@ -160,7 +165,8 @@ def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogra
         last_elephant += 1
 
         # Check if we encounter an elephant call
-        if (label_vec[i] == 1):
+        # Note: do >= in case where boundary + label = 2
+        if (updated_labels[i] >= 1):
             last_elephant = 0
 
         # If we haven't seen an elephant call
