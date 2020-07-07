@@ -6,12 +6,16 @@ Created on Mar 19, 2020
 
 import matplotlib.pyplot as plt
 from matplotlib.text import Text
+import matplotlib.gridspec as grd
 from matplotlib.font_manager import FontProperties
 
 import numpy as np
 from scipy.signal.filter_design import freqz, sosfreqz
 from datetime import timedelta
-from docutils.nodes import title
+
+from visualization import visualize
+from DSP.dsp_utils import DSPUtils
+
 
 class Plotter(object):
     '''
@@ -26,8 +30,7 @@ class Plotter(object):
     # Constructor
     #-------------------
 
-    def __init__(self, framerate):
-        self.framerate = framerate
+    def __init__(self):
         self.title     = Plotter.DEFAULT_TITLE
         
     #------------------------------------
@@ -59,10 +62,10 @@ class Plotter(object):
         fig.show()
 
     #------------------------------------
-    # plot_spectrogram_from_audio
+    # plot_spectrogram_from_magnitudes
     #-------------------
     
-    def plot_spectrogram_from_audio(self,
+    def plot_spectrogram_from_magnitudes(self,
                          freq_labels,
                          time_labels,
                          freq_time,
@@ -106,7 +109,7 @@ class Plotter(object):
         @type block: bool
         '''
         
-        # Define the grid of spectroram plots:
+        # Define the grid of spectrogram plots:
         plot_grid_width  = 3
         plot_grid_height = 6
         default_spectrogram_segment_secs = 30 # seconds
@@ -200,7 +203,87 @@ class Plotter(object):
         
         if block:
             self.block_till_figs_dismissed()
+
+
+    #------------------------------------
+    # plot_spectrogram_from_audio 
+    #-------------------
         
+    def plot_spectrogram_from_audio(self, 
+                                    raw_audio, 
+                                    samplerate, 
+                                    start_sec, 
+                                    end_sec, 
+                                    plot):
+
+        (spectrum, freqs, t_bins, im) = plt.specgram(raw_audio, 
+                                                     Fs=samplerate,
+                                                     #cmap='jet'
+                                                     cmap='gray'
+                                            		 )
+        if plot:
+            t = np.arange(start_sec, end_sec, 1/samplerate)
+            _fig = plt.Figure()
+            grid_spec = grd.GridSpec(nrows=2,
+                                     ncols=1
+                                     ) 
+            ax_audio = plt.subplot(grid_spec[0])
+            plt.xlabel('Time')
+            plt.ylabel('Audio Units')
+            ax_audio.plot(t, raw_audio)
+            
+            plt.show()
+        return (spectrum,freqs,t_bins,im)
+    
+    #------------------------------------
+    # plot_spectrogram_from_dataframe_file 
+    #-------------------
+    
+    def plot_spectrogram_from_dataframe_file(self, 
+                                             dff_file,
+                                             *args,
+                                             **kwargs
+                                             ):
+        df = DSPUtils.load_spectrogram(dff_file)
+        
+        self.plot_spectrogram_from_magnitudes(df.index,
+                                              df.columns,
+                                              df.values,
+                                              *args,
+                                              **kwargs
+                                              )
+
+    #------------------------------------
+    # plot_spectrogram_with_labels_truths 
+    #-------------------
+    
+    def plot_spectrogram_with_labels_truths(self,
+                                            features, 
+                                            outputs=None, 
+                                            labels=None, 
+                                            binary_preds=None, 
+                                            title=None, 
+                                            vert_lines=None,
+                                            filters=[]
+                                            ):
+        new_features = np.copy(features)
+        if filters is not None:
+            if type(filters) != list:
+                filters = [filters]
+            for _filter in filters:
+                new_features = eval(_filter(new_features),
+                   {"__builtins__":None},    # No built-ins at all
+                   {}                        # No additional func needed
+                   )
+        
+        visualize(new_features,
+                  outputs=outputs,
+                  labels=labels,
+                  binary_preds=binary_preds,
+                  title=title,
+                  vert_lines=vert_lines
+                  )
+
     #------------------------------------
     # plot_spectrogram_excerpts
     #-------------------
@@ -251,7 +334,8 @@ class Plotter(object):
             
             # Origin "lower" makes y axis start at 0:
             _axes_image = ax.imshow(matrix_excerpt, 
-                                    cmap='jet', 
+                                    #cmap='jet', 
+                                    cmap='gray', 
                                     origin='lower',
                                     aspect='auto',
                                     extent=(lowest_time-0.5, 
@@ -292,7 +376,8 @@ class Plotter(object):
     #-------------------
     
     def plot_frequency_response(self, 
-                                filter_coeffs, 
+                                filter_coeffs,
+                                framerate,
                                 cutoffs, 
                                 title=None):
         '''
@@ -306,6 +391,8 @@ class Plotter(object):
         
         @param filter_coeffs: definiting filter characteristics
         @type filter_coeffs: {(np_arr, np_arr) | np_arr}
+        @param framerate: sample frequency of the audio file.
+        @type int
         @param cutoffs: frequencies (Hz) at which filter is supposed to cut off
         @type cutoffs: {int | [int]}
         @param title: optional title of the figure. If None,
@@ -322,7 +409,7 @@ class Plotter(object):
 
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        ax.plot(0.5 * self.framerate * w/np.pi, np.abs(h), 'b') # Blue
+        ax.plot(0.5 * framerate * w/np.pi, np.abs(h), 'b') # Blue
         ax.plot(cutoffs[0], 0.5*np.sqrt(2), 'ko')
         ax.axvline(cutoffs[0], color='k')        
         if len(cutoffs) > 1:
@@ -332,7 +419,7 @@ class Plotter(object):
         # x vals at 0. To make best use of the 
         # horizontal space, start plotting at 
         # 5Hz below the low cutoff freq:
-        ax.set_xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*self.framerate)
+        ax.set_xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*framerate)
         ax.set_xscale('log')
         ax.set_yscale('log')
         if title is not None:
@@ -353,7 +440,7 @@ class Plotter(object):
 #         # x vals at 0. To make best use of the 
 #         # horizontal space, start plotting at 
 #         # 5Hz below the low cutoff freq:
-#         plt.xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*self.framerate)
+#         plt.xlim(cutoffs[0] - 5, max(cutoffs) + max(cutoffs))  #0.5*framerate)
 #         plt.xscale('log')
 #         plt.yscale('log')
 #         if title is not None:
@@ -400,7 +487,29 @@ class Plotter(object):
                      label=legend_entry
                      )
         self.ax.legend()
+
+    #------------------------------------
+    # compute_timeticks 
+    #-------------------
+    
+    def compute_timeticks(self, framerate, spectrogram_t):
         
+        # Number of columns in the spectrogram:
+        estimate_every_samples = self.n_fft - self.overlap * self.n_fft
+        estimate_every_secs    = estimate_every_samples / framerate
+        one_sec_every_estimates= 1/estimate_every_secs
+        (_num_freqs, num_estimates) = spectrogram_t.shape
+        num_second_ticks = num_estimates / one_sec_every_estimates
+        num_minute_ticks = num_second_ticks / 60
+        num_hour_ticks   = num_second_ticks / 3600
+        num_time_ticks = {'seconds': int(num_second_ticks),
+                          'minutes': int(num_minute_ticks),
+                          'hours'  : int(num_hour_ticks)
+                          }
+        
+        #time_labels       = np.array(range(num_timeticks))
+        return num_time_ticks
+
     #------------------------------------
     # block_till_figs_dismissed
     #-------------------
