@@ -590,8 +590,10 @@ if __name__ == '__main__':
 
     # Generate num_neg_samples negative examples where we randomly 
     # sample "samples_per_file" examples from each file
-    print ("Processing Positive examples")
+    
+    print ("Processing Negative examples")
     print ("Size: ", len(file_pairs))
+    '''
     pool = multiprocessing.Pool()
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     start_time = time.time()
@@ -599,6 +601,9 @@ if __name__ == '__main__':
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
     print('Multiprocessed took {}'.format(time.time()-start_time))
+    '''
+    for file_pair in file_pairs:
+        wrapper_processNeg(out_dir, samples_per_file, file_pair)
     
     # Save which files were used for main data files
     with open(out_dir + '/files.txt', 'w') as f:
