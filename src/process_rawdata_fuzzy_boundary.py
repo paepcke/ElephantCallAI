@@ -525,6 +525,12 @@ if __name__ == '__main__':
             if spectrogram_info['fudge_factor'] > 0:
                 np.save(directory + '/' + data_id + "_boundary-masks_" + str(i), boundary_mask_set[i])
 
+        # Free the memory!
+        del feature_set
+        del label_set
+        if spectrogram_info['fudge_factor'] > 0:
+            del boundary_mask_set
+
 
     # Add the random seed, the fudge factor, and the number of repeated calls
     # test this out
@@ -588,15 +594,22 @@ if __name__ == '__main__':
             if spectrogram_info['fudge_factor'] > 0:
                 np.save(directory + '/' + data_id + "_neg-boundary-masks_" + str(i), boundary_mask_set[i])
 
+        # Free the memory!
+        del feature_set
+        del label_set
+        if spectrogram_info['fudge_factor'] > 0:
+            del boundary_mask_set
+
     # Generate num_neg_samples negative examples where we randomly 
     # sample "samples_per_file" examples from each file
     
     print ("Processing Negative examples")
     print ("Size: ", len(file_pairs))
-    '''
+    #start_time = time.time()
+    
     pool = multiprocessing.Pool()
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    start_time = time.time()
+    print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.map(partial(wrapper_processNeg, out_dir, samples_per_file), file_pairs)
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
@@ -604,7 +617,8 @@ if __name__ == '__main__':
     '''
     for file_pair in file_pairs:
         wrapper_processNeg(out_dir, samples_per_file, file_pair)
-    
+    print('Normal Processing took {}'.format(time.time()-start_time))
+    '''
     # Save which files were used for main data files
     with open(out_dir + '/files.txt', 'w') as f:
         for i in range(len(file_pairs)):
