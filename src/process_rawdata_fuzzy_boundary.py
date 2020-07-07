@@ -609,7 +609,7 @@ if __name__ == '__main__':
     
     pool = multiprocessing.Pool()
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
-    print('Multiprocessed took {}'.format(time.time()-start_time))
+    start_time = time.time()
     pool.map(partial(wrapper_processNeg, out_dir, samples_per_file), file_pairs)
     print('Multiprocessed took {}'.format(time.time()-start_time))
     pool.close()
