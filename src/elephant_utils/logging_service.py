@@ -23,7 +23,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 import sys
-import psutil
 
 
 # ----------------------------- Metaclass ---------------------
