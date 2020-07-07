@@ -9,7 +9,12 @@ from enum import Enum
 import os
 import re
 
+import torch
+from torchaudio import transforms
+
 import numpy as np
+import pandas as pd
+
 
 class PrecRecFileTypes(Enum):
     SPECTROGRAM  = '_spectrogram'
@@ -63,10 +68,11 @@ class DSPUtils(object):
         @type file_type: PrecRecFileTypes
         '''
         (path_no_ext, ext) = os.path.splitext(root_info)
-        if file_type in [PrecRecFileTypes.SPECTROGRAM,
-                         PrecRecFileTypes.FREQ_LABELS,
+        if file_type in [PrecRecFileTypes.FREQ_LABELS,
                          PrecRecFileTypes.TIME_LABELS]:
             ext = '.npy'
+        elif file_type in [PrecRecFileTypes.SPECTROGRAM]:
+            ext = '.pickle'
         elif file_type in [PrecRecFileTypes.GATED_WAV]:
             ext = '.wav'
         elif file_type in [PrecRecFileTypes.PREC_REC_RES,
@@ -93,40 +99,127 @@ class DSPUtils(object):
                 new_file_path = f"{path_no_ext}{file_type.value}_{counter}{ext}"
 
     #------------------------------------
-    # get_spectrogram_data
+    # save_spectrogram 
     #-------------------
     
     @classmethod
-    def get_spectrogram_data(cls, threshold_db, cutoff_freq, src_dir='/tmp'):
-        #**************
+    def save_spectrogram(cls, 
+                         spectrogram, 
+                         spectrogram_dest,
+                         freq_labels,
+                         time_labels
+                         ):
+        '''
+        Given spectrogram magnitudes, frequency
+        and time axes labels, save as a pickled
+        dataframe
+        
+        @param spectrogram: 2d array of magnitudes
+        @type spectrogram: np.array
+        @param spectrogram_dest: file name to save to
+        @type spectrogram_dest: str
+        @param freq_labels: array of y-axis labels
+        @type freq_labels: np_array
+        @param time_labels: array of x-axis labels
+        @type time_labels: np_array
+        '''
+        # Save the spectrogram to file.
+        # Combine spectrogram, freq_labels, and time_labels
+        # into a DataFrame:
+        df = pd.DataFrame(spectrogram,
+                          columns=time_labels,
+                          index=freq_labels
+                          )
+        df.to_pickle(spectrogram_dest)
+
+    #------------------------------------
+    # load_spectrogram
+    #-------------------
+    
+    @classmethod
+    def load_spectrogram(cls, df_filename):
+        '''
+        Given the path to a pickled dataframe
+        that holds a spectrogram, return the
+        dataframe. The df will have the index
+        (i.e. row labels) set to the frequencies,
+        and the column names to the time labels.
+        
+        @param df_filename: location of the pickled df
+        @type df_filename: str
+        '''
+
+        # Safely read the pickled DataFrame
+        df = pd.read_pickle(df_filename)
+        return df
+
+        #return({'spectrogram' : df.values,
+        #        'freq_labels' : df.index,
+        #        'time_labels' : df.columns
+        #        })
+
+    #------------------------------------
+    # spectrogram_to_db 
+    #-------------------
+    
+    @classmethod
+    def spectrogram_to_db(cls, spect_magnitude):
+        '''
+        Takes a numpy spectrogram  of magnitudes.
+        Returns a numpy spectrogram containing 
+        dB scaled power.
+        
+        @param spect_magnitude:
+        @type spect_magnitude:
+        '''
+        transformer = transforms.AmplitudeToDB('power')
+        spect_tensor = torch.Tensor(spect_magnitude)
+        spect_dB_tensor = transformer.forward(spect_tensor)
+        spect_dB = spect_dB_tensor.numpy()
+        return spect_dB
+
+    #------------------------------------
+    # get_spectrogram__from_treatment
+    #-------------------
+    
+    @classmethod
+    def get_spectrogram__from_treatment(cls, threshold_db, cutoff_freq, src_dir='/tmp'):
+        '''
+        Given a list of treatments, construct the file names
+        that are created by the calibrate_preprossing.py facility.
+        Load them all, and return them.
+        
+        @param threshold_db: dB below which all values were set to zero
+        @type threshold_db: int
+        @param cutoff_freq: spectrogram cutoff frequency
+        @type cutoff_freq: int
+        @param src_dir: directory where all the files 
+            are located.
+        @type src_dir: src
+        @return:  {'spectrogram' : magnitudes,
+                   'freq_labels' : y-axis labels,
+                   'time_labels' : x-axis labels
+                  }
+
+        '''
+
         files = os.listdir(src_dir)
-        spec_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram.npy')
-        freq_lbl_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram_freq_labels.npy')
-        time_lbl_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram_time_labels.npy')        
+        spec_pat = re.compile(f'filtered_wav_{str(threshold_db)}dB_{str(cutoff_freq)}Hz.*spectrogram.pickle')
         try:
             spect_file = next(filter(spec_pat.match, files))
             spect_path = os.path.join(src_dir, spect_file)
         except StopIteration:
             raise IOError("Spectrogram file not found.")
-        try:
-            freq_lbl_file = next(filter(freq_lbl_pat.match, files))
-            freq_lbl_path = os.path.join(src_dir, freq_lbl_file)            
-        except StopIteration:
-            raise IOError("Frequency labels file not found.")
-        try:
-            time_lbl_file = next(filter(time_lbl_pat.match, files))
-            time_lbl_path = os.path.join(src_dir, time_lbl_file)            
-        except StopIteration:
-            raise IOError("Time labels file not found.")
-        
 
-        spectrogram = np.load(spect_path)
-        freq_labels = np.load(freq_lbl_path)
-        time_labels = np.load(time_lbl_path)
-        #*********
-        return({'spectrogram' : spectrogram,
-                'freq_labels' : freq_labels,
-                'time_labels' : time_labels
+        # Safely read the pickled DataFrame
+        df = eval(pd.read_pickle(spect_path),
+                   {"__builtins__":None},    # No built-ins at all
+                   {}                        # No additional func
+                   )
+
+        return({'spectrogram' : df.values,
+                'freq_labels' : df.index,
+                'time_labels' : df.columns
                 })
 
 # ---------------------------- Class SignalTreatment ------------

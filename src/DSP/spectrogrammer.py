@@ -4,27 +4,33 @@ Created on Feb 23, 2020
 @author: paepcke
 '''
 import argparse
-import math
 import os
 import sys
+import tempfile
 
 from scipy.io import wavfile
 from scipy.signal.spectral import stft, istft
+import torch
+import torchaudio
+from torchaudio import transforms
 
-import matplotlib.gridspec as grd
+from amplitude_gating import AmplitudeGater
+from elephant_utils.logging_service import LoggingService
 import matplotlib.pyplot as plt
 import numpy as np
-from elephant_utils.logging_service import LoggingService
-
-sys.path.append(os.path.dirname(__file__))
 from plotting.plotter import Plotter
+from wave_maker import WavMaker
 
-from visualization import visualize
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+sys.path.append(os.path.dirname(__file__))
+
+
 
 
 class Spectrogrammer(object):
     '''
-    Manipulate spectrograms. Includes starting
+    Create and manipulate spectrograms. Includes starting
     from a .wav file, or an already prepared .npy file. Allows
     spectrograms to be prepared from segments of a .wav
     file, as specified by start and end time.
@@ -32,9 +38,11 @@ class Spectrogrammer(object):
     Several frequency filters are available.
     '''
     NFFT = 4096 # was 3208 # We want a frequency resolution of 1.95 Hz
-    HOP_LENGTH = 800,
+    WIN_LENGTH = NFFT
+    OVERLAP = 1/2    
+    HOP_LENGTH = int(WIN_LENGTH * OVERLAP)
     FREQ_MAX = 150.
-    OVERLAP = 50
+
     # Energy below which spectrogram is set to zero:
     ENERGY_SUPPRESSION = -50 # dBFS
     
@@ -45,17 +53,49 @@ class Spectrogrammer(object):
 
     def __init__(self, 
                  infiles,
-                 clean_spectrogram,
-                 max_f,
+                 clean_spectrogram=False,
+                 max_f=FREQ_MAX,
                  label_mask_files=None,
                  start_sec=0,
                  end_sec=None,
                  normalize=False,
                  framerate=8000,
+                 threshold_db=-40, # dB
+                 low_freq=10,      # Hz 
+                 high_freq=50,     # Hz
+                 spectrogram_freq_cap=150,
                  plot=True,
                  model_input_plot=False,
                  nfft=None,
                  ):
+        '''
+        
+        
+        @param infiles:
+        @type infiles:
+        @param clean_spectrogram: whether or not to clean the spectrogram
+        @type clean_spectrogram: bool
+        @param max_f: max frequency to keep in the spectrogram(s)
+        @type max_f: float
+        @param label_mask_files: text files with manually produced labels
+        @type label_mask_files: str
+        @param start_sec: start second in the wav file
+        @type start_sec: int
+        @param end_sec: end second in the wav file
+        @type end_sec: int
+        @param normalize: whether or not to normalize the signal
+        @type normalize: bool
+        @param framerate: framerate of the recording. Normally 
+            obtained from the wav file itself.
+        @type framerate: int
+        @param plot: whether or not to plot the spectrogram
+        @type plot: bool
+        @param model_input_plot: whether or not to plot the model
+            as seen by the classifier.
+        @type model_input_plot: bool
+        @param nfft: window width
+        @type nfft: int
+        '''
         '''
         Constructor
         '''
@@ -67,8 +107,10 @@ class Spectrogrammer(object):
             self.log.info(f"Assuming NFFT == {Spectrogrammer.NFFT}")
             nfft = Spectrogrammer.NFFT
             
-        self.plotter = Plotter(framerate)
+        self.plotter = Plotter()
 
+        if type(infiles) != list:
+            infiles = [infiles]
         for infile in infiles:
             if not os.path.exists(infile):
                 print(f"File {infile} does not exist.")
@@ -76,20 +118,31 @@ class Spectrogrammer(object):
     
             if infile.endswith('.wav'):
                 try:
-                    self.log.info(f"Reding wav file {infile}...")
+                    self.log.info(f"Reading wav file {infile}...")
                     (self.framerate, samples) = wavfile.read(infile)
                     self.log.info(f"Processing wav file {infile}...")
-                    (freq_labels, time_labels, spect) = \
+                    process_result_dict = \
                         self.process_wav_file(samples, 
-                                              self.framerate, 
-                                              start_sec, 
-                                              end_sec, 
-                                              normalize,
-                                              plot)
-                        
+                                              start_sec=start_sec, 
+                                              end_sec=end_sec, 
+                                              normalize=normalize,
+                                              threshold_db=threshold_db,
+                                              low_freq=low_freq,
+                                              high_freq=high_freq,
+                                              spectrogram_freq_cap=spectrogram_freq_cap                                              
+                                              )
                 except Exception as e:
-                    print(f"Cannot read .wav file: {repr(e)}")
+                    print(f"Cannot process .wav file: {repr(e)}")
                     sys.exit(1)
+
+                try:
+                    # Create spectrogram:
+                    (freq_labels, time_labels, freq_time_dB) = \
+                        self.make_spectrogram(process_result_dict['gated_samples'])
+                except Exception as e:
+                    print(f"Cannot create spectrogram for {infile}: {repr(e)}")
+                    sys.exit(1)
+                spect = freq_time_dB
             else:
                 # Infile is a .npy spectrogram file:
                 label_mask = None
@@ -126,65 +179,67 @@ class Spectrogrammer(object):
                     title=f"{os.path.basename(infile)}")
                 
             if model_input_plot:
-                self.plot_spectrogram_from_numpy(clean_spect, 
+                if label_mask_files is None:
+                    self.log.err("The model_input_plot option requires label_mask_files to be specified.")
+                self.plot_spectrogram_with_labels_truths(clean_spect, 
                                                  labels=label_mask,
                                                  title=os.path.basename(infile), 
                                                  vert_lines=None, 
                                                  filters=None)
 
-    #------------------------------------
-    # process_wav_file 
-    #-------------------
-    
-    def process_wav_file(self,
-                         samples,
-                         start_sec,
-                         end_sec,
-                         normalize,
-                         plot=True
-                         ):
-
-        # Total time in seconds:
-        audio_secs = math.floor(samples.size / self.framerate)
-        
-        # Seek in to start time, and cut all beyond stop time:
-        if end_sec is None or end_sec > audio_secs:
-            end_sec = audio_secs
-        start_sample = self.framerate * start_sec
-        stop_sample  = self.framerate * end_sec
-        
-        if normalize:
-            samples_to_use = self.normalize(samples[start_sample : stop_sample])
-        else:
-            samples_to_use = samples
-            
-        (freq_labels, time_labels, freq_time) = \
-            self.make_spectrogram(samples_to_use)
-            
-        if plot:
-            (_spectrum,_freqs,_t_bins,_im) = \
-                self.plot_spectrogram_from_audio(samples_to_use, 
-                                      self.framerate,
-                                      start_sec,
-                                      end_sec
-                                      )
-        return (freq_labels, time_labels, freq_time)
+#     #------------------------------------
+#     # process_wav_file 
+#     #-------------------
+#     
+#     def process_wav_file(self,
+#                          samples,
+#                          start_sec,
+#                          end_sec,
+#                          normalize,
+#                          plot=True
+#                          ):
+# 
+#         # Total time in seconds:
+#         audio_secs = math.floor(samples.size / self.framerate)
+#         
+#         # Seek in to start time, and cut all beyond stop time:
+#         if end_sec is None or end_sec > audio_secs:
+#             end_sec = audio_secs
+#         start_sample = self.framerate * start_sec
+#         stop_sample  = self.framerate * end_sec
+#         
+#         if normalize:
+#             samples_to_use = self.normalize(samples[start_sample : stop_sample])
+#         else:
+#             samples_to_use = samples
+#             
+#         (freq_labels, time_labels, freq_time) = \
+#             self.make_spectrogram(samples_to_use)
+#             
+#         if plot:
+#             (_spectrum,_freqs,_t_bins,_im) = \
+#                 self.plot_spectrogram_from_magnitudes(samples_to_use, 
+#                                       self.framerate,
+#                                       start_sec,
+#                                       end_sec
+#                                       )
+#         return (freq_labels, time_labels, freq_time)
 
     #------------------------------------
     # process_spectrogram 
     #-------------------
     
-    def process_spectrogram(self, spect):
+    def process_spectrogram(self, freq_time):
         
-        max_energy = np.amax(spect)
+        max_energy = np.amax(freq_time)
         db_cutoff  = Spectrogrammer.ENERGY_SUPPRESSION # dB
         low_energy_thres = max_energy * 10**(db_cutoff/20)
-        spect_low_energy_indices = np.nonzero(spect <= low_energy_thres)
-        spect[spect_low_energy_indices] = 0.0
+        spect_low_energy_indices = np.nonzero(freq_time <= low_energy_thres)
+        freq_time[spect_low_energy_indices] = 0.0
 
         #delete all but row <= 60?
         #take the log
-        return spect
+        return freq_time
 
     #------------------------------------
     # make_spectrogram
@@ -217,18 +272,57 @@ class Spectrogrammer(object):
         
         '''
         
+        # The time_labels will be in seconds. But
+        # they will be fractions of a second, like
+        #   0, 0.256, ... 1440
         self.log.info("Creating spectrogram...")
         (freq_labels, time_labels, complex_freq_by_time) = \
             stft(data, 
                  self.framerate, 
-                 nperseg=self.FFT_WIDTH
+                 nperseg=self.NFFT
                  #nperseg=int(self.framerate)
                  )
             
         self.log.info("Done creating spectrogram.")
-        
+
         freq_time = np.absolute(complex_freq_by_time)
-        return (freq_labels, time_labels, freq_time)
+        
+        # Transformer for magnitude to power dB:
+        amp_to_dB_transformer = torchaudio.transforms.AmplitudeToDB()
+        freq_time_dB_tensor = amp_to_dB_transformer(torch.Tensor(freq_time))
+        
+        return (freq_labels, time_labels, freq_time_dB_tensor.numpy())
+
+    #------------------------------------
+    # make_mel_spectrogram
+    #-------------------
+    
+    def make_mel_spectrogram(self, sig_t, framerate):
+        
+        # Get tensor (128 x num_samples), where 128
+        # is the default number of mel bands. Can 
+        # change in call to MelSpectrogram:
+        mel_spec_t = transforms.MelSpectrogram(
+            sample_rate=framerate,
+            n_fft=self.n_fft,
+            win_length=self.win_length,
+            hop_length=self.hop_length
+            )(sig_t)
+            
+        # Turn energy values to db of max energy
+        # in the spectrogram:
+        mel_spec_db_t = transforms.AmplitudeToDB()(mel_spec_t)
+        
+        (num_mel_bands, _num_timebins) = mel_spec_t.shape
+        
+        # Number of columns in the spectrogram:
+        num_time_label_choices = self.compute_timeticks(framerate, 
+                                                        mel_spec_db_t
+                                                        )
+        # Enumeration of the mel bands to use as y-axis labels: 
+        freq_labels = np.array(range(num_mel_bands))
+        
+        return(freq_labels, num_time_label_choices, mel_spec_db_t)
 
     #------------------------------------
     # make_inverse_spectrogram 
@@ -336,61 +430,133 @@ class Spectrogrammer(object):
 
         return (new_freq_labels, new_freq_time)
 
-
     #------------------------------------
-    # plot_spectrogram_from_audio 
+    # process_wav_file
     #-------------------
-        
-    def plot_spectrogram_from_audio(self, raw_audio, samplerate, start_sec, end_sec, plot):
 
-        (spectrum, freqs, t_bins, im) = plt.specgram(raw_audio, 
-                                                     Fs=samplerate,
-                                                     cmap='jet'
-                                            		 )
-        if plot:
-            t = np.arange(start_sec, end_sec, 1/samplerate)
-            _fig = plt.Figure()
-            grid_spec = grd.GridSpec(nrows=2,
-                                     ncols=1
-                                     ) 
-            ax_audio = plt.subplot(grid_spec[0])
-            plt.xlabel('Time')
-            plt.ylabel('Audio Units')
-            ax_audio.plot(t, raw_audio)
+    def process_wav_file(self,
+                         infile_or_samples,
+                         start_sec=None, 
+                         end_sec=None,
+                         threshold_db=-40, # dB
+                         low_freq=10,      # Hz 
+                         high_freq=50,     # Hz
+                         spectrogram_freq_cap=150,
+                         normalize=False,
+                         outdir=None,
+                         keep_excerpt=False,
+                         ):
+        '''
+        Takes either a wav file path, or the audio samples
+        from a wav file. Subjects the signal to a bandpass
+        filter plus a noise filter. Optionally only works
+        on an excerpt of the file.
+        
+        
+        @param infile_or_samples: either audio samples, or a wav file path
+        @type infile_or_samples: {str | np.array}
+        @param start_sec: if non-none, the first audio second to include
+            If None, 0 is assumed.
+        @type start_sec: {None|int}
+        @param end_sec: one second behond where the excerpt should stop
+            If None, to the end is assumed
+        @type end_sec: {None|int}
+        @param threshold_db: dB of RMS of audio signal below which 
+            signal is zeroed out.
+        @type threshold_db: int
+        @param low_freq: low frequency of the bandpass filter
+        @type low_freq: int
+        @param high_freq: high frequency of the bandpass filter
+        @type high_freq: int
+        @param normalize: whether or not to normalize the audio
+        @type normalize: bool
+        @param outdir: directory where to write the gated outfile.
+            the name will be returned (see results)
+        @type outdir: str
+        @param keep_excerpt: if excerpt was requested, whether or
+            not to keep the excerpt in the file system after processing.
+        @type keep_excerpt: bool
+        @return: dict with:
+
+             the gated samples:                           'gated_samples',
+             the percent of the wav file that was zeroed: 'perc_zeroed'
+             path to the gated wav file on disk:          'result_file'
+             path to untreated excerpt file if requested: 'excerpt_file'
+
+          The latter only if (a) at least one of start_sec or end_sec
+          where not None, and (b) the keep_excerpt option was True          
+        @rtype: {str : {str|{str|float|np.array}}
+         
+        '''
+
+        excerpted = False
+        
+        if (start_sec or end_sec) is not None:
+            excerpted = True
             
-            plt.show()
-        return (spectrum,freqs,t_bins,im)
-    
-    #------------------------------------
-    # plot_spectrogram_from_numpy 
-    #-------------------
-    
-    def plot_spectrogram_from_numpy(self,
-                                    features, 
-                                    outputs=None, 
-                                    labels=None, 
-                                    binary_preds=None, 
-                                    title=None, 
-                                    vert_lines=None,
-                                    filters=[]
-                                    ):
-        new_features = np.copy(features)
-        if filters is not None:
-            if type(filters) != list:
-                filters = [filters]
-            for _filter in filters:
-                new_features = eval(_filter(new_features),
-                   {"__builtins__":None},    # No built-ins at all
-                   {}                        # No additional func needed
-                   )
-        
-        visualize(new_features,
-                  outputs=outputs,
-                  labels=labels,
-                  binary_preds=binary_preds,
-                  title=title,
-                  vert_lines=vert_lines
-                  )
+            # If given an infile path, we need the samples themselves:
+            if type(infile_or_samples) == str:
+                (self.framerate, samples) = wavfile.read(infile_or_samples)
+            else:
+                samples = infile_or_samples
+
+            
+            # Pull out the excerpt, and write it to a temp file:
+            start_sample_indx = self.framerate * start_sec
+            end_sample_indx   = self.framerate * end_sec
+
+            excerpt_infile = tempfile.NamedTemporaryFile(prefix='excerpt_',
+                                                         suffix='.wav'
+                                                         )
+            
+            wavfile.write(excerpt_infile, 
+                          self.framerate,
+                          samples[start_sample_indx:end_sample_indx]
+                          )
+        elif type(infile_or_samples) == str:
+            excerpt_infile = infile_or_samples
+        else:
+            # Were given samples, which we didn't need to 
+            # excerpt. AmplitudeGater does want an infile,
+            # so we temporarily write one out, containing
+            # all the samples
+            excerpt_infile = tempfile.NamedTemporaryFile(prefix='full_file_',
+                                                         suffix='.wav'
+                                                         )
+            
+            wavfile.write(excerpt_infile, 
+                          self.framerate,
+                          infile_or_samples  # These are samples
+                          )
+            
+
+        try:
+            try:
+                gater = AmplitudeGater(excerpt_infile.name,
+                                       amplitude_cutoff=threshold_db,
+                                       low_freq=low_freq,
+                                       high_freq=high_freq,
+                                       spectrogram_freq_cap=spectrogram_freq_cap,
+                                       outdir=outdir,
+                                       normalize=normalize
+                                       )
+            except Exception as e:
+                self.log.err(f"Processing failed for '{excerpt_infile}: {repr(e)}")
+                return None
+            
+            perc_zeroed = gater.percent_zeroed
+
+            return {'gated_samples': gater.gated_samples,
+                    'perc_zeroed'  : perc_zeroed,
+                    'result_file'  : gater.gated_outfile,
+                    'excerpt_file' : excerpt_infile if (start_sec or end_sec) is not None
+                                                    and keep_excerpt
+                                                    else None
+                    }
+        finally:
+            if excerpted and not keep_excerpt:
+                os.remove(excerpt_infile)
+
 
     #------------------------------------
     # normalize
@@ -489,6 +655,44 @@ class Spectrogrammer(object):
         freq_scale = list(np.arange(0,max_freq,freq_band))
         time_scale = list(np.arange(num_times))
         return(freq_scale, time_scale)
+
+    #------------------------------------
+    # compute_timeticks 
+    #-------------------
+    
+    def compute_timeticks(self, framerate, spectrogram_t):
+        '''
+        Given a spectrogram, compute the x-axis
+        time ticks in seconds, minutes, and hours.
+        Return all three in a dict:
+           {'seconds' : num-of-ticks,
+            'minutes' : num-of-ticks,
+            'hours'   : num-of-ticks
+            }
+            
+        Recipient can pick 
+        
+        @param framerate:
+        @type framerate:
+        @param spectrogram_t:
+        @type spectrogram_t:
+        '''
+        
+        # Number of columns in the spectrogram:
+        estimate_every_samples = self.n_fft - self.overlap * self.n_fft
+        estimate_every_secs    = estimate_every_samples / framerate
+        one_sec_every_estimates= 1/estimate_every_secs
+        (_num_freqs, num_estimates) = spectrogram_t.shape
+        num_second_ticks = num_estimates / one_sec_every_estimates
+        num_minute_ticks = num_second_ticks / 60
+        num_hour_ticks   = num_second_ticks / 3600
+        num_time_ticks = {'seconds': int(num_second_ticks),
+                          'minutes': int(num_minute_ticks),
+                          'hours'  : int(num_hour_ticks)
+                          }
+        
+        #time_labels       = np.array(range(num_timeticks))
+        return num_time_ticks
                         
     #------------------------------------
     # get_label_filename 

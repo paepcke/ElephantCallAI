@@ -21,7 +21,6 @@ from plotting.plotter import PlotterTasks
 from precision_recall_from_wav import PerformanceResult
 from precision_recall_from_wav import PrecRecComputer
 
-
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -34,14 +33,60 @@ class PreprocessingCalibration(object):
     def __init__(self,
                  in_wav_file,
                  labelfile,
-                 overlap_percentages,
-                 thresholds_db,
-                 low_freqs,
-                 high_freqs,
+                 overlap_percentages=1,
+                 thresholds_db=-40,
+                 low_freqs=10,
+                 high_freqs=150,
                  spectrogram_freq_cap=AmplitudeGater.spectrogram_freq_cap,
                  outfile_dir='/tmp',
                  spectrogram=None,
                  logfile=None):
+        '''
+        Run a series of experiments, and save the result
+        Each experiment uses a different combination of 
+        parameters.
+        
+        @param in_wav_file: wav file to experiment with
+        @type in_wav_file: str
+        @param labelfile: txt file of truth labels (elephant locations)
+            usually created via Raven 
+        @type labelfile: str
+        @param overlap_percentages: one or more values for how much
+            predicted time periods of el calls must overlap with 
+            the true range to be counted as successful prediction
+        @type overlap_percentages: {int|[int]}
+        @param thresholds_db: dB below which all audio is set to zero.
+            Currently, dB is relative to signal RMS. Must be a negative
+            number. Low lower it is, the less signal is removed
+        @type thresholds_db: int
+        @param low_freqs: one or more frequencies to use as lower
+            bounds of the bandpass filter that is applied to the 
+            input before further processing.
+        @type low_freqs: {int|[int]}
+        @param high_freqs: one or more frequencies to use as upper
+            bounds of the bandpass filter that is applied to the 
+            input before further processing.
+        @type upper_freqs: {int|[int]}
+        @param spectrogram_freq_cap: highest frequency included in the
+            spectrogram
+        @type spectrogram_freq_cap: {int|[int]}
+        @param outfile_dir: where the various result files will be
+            written
+        @type outfile_dir: str
+        @param spectrogram: whether or not a spectrogram is 
+            created, and written to an npy file
+        @type spectrogram: bool
+        @param logfile: file where log is written, instead of
+            to stdout
+        @type logfile: str
+        '''
+        
+        if type(low_freqs) != list:
+            low_freqs = [low_freqs]
+        if type(high_freqs) != list:
+            high_freqs = [high_freqs]
+        if type(thresholds_db) != list:
+            thresholds_db = [thresholds_db]
 
         # Make sure the corresponding low/high freqs
         # to try for the bandpass filter are suitable:

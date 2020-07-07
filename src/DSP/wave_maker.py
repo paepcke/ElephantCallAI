@@ -14,8 +14,13 @@ All .wav files in the subdirs are recursively included.
 '''
 import argparse
 import os
-import sys
 import shutil
+import sys
+import time
+
+from scipy.io import wavfile
+import torch
+import torchaudio
 
 from amplitude_gating import AmplitudeGater
 from elephant_utils.logging_service import LoggingService
@@ -40,6 +45,9 @@ class WavMaker(object):
                  copy_label_files=True,
                  low_freq=10,
                  high_freq=50,
+                 spectrogram_freq_cap=150, # Hz
+                 spectrogram_dest=None,
+                 limit=None,
                  logfile=None
                  ):
         '''
@@ -67,22 +75,33 @@ class WavMaker(object):
             self.log.info(f"Todo: {num_wav_files} .wav files")
 
         files_done = 0
-        
+        #*************
+        transformer = torchaudio.transforms.Spectrogram(n_fft=4096) 
+        #*************
         for file_info in files_info_todo:
             
             # Reconstruct the full .wav file path
-            infile = os.path.join(file_info['outdir'], file_info['wav'])
+            infile = os.path.join(file_info['dir'], file_info['wav'])
             if not os.path.isfile(infile):
                 # At this point we should only be seeing existing .wav files:
                 self.log.warn(f"File {infile} does not exist or is a directory.")
                 continue
 
+            #************
+            start_time = time.time()
+            sig = (framerate, sig) = wavfile.read(infile)
+            spect_t = transformer(torch.Tensor(sig))
+            print(f"{time.time()-start_time} secs")
+            continue
+            #************
             self.log.info(f"Processing {infile}...")
             try:
                 gater = AmplitudeGater(infile,
                                        amplitude_cutoff=threshold_db,
                                        low_freq=low_freq,
                                        high_freq=high_freq,
+                                       spectrogram_freq_cap=spectrogram_freq_cap,
+                                       spectrogram_dest=spectrogram_dest,
                                        outdir=outdir
                                        )
             except Exception as e:
@@ -100,7 +119,14 @@ class WavMaker(object):
                     # We already warned above:
                     pass
             files_done += 1
-            self.log.info(f"\nBatch gated {files_done} wav files.")
+            if limit is not None and (files_done >= limit):
+                self.log_info(f"Completed {files_done}, completing the limit of {limit}")
+                break
+            if files_done > 0 and (files_done % 10) == 0:
+                if limit is not None:
+                    self.log.info(f"\nBatch gated {files_done} of {limit} wav files.")
+                else:
+                    self.log.info(f"\nBatch gated {files_done} of {len(files_info_todo)} wav files.")
 
     #------------------------------------
     # get_files_todo_info 
@@ -228,9 +254,23 @@ if __name__ == '__main__':
                         default=50,
                         help='high end of front end bandpass filter; default 50Hz'
                         );
+    parser.add_argument('-s', '--spectrofreqcap',
+                        type=int,
+                        default=150,
+                        help='highest frequencies to keep in the spectrograms; default 150Hz'
+                        );
+    parser.add_argument('-d', '--spectrodest',
+                        help='fully qualified log file name to dir where spectrograms will be placed. Default: /tmp',
+                        default='/tmp');
+    parser.add_argument('-x', '--limit',
+                        type=int,
+                        default=None,
+                        help='maximum number of wav files to process; default: all'
+                        );
     parser.add_argument('infiles',
                         nargs='+',
                         help='Repeatable: .wav input files')
+
     args = parser.parse_args();
     
     if args.threshold > 0:
@@ -240,5 +280,8 @@ if __name__ == '__main__':
     WavMaker(args.infiles,
              outdir=args.outdir,
              threshold_db=args.threshold,
+             spectrogram_freq_cap=args.spectrofreqcap,
+             spectrogram_dest=args.spectrodest,
+             limit=args.limit,
              logfile=args.logfile
              )

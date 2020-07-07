@@ -48,7 +48,7 @@ import numpy.ma as ma
 from plotting.plotter import Plotter
 from plotting.plotter import PlotterTasks
 
-from dsp_utils import PrecRecFileTypes, DSPUtils
+from dsp_utils import DSPUtils
 
 class FrequencyError(Exception):
     pass
@@ -68,7 +68,6 @@ class AmplitudeGater(object):
     #------------------------------------
     # Constructor 
     #-------------------    
-
     def __init__(self,
                  infile,
                  amplitude_cutoff=-40,   # dB of peak
@@ -78,7 +77,7 @@ class AmplitudeGater(object):
                  normalize=True,
                  logfile=None,
                  framerate=None,  # Only used for testing.
-                 spectrogram_outfile=None,
+                 spectrogram_dest=None,
                  outdir=None,
                  outfile=None,
                  testing=False
@@ -122,10 +121,12 @@ class AmplitudeGater(object):
             Can be set here for testing. Samples/sec
         @type framerate: int
 
-        @param spectrogram_outfile: optionally a file to which a
+        @param spectrogram_dest: optionally a file to which a
             spectrogram of the entire noise-gated result is written.
-            If None, no spectrogram is created.
-        @type spectrogram_outfile: {None | str}
+            If None, no spectrogram is created. If a directory, a
+            name will be constructed by appending '_spectrogram'
+            to the input file before the extension
+        @type spectrogram_dest: {None | str}
 
         @param logfile: file where to write logs; Default: stdout
         @type logfile: str
@@ -159,6 +160,9 @@ class AmplitudeGater(object):
         fileroot   = os.path.basename(path)
         if outfile is None:
             outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
+        if os.path.isdir(spectrogram_dest):
+            spectrogram_dest =\
+                f"{os.path.join(spectrogram_dest, fileroot)}_spectrogram.pickle"
 
         try:
             with open(outfile, 'wb') as _fd:
@@ -182,7 +186,8 @@ class AmplitudeGater(object):
             except Exception as e:
                 raise IOError(f"Cannot read .wav file {infile}: {repr(e)}")
 
-        self.plotter = Plotter(self.framerate)
+        
+        self.plotter = Plotter()
 
         if testing:
             self.recording_length_hhmmss = "<unknown>"
@@ -263,7 +268,7 @@ class AmplitudeGater(object):
             gated_samples  = self.amplitude_gate(freq_gated_samples_abs, 
                                                  amplitude_cutoff,
                                                  spectrogram_freq_cap=spectrogram_freq_cap,
-                                                 spectrogram_dest=spectrogram_outfile
+                                                 spectrogram_dest=spectrogram_dest
                                                  )
 
             #************
@@ -281,6 +286,12 @@ class AmplitudeGater(object):
             self.log.info(f"Writing {outfile}...")
             wavfile.write(outfile, self.framerate, gated_samples)
             self.log.info(f"Done writing {outfile}...")
+
+        # Make samples available to caller via 
+        # property 'gated_samples' (see below for its definition):
+        self._gated_samples = gated_samples
+        # Same with path to gated outfile:
+        self._gated_outfile = outfile
         
         if PlotterTasks.has_task('gated_wave_excerpt'):
             
@@ -467,40 +478,31 @@ class AmplitudeGater(object):
             
             # Get a combined frequency x time matrix. The matrix values will
             # be complex: 
-            (freq_labels, time_labels, complex_freq_time) = self.make_spectrogram(gated_samples)
-            # Keep only the complex values:
-            self.log.info("Getting magnitudes of complex frequency values...")  
-            freq_time = np.absolute(complex_freq_time)
-            self.log.info("Done getting magnitudes of complex frequency values.")
+            (freq_labels, time_labels, freq_time_dB) = self.make_spectrogram(gated_samples)
             
             if spectrogram_freq_cap is not None:
                 self.log.info(f"Removing frequencies above {spectrogram_freq_cap}Hz...")
                 # Remove all frequencies above, and including
                 # spectrogram_freq_cap:
                 (new_freq_labels, capped_spectrogram) = self.filter_spectrogram(freq_labels,
-                                                                                freq_time, 
+                                                                                freq_time_dB, 
                                                                                 [(None, spectrogram_freq_cap)]
                                                                                 )
                 self.log.info(f"Done removing frequencies above {spectrogram_freq_cap}Hz.")
             else:
-                capped_spectrogram = freq_time
+                capped_spectrogram = freq_time_dB
                 new_freq_labels    = freq_labels
         
             # Save the spectrogram to file:
-            self.log.info(f"Saving spectrogram to {spectrogram_dest}...")
-            np.save(spectrogram_dest, capped_spectrogram)
-            freq_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest, 
-                                                              PrecRecFileTypes.FREQ_LABELS)
-            time_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest,
-                                                              PrecRecFileTypes.TIME_LABELS)
-            np.save(freq_labels_file, new_freq_labels)
-            np.save(time_labels_file, time_labels)
-            self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
+            DSPUtils.save_spectrogram(capped_spectrogram, 
+                                      spectrogram_dest, 
+                                      new_freq_labels, 
+                                      time_labels)
         
         if spectrogram_dest and PlotterTasks.has_task('spectrogram_excerpts') is not None:
             # The matrix is large, and plotting takes forever,
             # so define a matrix excerpt:
-            self.plotter.plot_spectrogram_from_audio(new_freq_labels, 
+            self.plotter.plot_spectrogram_from_magnitudes(new_freq_labels, 
                                           time_labels,
                                           capped_spectrogram)
 
@@ -600,27 +602,6 @@ class AmplitudeGater(object):
         return (new_freq_labels, new_freq_time)
 
     #------------------------------------
-    # save_spectrogram 
-    #-------------------
-    
-    def save_spectrogram(self, 
-                         spectrogram, 
-                         spectrogram_dest,
-                         freq_labels,
-                         time_labels
-                         ):
-        # Save the spectrogram to file:
-        self.log.info(f"Saving spectrogram to {spectrogram_dest}...")
-        np.save(spectrogram_dest, spectrogram)
-        freq_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest, 
-                                                          PrecRecFileTypes.FREQ_LABELS)
-        time_labels_file = DSPUtils.prec_recall_file_name(spectrogram_dest,
-                                                          PrecRecFileTypes.TIME_LABELS)
-        np.save(freq_labels_file, freq_labels)
-        np.save(time_labels_file, time_labels)
-        self.log.info(f"Done saving spectrogram to {spectrogram_dest}.")
-
-    #------------------------------------
     # freq_filter 
     #-------------------
     
@@ -677,7 +658,10 @@ class AmplitudeGater(object):
 
 
         if PlotterTasks.has_task('filter_response') is not None:
-            self.plotter.plot_frequency_response(sos, cutoffs, title)
+            self.plotter.plot_frequency_response(sos,
+                                                 self.framerate, 
+                                                 cutoffs, 
+                                                 title)
         new_sig = sosfilt(sos, data)
         
         return new_sig
@@ -965,7 +949,10 @@ class AmplitudeGater(object):
 
     def make_spectrogram(self, data):
         '''
-        Given data, compute a spectrogram.
+        Given data, compute a spectrogram. Returned
+        is a dB scaled spectrogram of the spectral power.
+        I.e. values are squared, then dB is computed relative
+        to highest value in the spectrogram.
 
         Assumptions:
             o self.framerate contains the data framerate
@@ -1016,8 +1003,9 @@ class AmplitudeGater(object):
                                                                 #nperseg=int(self.framerate)
                                                                 )
         self.log.info("Done creating spectrogram.")
-                
-        return (freq_labels, time_labels, complex_freq_by_time)
+        freq_time = np.absolute(complex_freq_by_time)
+        freq_time = DSPUtils.spectrogram_to_db(freq_time)
+        return (freq_labels, time_labels, freq_time)
         
     #------------------------------------
     # make_inverse_spectrogram 
@@ -1052,6 +1040,19 @@ class AmplitudeGater(object):
             
         # Nothing found, return start of array:
         return 0
+
+    #------------------------------------
+    # Readers/Writers
+    #-------------------
+    
+    @property
+    def gated_samples(self):
+        return self._gated_samples
+
+    @property
+    def gated_outfile(self):
+        return self._gated_outfile
+
 
 # --------------------------- Burst -----------------------
 
@@ -1218,7 +1219,7 @@ if __name__ == '__main__':
         for plot_name in args.plot:
             PlotterTasks.add_task(plot_name)
         #(root,extension) = os.path.splitext(args.outfile)
-        #spectrogram_outfile = os.path.join(root, '.npy')
+        #spectrogram_dest = os.path.join(root, '.npy')
     
     # AmplitudeGater('/Users/paepcke/tmp/nn01c_20180311_000000.wav',
     #                plot_result=True)
@@ -1228,7 +1229,7 @@ if __name__ == '__main__':
                        low_freq=args.lowfreq,
                        high_freq=args.highfreq,
                        spectrogram_freq_cap=args.spectrofilter,
-                       spectrogram_outfile=args.outfilespectrogram,
+                       spectrogram_dest=args.outfilespectrogram,
                        normalize=not args.raw,
                        outdir=args.outdir,
                        logfile=args.logfile,
