@@ -553,7 +553,7 @@ if __name__ == '__main__':
 
     
     call_counter = Value("i", 0) # Shared thread variable to count the number of postive call examples
-    pool = multiprocessing.Pool()
+    pool = multiprocessing.Pool(20)
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     start_time = time.time()
     pool.map(partial(wrapper_processPos, out_dir), file_pairs)
@@ -610,7 +610,7 @@ if __name__ == '__main__':
     print ("Size: ", len(file_pairs))
     #start_time = time.time()
     
-    pool = multiprocessing.Pool()
+    pool = multiprocessing.Pool(20)
     print('Multiprocessing on {} CPU cores'.format(os.cpu_count()))
     start_time = time.time()
     pool.map(partial(wrapper_processNeg, out_dir, samples_per_file), file_pairs)
