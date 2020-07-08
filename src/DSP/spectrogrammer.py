@@ -18,8 +18,10 @@ from amplitude_gating import AmplitudeGater
 from elephant_utils.logging_service import LoggingService
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from plotting.plotter import Plotter
 from wave_maker import WavMaker
+from deprecated_code.process_rawdata import FREQ_MAX
 
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
@@ -54,8 +56,7 @@ class Spectrogrammer(object):
     def __init__(self, 
                  infiles,
                  clean_spectrogram=False,
-                 max_f=FREQ_MAX,
-                 label_mask_files=None,
+                 label_files=None,
                  start_sec=0,
                  end_sec=None,
                  normalize=False,
@@ -63,7 +64,7 @@ class Spectrogrammer(object):
                  threshold_db=-40, # dB
                  low_freq=10,      # Hz 
                  high_freq=50,     # Hz
-                 spectrogram_freq_cap=150,
+                 spectrogram_freq_cap=FREQ_MAX,
                  plot=True,
                  model_input_plot=False,
                  nfft=None,
@@ -77,8 +78,8 @@ class Spectrogrammer(object):
         @type clean_spectrogram: bool
         @param max_f: max frequency to keep in the spectrogram(s)
         @type max_f: float
-        @param label_mask_files: text files with manually produced labels
-        @type label_mask_files: str
+        @param label_files: text files with manually produced labels
+        @type label_files: str
         @param start_sec: start second in the wav file
         @type start_sec: int
         @param end_sec: end second in the wav file
@@ -144,21 +145,23 @@ class Spectrogrammer(object):
                     sys.exit(1)
                 spect = freq_time_dB
             else:
-                # Infile is a .npy spectrogram file:
+                # Infile is a .pickle spectrogram file:
                 label_mask = None
                 self.log.info(f"Loading spectrogram file {infile}...")
-                spect = np.load(infile)
+                try:
+                    spect = pd.read_pickle(infile)
+                except Exception as e:
+                    print(f"Could not read spectrogram {infile}: {repr(e)}")
+                    sys.exit(1)
+                freq_labels = spect.index
+                time_labels = spect.columns
                 self.log.info(f"Done loading spectrogram file {infile}.")
-
-                self.log.info("Computing freq and time ticks...")
-                (freq_labels, time_labels) = self.make_time_freq_seqs(max_f, spect)
-                self.log.info("Done computing freq and time ticks.")
                 
-                if label_mask_files is not None:
+                if label_files is not None:
                     # One or more .npy label masks was provided. See
                     # any of them match the .npy infile by name pattern:
                     label_file = self.get_label_filename(infile)
-                    if label_file in label_mask_files:
+                    if label_file in label_files:
                         self.log.info("Reading label mask...")
                         label_mask = np.load(label_file)
 
@@ -179,8 +182,8 @@ class Spectrogrammer(object):
                     title=f"{os.path.basename(infile)}")
                 
             if model_input_plot:
-                if label_mask_files is None:
-                    self.log.err("The model_input_plot option requires label_mask_files to be specified.")
+                if label_files is None:
+                    self.log.err("The model_input_plot option requires label_files to be specified.")
                 self.plot_spectrogram_with_labels_truths(clean_spect, 
                                                  labels=label_mask,
                                                  title=os.path.basename(infile), 
@@ -757,12 +760,6 @@ if __name__ == '__main__':
                              'of the resulting spectrogram') 
                         # Default corresponds to 21s
 
-    parser.add_argument('--max_f', 
-                        dest='max_freq', 
-                        type=int, 
-                        default=Spectrogrammer.FREQ_MAX, 
-                        help='Deterimes the maximum frequency band in spectrogram')
-    
     parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
                         help='Deterimes the padded window size that we ' +
                              'want to give a particular grid spacing (i.e. 1.95hz')
@@ -772,7 +769,13 @@ if __name__ == '__main__':
                         default=8000,
                         help='Framerate at which original .wav file was recorded; def: 8000')
 
-    parser.add_argument('-s', '--start', 
+    parser.add_argument('--max_f', 
+                    dest='max_freq', 
+                    type=int, 
+                    default=Spectrogrammer.FREQ_MAX, 
+                    help='Deterimes the maximum frequency band in spectrogram')
+
+parser.add_argument('-s', '--start', 
                         type=int, 
                         default=0, 
                         help='Seconds into recording when to start spectrogram')
@@ -819,7 +822,7 @@ if __name__ == '__main__':
 
     parser.add_argument('infiles',
                         nargs='+',
-                        help="Input .wav/.npy file(s)"
+                        help="Input .wav/.pickle file(s)"
                         )
 
     args = parser.parse_args();
@@ -833,6 +836,7 @@ if __name__ == '__main__':
                    plot=args.plot,
                    model_input_plot=args.modelplot,
                    label_mask_files=args.labelfiles,
+                   spectrogram_freq_cap=args.max_freq,
                    nfft=args.nfft
                    )
     # Keep charts up till user kills the windows:
