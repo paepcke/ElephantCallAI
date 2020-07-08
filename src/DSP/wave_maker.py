@@ -120,7 +120,7 @@ class WavMaker(object):
                     pass
             files_done += 1
             if limit is not None and (files_done >= limit):
-                self.log_info(f"Completed {files_done}, completing the limit of {limit}")
+                self.log.info(f"Completed {files_done}, completing the limit of {limit}")
                 break
             if files_done > 0 and (files_done % 10) == 0:
                 if limit is not None:
