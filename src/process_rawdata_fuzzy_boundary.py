@@ -361,6 +361,9 @@ def generate_data_chunks(audio_file, label_file, spectrogram_info, num_neg=0):
         print ("File size", raw_audio.shape)
     except:
         print("FILE Failed", audio_file)
+        # Let us try this for now to see if it stops the failing
+        return [], [], []
+
     # No calls to extract
     if label_file is None and num_neg == 0:
         return [], [], []
