@@ -1622,7 +1622,7 @@ if __name__ == '__main__':
         train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
 
     # Probably make call repeats and neg samples default to 1 for test data!!!!
-    test_data_path = "/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(1) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+    test_data_path = "/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
                 "_CallRepeats_" + str(1)
     if include_boundaries:
         test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
