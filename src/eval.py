@@ -209,12 +209,12 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
         (if is_truth = True) by the call defined by
         [s2: e2 + 1] with given threshold.
     """
-    print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
-    print ("and s2 = {}, e2 = {}".format(s2, e2))
+    #print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
+    #print ("and s2 = {}, e2 = {}".format(s2, e2))
     len_source = e1 - s1 + 1
-    print ("Len Test Call: {}".format(len_source))
+    #print ("Len Test Call: {}".format(len_source))
     test_call_length = e2 - s2 + 1
-    print ("Len Compare Call: {}".format(test_call_length))
+    #print ("Len Compare Call: {}".format(test_call_length))
     # Overlap check
     if s2 < s1: # Test call starts before the source call
         # The call is larger than our source call
@@ -225,29 +225,29 @@ def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
             # call, but we must make sure that the source covers at least
             # overlap xs this call. Kind of edge case should watch this
             elif len_source >= max(threshold * test_call_length, 1): 
-                print ('Prediction = portion of GT')
+                #print ('Prediction = portion of GT')
                 return True
             else:
                 # NOTE this is an edge case and should be considered. We probably out of consistancy should not
                 # Include this as a good predction because it is too small!
-                print ("Prediction = Smaller than threshold portion of GT") 
+                #print ("Prediction = Smaller than threshold portion of GT") 
                 return True
         else:
             overlap = e2 - s1 + 1
-            print ("Test call starts before source call")
+            #print ("Test call starts before source call")
             if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
                 return True
             elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
                 return True
     elif e2 > e1: # Call ends after the source call
         overlap = e1 - s2 + 1
-        print ('Test call ends after source')
+        #print ('Test call ends after source')
         if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
             return True
         elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
             return True
     else: # We are completely in the call
-        print ('Test call completely in source call')
+        #print ('Test call completely in source call')
         if not is_truth:
             return True
         elif test_call_length >= max(threshold * len_source, 1):
@@ -518,8 +518,8 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
     i = 0
     # How can I parralelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
-        if (i % 1000 == 0):
-            print ("Chunk number " + str(i))
+        #if (i % 1000 == 0):
+        #    print ("Chunk number " + str(i))
 
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
         # Transform the slice 
@@ -539,7 +539,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
 
     # Do the last one if it was not covered
     if (spect_idx - jump + chunk_size != spectrogram.shape[1]):
-        print ('One final chunk!')
+        #print ('One final chunk!')
         spect_slice = spectrogram[:, spect_idx: , :]
         # Transform the slice 
         # Should use the function from the dataset!!
