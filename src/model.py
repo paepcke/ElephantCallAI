@@ -1226,6 +1226,7 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
 
     # Check this
     last_validation_accuracies = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
+    last_validation_fscores = deque(maxlen=parameters.TRAIN_STOP_ITERATIONS)
 
     try:
         for epoch in range(starting_epoch, num_epochs):
@@ -1302,11 +1303,18 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
                     valid_epoch_fscore = running_fscore / iterations
                     valid_non_zero = running_non_zero
                     last_validation_accuracies.append(valid_epoch_acc)
-                    
-                if phase == 'valid' and valid_epoch_acc > best_valid_acc:
-                    best_valid_acc = valid_epoch_acc
-                    best_valid_fscore = valid_epoch_fscore
-                    best_model_wts = model.state_dict()
+                    last_validation_fscores.append(valid_epoch_fscore)
+                
+                # Keep models based on best valid f-score not accuracy! 
+                if phase == 'valid':
+                    if valid_epoch_acc > best_valid_acc:
+                        best_valid_acc = valid_epoch_acc
+                        #best_model_wts = model.state_dict()
+
+                    if valid_epoch_fscore > best_valid_fscore:
+                        best_valid_fscore = valid_epoch_fscore
+                        best_model_wts = model.state_dict()
+
 
             print ('Epoch [{}/{}] Train Non-Zero: {} Val Non-Zero: {}'.format(epoch, num_epochs - 1, train_non_zero, valid_non_zero))
             print('Epoch [{}/{}] Training loss: {:.6f} acc: {:.4f} ' 
@@ -1326,9 +1334,12 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
 
             scheduler.step()
 
+            # Maybe stop based on f_score!!!
             # Check whether to early stop due to decreasing validation acc
-            if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
-                print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
+            #if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+            if all([val_fscore < best_valid_fscore for val_fscore in last_validation_fscores]):
+                #print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
+                print("Early stopping because last {} validation f-scores have been {} and less than best val f-score {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_fscores, best_valid_fscore))
                 break
 
     except KeyboardInterrupt:
