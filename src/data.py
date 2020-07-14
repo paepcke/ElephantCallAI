@@ -235,8 +235,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.scale = scale
         self.include_boundaries = include_boundaries
 
-        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        self.initialize_labels()
+        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        #self.initialize_labels()
+        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
@@ -254,6 +257,58 @@ class ElephantDatasetFuzzy(data.Dataset):
             self.labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
             if self.include_boundaries:
                 self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+    def set_pos_features(self, pos_features):
+        self.pos_features = pos_features
+        print("Length of pos_features is now {} ".format(len(self.pos_features)))
+        self.intialize_data(init_pos=True, init_neg=False)
+
+    def set_neg_features(self, neg_features):
+        self.neg_features = neg_features
+        print("Length of neg_features is now {} ".format(len(self.neg_features)))
+        self.intialize_data(init_pos=False, init_neg=True)
+
+    def set_featues(self, pos_features, neg_features):
+        self.pos_features = pos_features
+        self.neg_features = neg_features
+        print("Length of pos_features is now {} ".format(len(self.pos_features)))
+        print("Length of neg_features is now {} ".format(len(self.neg_features)))
+        self.intialize_data(init_pos=True, init_neg=True)
+
+    def intialize_data(self, init_pos=True, init_neg=True):
+        """
+            Initialize both the positive and negative label and boundary
+            mask data arrays if indicated by the initialization flags 
+            'init_pos' and 'init_neg'. After initializing any necessary
+            data, combine the positive and negative examples!
+        """
+        # Initialize the positive examples
+        if init_pos:
+            self.pos_labels = []
+            self.pos_boundary_masks = []
+            for feature_path in self.pos_features:
+                feature_parts = feature_path.split("features")
+                # Just out of curiosity
+                self.pos_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
+                if self.include_boundaries:
+                    self.pos_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+        # Initialize the negative examples
+        if init_neg:
+            self.neg_labels = []
+            self.neg_boundary_masks = []
+            for feature_path in self.neg_features:
+                feature_parts = feature_path.split("features")
+                # Just out of curiosity
+                self.neg_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
+                if self.include_boundaries:
+                    self.neg_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+        # Combine the positive and negative examples!
+        self.features = self.pos_features + self.neg_features
+        self.labels = self.pos_labels + self.neg_labels
+        if self.include_boundaries:
+            self.boundary_masks = self.pos_boundary_masks + self.neg_boundary_masks
 
 
     def __len__(self):

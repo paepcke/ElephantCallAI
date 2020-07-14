@@ -463,20 +463,20 @@ if __name__ == '__main__':
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
             full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
-            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[1])
+            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[0])
             print("Shapes of full spectrograms and labels")
             print(full_24_hr_spectogram.shape)
             print(labels.shape)
 
             # Save the individual files seperately for each location!
             num_chunks = 0
-            for i in range(math.floor(full_24_hr_spectogram.shape[1] / 256)):
-                feature = full_24_hr_spectogram[:, i * 256:(i + 1) * 256]
+            for i in range(math.floor(full_24_hr_spectogram.shape[0] / 256)):
+                feature = full_24_hr_spectogram[i * 256:(i + 1) * 256, :]
                 label = labels[i * 256:(i + 1) * 256]
 
-                if feature.shape[1] != 256:
+                if feature.shape[0] != 256:
                     print("MAJOR PROBLEMSSSS WHY DOESNT MULTIPROCESSING SURFACE ERRORS")
-                assert feature.shape[1] == 256
+                assert feature.shape[0] == 256
                 assert label.shape[0] == 256
 
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
