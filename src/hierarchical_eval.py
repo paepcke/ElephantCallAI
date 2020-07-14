@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import os
 import argparse
+from scipy.ndimage import gaussian_filter1d
 
 import parameters
 from data import get_loader, ElephantDatasetFull
