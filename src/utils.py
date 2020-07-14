@@ -49,9 +49,6 @@ def is_eval_epoch(cur_epoch):
 def sigmoid(x):                                        
     return 1 / (1 + np.exp(-x))
 
-def get_f_score(binary_preds, labels):
-    return sklearn.metrics.f1_score(labels, binary_preds)
-
 def calc_accuracy(binary_preds, labels):
     accuracy = (binary_preds == labels).sum() / labels.shape[0]
     return accuracy
