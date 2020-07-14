@@ -4,6 +4,7 @@ import torch.nn as nn
 import os
 import argparse
 from scipy.ndimage import gaussian_filter1d
+from sklearn.metrics import f1_score
 
 import parameters
 from data import get_loader, ElephantDatasetFull
@@ -542,7 +543,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         # Call Recall False Negatives
         true_pos_recall, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
 
-        f_score = get_f_score(binary_preds, labels) # just for the postive class
+        f_score = f1_score(labels, binary_preds)
         accuracy = calc_accuracy(binary_preds, labels)
 
         results[data_id] = {'true_pos': true_pos,
