@@ -150,25 +150,26 @@ class AmplitudeGater(object):
         @type testing: bool
         '''
 
-        if outdir is None:
-            outdir = os.path.dirname(infile)
-        # Make sure the outfile can be opened for writing,
-        # before going into lengthy computations:
-
-        # Replace input wav file outdir with specified outdir:
-        (path,ext) = os.path.splitext(infile)
-        fileroot   = os.path.basename(path)
-        if outfile is None:
-            outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
-        if os.path.isdir(spectrogram_dest):
-            spectrogram_dest =\
-                f"{os.path.join(spectrogram_dest, fileroot)}_spectrogram.pickle"
-
-        try:
-            with open(outfile, 'wb') as _fd:
-                pass
-        except Exception as e:
-            raise IOError(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
+        if not testing:
+            if outdir is None:
+                outdir = os.path.dirname(infile)
+            # Make sure the outfile can be opened for writing,
+            # before going into lengthy computations:
+    
+            # Replace input wav file outdir with specified outdir:
+            (path,ext) = os.path.splitext(infile)
+            fileroot   = os.path.basename(path)
+            if outfile is None:
+                outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
+            if os.path.isdir(spectrogram_dest):
+                spectrogram_dest =\
+                    f"{os.path.join(spectrogram_dest, fileroot)}_spectrogram.pickle"
+    
+            try:
+                with open(outfile, 'wb') as _fd:
+                    pass
+            except Exception as e:
+                raise IOError(f"Outfile cannot be access for writing; doing nothing: {repr(e)}")
                 
 
         AmplitudeGater.log = LoggingService(logfile=logfile)

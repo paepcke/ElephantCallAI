@@ -197,7 +197,7 @@ class TestPrecisionRecall(unittest.TestCase):
         # samples:
         label_start_stops = label_start_stops / self.framerate
         label_file_name = self.create_label_file(label_start_stops)
-        signal_desc = SignalTreatmentDescriptor(-20,300)
+        signal_desc = SignalTreatmentDescriptor(-20,100,300,10)
         perf_res = self.prec_rec_computer.compute_performance(signal_desc,
                                                               voltages, 
                                                               label_file_name, 
@@ -367,7 +367,7 @@ class TestPrecisionRecall(unittest.TestCase):
 
             # Create one line of 'label' for each
             # row in the given start-stop array:
-            generic_label_entry = "1	Spectrogram 1	1	1.293	6.464999999991385	19.7	43.3	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	1.293	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al"
+            generic_label_entry = "1	Spectrogram 1	1	1.293	6.464999999991385	19.7	43.3	L:\\ELP\\Projects\\GabonBais\\gb_sounds\\ceb1_oct2011\\CEB1_20111107_000000.wav	1.293	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al"
             # Turn the string into an array of strings;
             generic_label_entry_arr = [str(entry) for entry in generic_label_entry.split('\t')]
             

@@ -162,7 +162,10 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         @type logFile: str
         '''
 
-        LoggingService.logger = logging.getLogger(os.path.basename(__file__))
+        # Make the name of the logger be the name
+        # of this file, without the .py extension:
+        (logger_name, _ext) = os.path.splitext(os.path.basename(__file__))
+        LoggingService.logger = logging.getLogger(logger_name)
 
         # Create file handler if requested:
         if logFile is not None:

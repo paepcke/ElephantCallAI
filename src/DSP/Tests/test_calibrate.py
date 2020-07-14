@@ -6,10 +6,8 @@ Created on Apr 5, 2020
 
 import csv
 import os
-import statistics
 import tempfile
 import unittest
-from collections import OrderedDict
 
 import numpy as np
 
@@ -111,7 +109,7 @@ class TestCalibrate(unittest.TestCase):
         
         # Create a temp file for each test to use:
         tmp_file_fd = tempfile.NamedTemporaryFile(mode='w', delete=False)
-        self.tmp_file_name = tmp_file_fd.name + '.tsv'
+        self.tmp_file_name = tmp_file_fd.name + '.pickle'
         tmp_file_fd.close()
 
     #------------------------------------
@@ -122,6 +120,13 @@ class TestCalibrate(unittest.TestCase):
         try:
             # If temp file still exists, get rid of it:
             os.remove(self.tmp_file_name)
+        except Exception:
+            pass
+        # Some tests use tmp_file_name with .pickle removed,
+        # and .tsv added instead:
+        (root, _ext) = os.path.splitext(self.tmp_file_name)
+        try:
+            os.remove(root + '.tsv')
         except Exception:
             pass
 
@@ -137,9 +142,8 @@ class TestCalibrate(unittest.TestCase):
         retrieved_exp = next(self.experiment.load(self.tmp_file_name))
         self.assertTrue(self.experiments_equality(retrieved_exp, self.experiment))
         
-        # Try saving two experiments (using the same instance):
+        # Save a second experiment to the same file (using the same instance):
         self.experiment.save(outfile=self.tmp_file_name, append=True)
-        self.experiment.save(outfile=self.tmp_file_name, append=False)
         
         retrieved_experiments = [exp for exp in Experiment.load(self.tmp_file_name)]
         self.assertEqual(len(retrieved_experiments), 2)
@@ -155,8 +159,13 @@ class TestCalibrate(unittest.TestCase):
     def test_to_flat_tsv(self):
         # Save an Experiment instance  to a .tsv file:
         
-        self.experiment.to_flat_tsv(include_col_header=True, outfile=self.tmp_file_name, append=True)
-        with open(self.tmp_file_name, 'r') as tmp_file_fd:
+        # Want tmp file to end not in .pickle, but in .tsv:
+        (root, _ext) = os.path.splitext(self.tmp_file_name)
+        tmp_file_name = root + '.tsv'
+        self.experiment.to_flat_tsv(include_col_header=True, 
+                                    outfile=tmp_file_name, 
+                                    append=True)
+        with open(tmp_file_name, 'r') as tmp_file_fd:
             reader = csv.reader(tmp_file_fd, delimiter='\t')
             col_header = next(reader)
             col_header_set = set(col_header)
@@ -195,7 +204,7 @@ class TestCalibrate(unittest.TestCase):
         # Write our known Experiment instance to tsv:
         self.experiment.save(outfile=self.tmp_file_name, append=True)
         # Make a new instance, and read that tsv file:
-        experiment_inst_list = Experiment.instances_from_tsv(self.tmp_file_name)
+        experiment_inst_list = Experiment.instances_from_saved(self.tmp_file_name)
 
         restored_experiment = experiment_inst_list[0]
         for (prop_name, prop_value) in self.experiment.items():

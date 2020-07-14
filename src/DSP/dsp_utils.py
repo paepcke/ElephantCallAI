@@ -147,6 +147,11 @@ class DSPUtils(object):
         
         @param df_filename: location of the pickled df
         @type df_filename: str
+        @return: spectrogram DataFrame: columns are 
+            times in seconds, index are frequency bands
+        @rtype pandas.DataFrame
+        @raise FileNotFoundError: when pickle file not found
+        @raise pickle.UnpicklingError
         '''
 
         # Safely read the pickled DataFrame

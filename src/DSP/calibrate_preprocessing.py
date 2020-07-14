@@ -528,7 +528,7 @@ class Experiment(OrderedDict):
         
         That is in contrast to method save(), which preserves
         the ability to reconstitute an Experiment instance via
-        instances_from_tsv()
+        instances_from_saved()
 
         @param include_col_header:
         @type include_col_header:
@@ -580,8 +580,6 @@ class Experiment(OrderedDict):
 
         try:
             if outfile is not None:
-                if not outfile.endswith('.tsv'):
-                    outfile += '.tsv'
                 fd = open(outfile, 'a' if append else 'w')
             else:
                 fd = sys.stdout
@@ -605,13 +603,21 @@ class Experiment(OrderedDict):
         
         May be called multiple times to save
         multiple experiments, if append is set
-        to True
+        to True. Always saves a list of experiment(s)
          
-        @param outfile:
-        @type outfile:
+        @param outfile: name of destination file. Should end in .pickle
+        @type outfile: str
         '''
-        with open(outfile, 'wb' if append else 'ab') as fd:
-            pickle.dump(self,fd)
+        if append and os.path.exists(outfile):
+            # To append we need to read the current
+            # list of Experiment instances, add self
+            # to that list, and re-pickle:
+            experiments_list = list(self.load(outfile))
+        else:
+            experiments_list = []
+        experiments_list.append(self)
+        with open(outfile, 'wb') as fd:
+            pickle.dump(experiments_list,fd)
 
     #------------------------------------
     # load
@@ -621,41 +627,42 @@ class Experiment(OrderedDict):
     def load(cls, fd_or_path):
         '''
         Given an open fd_or_path to a pickeled
-        file, return one exeperiment object.
+        file, return an iterator over all the 
+        experiments saved in that file.
         Can be called multiple times to get 
         successive instances that were all
-        pickled, if fd_or_path is not closed in the between.
-        
-        Raises EOFError when nothing left.
+
+        Raises StopIteration when nothing left.
         
         @param fd_or_path: file object open for 
             binary read (br)
-        @type fd_or_path:
-        @raise EOFERROR: if nothing left in file. 
+        @type fd_or_path: {str|fd}
+        @return: one Experiment instance, if one is left.
+        @rtype: Experiment
+        @raise StopIteration: if no experiment left. 
         '''
         if isinstance(fd_or_path, str):
             fd = open(fd_or_path, 'br')
         try:
-            return pickle.load(fd)
-        except EOFError:
-            return
+            experiments_list = pickle.load(fd)
+        except Exception as e:
+            raise IOError(f"Content of supposed Experiments list is not: {repr(e)}")
+        try:
+            yield from experiments_list
         finally:
-            fd.close()
+            # If we opened the file, close it:
+            if isinstance(fd_or_path, str):
+                fd.close()
 
     #------------------------------------
-    # instances_from_tsv
+    # instances_from_saved
     #-------------------
 
     @classmethod
-    def instances_from_tsv(cls, infile):
+    def instances_from_saved(cls, infile):
         
-        res_obj_list = []
         with open(infile, 'rb') as fd:
-            while True:
-                try:
-                    res_obj_list.append(pickle.load(fd))
-                except EOFError:
-                    return res_obj_list
+            return pickle.load(fd)
             
     #------------------------------------
     # _make_res_obj
