@@ -1,4 +1,5 @@
 import parameters
+import numpy as np
 import torch
 import torch.nn as nn
 import sklearn
@@ -44,6 +45,9 @@ def is_eval_epoch(cur_epoch):
         cur_epoch == 0 or
         (cur_epoch + 1) == parameters.NUM_EPOCHS
     )
+
+def sigmoid(x):                                        
+    return 1 / (1 + np.exp(-x))
 
 def num_correct(logits, labels):
     sig = nn.Sigmoid()
