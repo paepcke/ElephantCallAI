@@ -4,10 +4,18 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 150
+EVAL_PERIOD = 1
 
 ADVERSARIAL_LOOPS = 10
 TRAIN_STOP_ITERATIONS = 30
+# Which metric to track for early stopping
+# and saving the best model
+# Options:
+# 1) acc = accuracy
+# 2) fscore
+TRAIN_MODEL_SAVE_CRITERIA = 'acc'
+
 # Determines number of adversarial samples to discover.
 # This is a number (0, 1] that calculates how
 # many adversarial samples to find based on the size of the
@@ -18,25 +26,30 @@ ADVERSARIAL_SAMPLES = 0.5
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
 
+FALSE_NEGATIVE_THRESHOLD = 10
+
+MODEL_ID = 17
+
+# WE SHOULD PHASE THIS OUT!
 DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "BOUNDARY"
+LOSS = "CE"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.5 
 FOCAL_GAMMA = 15
 FOCAL_ALPHA = 0.25
 
 NEG_SAMPLES = 1
-TEST_NEG_SAMPLES = 2
-CALL_REPEATS = 10
+TEST_NEG_SAMPLES = 1
+CALL_REPEATS = 1
 NORM = "norm"
 SCALE = True
 
 # Flags for how to deal with boundaries!!
 # If > 0 then use boundaries else no boundaries
-BOUNDARY_FUDGE_FACTOR = 2
+BOUNDARY_FUDGE_FACTOR = 0
 INDIVIDUAL_BOUNDARIES = True
 # Determine how to incorperate the boundary
 # into the loss
@@ -45,6 +58,30 @@ INDIVIDUAL_BOUNDARIES = True
 BOUNDARY_LOSS = 'EQUAL'
 # How to weight the boundary slices in [0, 1]
 BOUNDARY_WEIGHT = 0.5
+
+RANDOM_SEED = 8
+DATA_LOADER_SEED = 33
+
+BATCH_SIZE = 32
+
+LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
+LOCAL_TEST_FILES = '../elephant_dataset/Test/'
+LOCAL_FULL_TRAIN = '../elephant_dataset/Train/Full_24_hrs/'
+LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs/'
+
+REMOTE_TRAIN_FILES = '/home/data/elephants/processed_data/Train_nouab/'
+REMOTE_TEST_FILES = "/home/data/elephants/processed_data/Test_nouab/"
+REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/'
+REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs/'
+
+
+#Local
+#SAVE_PATH = '../models/'
+LOCAL_SAVE_PATH = '../models/'
+REMOTE_SAVE_PATH = '/home/data/elephants/models/'
+
+INPUT_SIZE = 77
+OUTPUT_SIZE = 1
 
 HYPERPARAMETERS = {
 0: {
@@ -163,15 +200,3 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         }
 }
-
-RANDOM_SEED = 8
-DATA_LOADER_SEED = 33
-
-BATCH_SIZE = 32
-
-#Local
-SAVE_PATH = '../models/'
-#SAVE_PATH = '/home/data/elephants/models/'
-
-INPUT_SIZE = 77
-OUTPUT_SIZE = 1

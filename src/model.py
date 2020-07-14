@@ -8,7 +8,6 @@ For visualization:
 python model.py visualize <path_to_model>
 """
 
-from torch.utils.data.sampler import SubsetRandomSampler
 import numpy as np
 import torch
 import torch.nn as nn

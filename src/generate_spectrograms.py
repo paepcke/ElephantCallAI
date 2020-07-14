@@ -93,7 +93,7 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
     start_chunk = 0
     i = 0
     while start_chunk + len_chunk < raw_audio.shape[0]:
-        if (i % 10 == 0):
+        if (i % 100 == 0):
             print ("Chunk number " + str(i) + ": " + id)
         [spectrum, freqs, t] = ml.specgram(raw_audio[start_chunk: start_chunk + len_chunk], 
                 NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
