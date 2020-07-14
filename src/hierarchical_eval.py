@@ -7,7 +7,7 @@ import argparse
 import parameters
 from data import get_loader, ElephantDatasetFull
 from visualization import visualize, visualize_predictions
-from utils import sigmoid, get_f_score, calc_accuracy
+from utils import sigmoid, calc_accuracy, get_f_score
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
