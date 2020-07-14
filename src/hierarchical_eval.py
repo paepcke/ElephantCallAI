@@ -7,6 +7,7 @@ import argparse
 import parameters
 from data import get_loader, ElephantDatasetFull
 from visualization import visualize, visualize_predictions
+from utils import sigmoid
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
@@ -93,7 +94,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
         # Transform the slice - this is definitely sketchy!!!! 
         spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
         spect_slice = torch.from_numpy(spect_slice).float()
-        spect_slice.to(parameters.device)
+        spect_slice = spect_slice.to(parameters.device)
 
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
         compressed_out = outputs.view(-1, 1).squeeze()
@@ -123,7 +124,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
         # Should use the function from the dataset!!
         spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
         spect_slice = torch.from_numpy(spect_slice).float()
-        spect_slice.to(parameters.device)
+        spect_slice = spect_slice.to(parameters.device)
 
         outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
         # In the case of ResNet the output is forced to the chunk size
