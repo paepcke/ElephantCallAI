@@ -7,7 +7,7 @@ import argparse
 import parameters
 from data import get_loader, ElephantDatasetFull
 from visualization import visualize, visualize_predictions
-from utils import sigmoid
+from utils import sigmoid, get_f_score, calc_accuracy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
@@ -153,6 +153,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
 
     return predictions
 
+
 def generate_predictions_full_spectrograms(dataset, model, model_id, predictions_path, 
     sliding_window=True, chunk_size=256, jump=128, hierarchical_model=None):
     """
@@ -195,6 +196,259 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             os.mkdir(path)
         # The data id associates predictions with a particular spectrogram
         np.save(path + '/' + data_id  + '.npy', predictions)
+
+def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
+    """
+        Test is the source call defined by [s1: e1 + 1] 
+        overlaps (if is_truth = False) or is overlaped
+        (if is_truth = True) by the call defined by
+        [s2: e2 + 1] with given threshold.
+    """
+    #print ("Checking overlap of s1 = {}, e1 = {}".format(s1, e1))
+    #print ("and s2 = {}, e2 = {}".format(s2, e2))
+    len_source = e1 - s1 + 1
+    #print ("Len Test Call: {}".format(len_source))
+    test_call_length = e2 - s2 + 1
+    #print ("Len Compare Call: {}".format(test_call_length))
+    # Overlap check
+    if s2 < s1: # Test call starts before the source call
+        # The call is larger than our source call
+        if e2 > e1:
+            if is_truth:
+                return True
+            # The call we are comparing to is larger then the source 
+            # call, but we must make sure that the source covers at least
+            # overlap xs this call. Kind of edge case should watch this
+            elif len_source >= max(threshold * test_call_length, 1): 
+                #print ('Prediction = portion of GT')
+                return True
+            else:
+                # NOTE this is an edge case and should be considered. We probably out of consistancy should not
+                # Include this as a good predction because it is too small!
+                #print ("Prediction = Smaller than threshold portion of GT") 
+                return True
+        else:
+            overlap = e2 - s1 + 1
+            #print ("Test call starts before source call")
+            if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
+                return True
+            elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
+                return True
+    elif e2 > e1: # Call ends after the source call
+        overlap = e1 - s2 + 1
+        #print ('Test call ends after source')
+        if is_truth and overlap >= max(threshold * len_source, 1): # Overlap x% of ourself
+            return True
+        elif not is_truth and overlap >= max(threshold * test_call_length, 1): # Overlap x% of found call
+            return True
+    else: # We are completely in the call
+        #print ('Test call completely in source call')
+        if not is_truth:
+            return True
+        elif test_call_length >= max(threshold * len_source, 1):
+            return True
+
+    return False
+
+def call_prec_recall(test, compare, threshold=0.1, is_truth=False, spectrogram=None, preds=None, gt_labels=None):
+    """
+        Adapted from Peter's paper.
+        Given calls defined by their start and end time (in sorted order by occurence)
+        we want to compute the "precision" and "recall." If is_truth = False then 
+        we are comparing the predicted elephant calls from the detector to the ground
+        truth elephant calls ==> (True Pos. and False Pos.). If is_truth = True then we
+        are comparing the ground truth to the predictions and looking for ==>
+        (True Pos. and False Neg.).
+
+        1) is_truth = True: try to find a call in compare that overlaps (by at least prop. threshold) for
+        each call in test
+
+        2) is_truth = False: for a call in test, try to find a call in compare that it
+        overlaps (by at least prop. threshold).
+
+        Note 2) if threshold = 0 then we just want any amount of threshold
+    """
+    index_compare = 0
+    true_events = []
+    false_events = []
+    for call in test:
+        # Loop through the calls compare checking if the start is before 
+        # our end
+        start = call[0]
+        end = call[1]
+        length = call[2]
+
+        # Rewind index_compare. Although this leads
+        # to potentially extra computation, it is necessary
+        # to avoid issues with overlapping calls, etc.
+        # Can occur if on call overlaps two calls
+        # or if we have overlapping calls
+        # We basically want to consider all the calls
+        # that could possibly overlap us.
+        while index_compare > 0:
+            # Back it up if we are past the end
+            if (index_compare >= len(compare)):
+                index_compare -= 1
+                continue
+
+            compare_call = compare[index_compare]
+            compare_start = compare_call[0]
+            compare_end = compare_call[1]
+
+            # May have gone to far so back up
+            if (compare_end > start):
+                index_compare -= 1
+            else:
+                break
+
+        found = False
+        while index_compare < len(compare):
+            # Get the call we are on to compare
+            compare_call = compare[index_compare]
+            compare_start = compare_call[0]
+            compare_end = compare_call[1]
+            compare_len = compare_call[2]
+
+            # Call ends before 
+            if compare_end < start:
+                index_compare += 1
+                continue
+
+            # Call start after. Thus
+            # all further calls end after. 
+            if compare_start > end:
+                break
+
+            # If we are here then we know
+            # compare_end >= start and compare_start <= end
+            # so the calls overlap.
+            if test_overlap(start, end, compare_start, compare_end, threshold, is_truth):
+                found = True
+                break
+
+            # Let us think about tricky case with overlapping calls!
+            # May need to rewind!
+            index_compare += 1
+
+
+        if found:
+            true_events.append(call)
+        else:
+            false_events.append(call)
+            #visualize_predictions([call], spectrogram, preds, gt_labels, label="False Pos")
+
+    return true_events, false_events
+
+
+def process_ground_truth(label_path, in_seconds=False, samplerate=8000, NFFT=4096., hop=800.): # Was 3208, 641
+    """
+        Given ground truth call data for a given day / spectrogram, 
+        generate a list of elephant calls as (start, end, duration).
+
+        If in_seconds = True we leave the values in seconds
+
+        Otherwise convert to the corresponding spectrogram "slice"
+    """
+    labelFile = csv.DictReader(open(label_path,'rt'), delimiter='\t')
+    calls = []
+
+    for row in labelFile:
+        # Use the file offset to determine the start of the call
+        start_time = float(row['File Offset (s)'])
+        call_length = float(row['End Time (s)']) - float(row['Begin Time (s)'])
+        end_time = start_time + call_length
+        
+        if in_seconds:
+            calls.append((start_time, end_time, call_length))
+        else: 
+            # Figure out which spectrogram slices we are on
+            # to get columns that we want to span with the given
+            # slice. This math transforms .wav indeces to spectrogram
+            # indices
+            start_spec = max(math.ceil((start_time * samplerate - NFFT / 2.) / hop), 0)
+            end_spec = min(math.ceil((end_time * samplerate - NFFT / 2.) / hop), labelMatrix.shape[0])
+            len_spec = end_spec - start_spec 
+            calls.append((start_spec, end_spec, len_spec))
+
+    return calls
+
+
+def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerate=8000., NFFT=4096., hop=800.): # Was 3208, 641
+    """
+        Given a binary predictions vector, we now want
+        to step through and locate all of the elephant
+        calls. For each continuous stream of 1s, we define
+        a found call by the start and end frame within 
+        the spectrogram (if in_seconds = False), otherwise
+        we convert to the true start and end time of the call
+        from begin time 0.
+
+        If min_length != 0, then we only keep calls of
+        a given length. Note that min_length is in FRAMES!!
+
+        Note: some reference frame lengths.
+        - 20 frames = 2.4 seconds 
+        - 15 frames = 1.9 seconds
+        - 10 frames = 1.4 seconds
+    """
+    calls = []
+    processed_preds = binary_preds.copy()
+    search = 0
+    while True:
+        begin = search
+        # Look for the start of a predicted calls
+        while begin < binary_preds.shape[0] and binary_preds[begin] == 0:
+            begin += 1
+
+        if begin >= binary_preds.shape[0]:
+            break
+
+        end = begin + 1
+        # Look for the end of the call
+        while end < binary_preds.shape[0] and binary_preds[end] == 1:
+            end += 1
+
+        call_length = end - begin
+
+        # Found a predicted call!
+        if (call_length >= min_length):
+            if not in_seconds:
+                # Note we subtract -1 to get the last frame 
+                # that has the actual call
+                calls.append((begin, end - 1, call_length))
+            else:
+                # Frame k is centered around second
+                # (NFFT / sr / 2) + (k) * (hop / sr)
+                # Meaning the first time it captures is (k) * (hop / sr)
+                # Remember we zero index!
+                begin_s = (begin) * (hop / samplerate) #(NFFT / samplerate / 2.) + 
+                # Here we subtract 1 because end goes one past last column
+                # And the last time it captures is (k) * (hop / sr) + NFFT / sr
+                end_s = (end - 1) * (hop / samplerate) + (NFFT / samplerate)
+                # k frames spans ==> (NFFT / sr) + (k-1) * (hop / sr) seconds
+                call_length_s = (NFFT / samplerate) + (call_length - 1) * (hop / samplerate)
+
+                calls.append((begin_s, end_s, call_length_s))
+        else: # zero out the too short predictions
+            processed_preds[begin:end] = 0
+
+        search = end + 1
+
+    return calls, processed_preds
+
+
+def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
+    """
+        Generate the binary 0/1 predictions and output the 
+        predictions vector used to do so. Note this is only important
+        when we smooth the predictions vector.
+    """
+    if (smooth):
+        predictions = gaussian_filter1d(predictions, sigma)
+
+    binary_preds = np.where(predictions > threshold, 1, 0)
+
+    return binary_preds, predictions
 
 def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
             in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False):
