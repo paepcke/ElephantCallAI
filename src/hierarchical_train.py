@@ -42,8 +42,9 @@ def adversarial_discovery(dataloader, model, min_length, threshold=0.5, num_file
     adversarial_examples = []
     # Put in eval mode!!
     model.eval()
+    print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
-        if idx % 100 == 0:
+        if idx % 1000 == 0:
             print("Adversarial search has gotten through {} batches".format(idx))
         # Allows for subsampling of adversarial examples.
         # -1 indicates collect all
