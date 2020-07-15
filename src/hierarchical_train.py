@@ -192,7 +192,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     dloaders = {'train':train_loader, 'valid':test_loader}
 
     # Train the first model!
-    second_model_save_path = save_path + '/' + "Model_1_" + str(parameters.HIERARCHICAL_MODEL) 
+    second_model_save_path = os.path.join(save_path, "Model_1_" + str(parameters.HIERARCHICAL_MODEL))
     if not os.path.exists(second_model_save_path):
             os.makedirs(second_model_save_path)
 
@@ -205,7 +205,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
 
     if model_1_wts:
         model_1.load_state_dict(model_1_wts)
-        model_save_path = second_model_save_path + "/" + "model.pt"
+        model_save_path = os.path.join(second_model_save_path, "model.pt")
         torch.save(model_1, model_save_path)
         print('Saved best Model 1 based on {} to path {}'.format(parameters.TRAIN_MODEL_SAVE_CRITERIA.upper(), second_model_save_path))
     else:
@@ -231,13 +231,13 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
 
     # For now let us try including all of the false negatives!
     adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
-    adversarial_train_save_path = save_path + "/" + "model_0-False_Pos_Train"+ ".txt"
+    adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
     with open(adversarial_train_save_path, 'w') as f:
         for file in adversarial_train_files:
             f.write('{}\n'.format(file))
 
     adversarial_test_files = adversarial_discovery_helper(full_test_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
-    adversarial_test_save_path = save_path + "/" + "model_0-False_Pos_Test"+ ".txt"
+    adversarial_test_save_path = os.path.join(save_path, "model_0-False_Pos_Test.txt")
     with open(adversarial_test_save_path, 'w') as f:
         for file in adversarial_test_files:
             f.write('{}\n'.format(file))
@@ -251,7 +251,7 @@ def train_model_0(dloaders, save_path):
     print ("++================================++")
     print ("++ Training initial call detector ++")
     print ("++================================++")
-    first_model_save_path = save_path + '/' + "Model_0"
+    first_model_save_path = os.path.join(save_path, "Model_0")
     if not os.path.exists(first_model_save_path):
             os.makedirs(first_model_save_path)
 
@@ -262,7 +262,7 @@ def train_model_0(dloaders, save_path):
 
     if model_0_wts:
         model_0.load_state_dict(model_0_wts)
-        model_save_path = first_model_save_path + "/" + "model.pt"
+        model_save_path = os.path.join(first_model_save_path, "model.pt")
         torch.save(model_0, model_save_path)
         print('Saved best Model 0 based on {} to path {}'.format(parameters.TRAIN_MODEL_SAVE_CRITERIA.upper(), first_model_save_path))
     else:
@@ -338,14 +338,14 @@ def main():
     # Train just model_1
     elif args.model1:
         # Read in the adversarial files
-        adversarial_train_save_path = save_path + "/" + "model_0-False_Pos_Train"+ ".txt"
+        adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
         adversarial_train_files = []
         with open(adversarial_train_save_path, 'r') as f:
             files = f.readlines()
             for file in files:
                 adversarial_train_files.append(file.strip())
 
-        adversarial_test_save_path = save_path + "/" + "model_0-False_Pos_Test"+ ".txt"
+        adversarial_test_save_path = os.path.join(save_path, "model_0-False_Pos_Test.txt")
         adversarial_test_files = []
         with open(adversarial_test_save_path, 'r') as f:
             files = f.readlines()
