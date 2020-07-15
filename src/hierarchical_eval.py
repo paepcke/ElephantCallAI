@@ -607,7 +607,8 @@ def main(args):
     # Load Model_0 and Model_1 of the hierarchical models
     hierarchical_model_path = args.model
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
-    model_1_path = os.path.join(hierarchical_model_path, "Model_1/model.pt")
+    model_1_name = "Model_1_" + str(parameters.HIERARCHICAL_MODEL) 
+    model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
     model_0, model_id = loadModel(model_0_path)
     model_1, _ = loadModel(model_1_path)
