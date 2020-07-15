@@ -259,20 +259,20 @@ class ElephantDatasetFuzzy(data.Dataset):
                 self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
 
     def set_pos_features(self, pos_features):
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
         self.pos_features = pos_features
-        print("Length of pos_features is now {} ".format(len(self.pos_features)))
         self.intialize_data(init_pos=True, init_neg=False)
 
     def set_neg_features(self, neg_features):
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
         self.neg_features = neg_features
-        print("Length of neg_features is now {} ".format(len(self.neg_features)))
         self.intialize_data(init_pos=False, init_neg=True)
 
     def set_featues(self, pos_features, neg_features):
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
         self.pos_features = pos_features
         self.neg_features = neg_features
-        print("Length of pos_features is now {} ".format(len(self.pos_features)))
-        print("Length of neg_features is now {} ".format(len(self.neg_features)))
         self.intialize_data(init_pos=True, init_neg=True)
 
     def intialize_data(self, init_pos=True, init_neg=True):
