@@ -80,7 +80,7 @@ def get_f_score(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)
-        binary_preds = torch.where(pred > parameters.THRESHOLD, torch.tensor(1.0), torch.tensor(0.0))
+        binary_preds = torch.where(pred > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
         # Flatten the array for fscore
         binary_preds = binary_preds.view(-1)
         labels = labels.view(-1)
