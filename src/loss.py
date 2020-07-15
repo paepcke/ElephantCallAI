@@ -51,6 +51,9 @@ def get_loss():
         print("Using Boundary Enhanced Loss with Individual-Boundaries: {}, Boundary_Size: {}, Boundary Loss Type: {}, Weighting: {}".format(
                 parameters.INDIVIDUAL_BOUNDARIES, parameters.BOUNDARY_FUDGE_FACTOR,
                 parameters.BOUNDARY_LOSS, parameters.BOUNDARY_WEIGHT))
+    elif parameters.LOSS.upper() == "F1":
+        loss_func = F1_Loss()
+        print ("Using Approximate F1-Score Loss")
     else:
         print("Unknown Loss")
         return
@@ -249,5 +252,50 @@ class BCE_Weighted_Boundary_Loss(nn.Module):
         loss = self.loss_func(inputs, targets)
 
         return loss
+
+class F1_Loss(nn.Module):
+    """
+        Differentiable relaxation of F1_Score as loss function. Rather
+        than binarizing input predictions, leave them as real values. 
+        Thus if the ground truth is 1 and the model prediction is 0.4, 
+        we calculate it as 0.4 true positive and 0.6 false negative. 
+        If the ground truth is 0 and the model prediction is 0.4, 
+        we calculate it as 0.6 true negative and 0.4 false positive.
+
+        Reference: https://www.kaggle.com/rejpalcz/best-loss-function-for-f1-score-metric
+    """
+    def __init__(self, epsilon=1e-7):
+        super(F1_Loss, self).__init__()
+        self.epsilon = epsilon
+        
+    def forward(self, inputs, targets):
+        """
+            inputs - [batch, seq_len]
+            target - [batch, seq_len]
+        """
+        # Note we can do this two ways, first we calculate
+        # the F-score per chunk and take avg. or we do a total 
+        # F-score based on each individual chunk!
+        inputs = torch.sigmoid(inputs)
+
+        # Sum the models predictions for the positive slices
+        tp = torch.sum(targets * inputs)#, dim=1)
+        # Sum the (1 - model predictions) for negative slices.
+        # Gives negative score predictions
+        tn = torch.sum((1 - targets) * (1 - inputs))#, dim=1)
+        # Sums the positive predictions scores for the negative slices.
+        fp = torch.sum((1 - targets) * inputs)#, dim=1)
+        # Sums the negative predictions scores for the positive slices.
+        fn = torch.sum(targets * (1 - inputs))#, dim=1)
+
+        precision = tp / (tp + fp + self.epsilon)
+        recall = tp / (tp + fn + self.epsilon)
+        
+        f1 = 2 * precision * recall / (precision + recall + self.epsilon)
+
+        return 1 - f1#torch.mean(f1)
+
+
+
 
 
