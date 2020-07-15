@@ -49,10 +49,10 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, incl
         running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
         running_fscore += get_f_score(logits, labels)
 
-    train_epoch_loss = running_loss / idx
+    train_epoch_loss = running_loss / (idx + 1)
     train_epoch_acc = float(running_corrects) / running_samples
     train_non_zero = running_non_zero
-    train_epoch_fscore = running_fscore / idx
+    train_epoch_fscore = running_fscore / (idx + 1)
 
     #Logging
     #print ('Train Non-Zero: {}'.format(train_non_zero))
@@ -101,9 +101,9 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
         running_samples += logits.shape[0] * logits.shape[1] #Count the number slices
         running_fscore += get_f_score(logits, labels)
 
-    valid_epoch_loss = running_loss / idx
+    valid_epoch_loss = running_loss / (idx + 1)
     valid_epoch_acc = float(running_corrects) / running_samples
-    valid_epoch_fscore = running_fscore / idx
+    valid_epoch_fscore = running_fscore / (idx + 1)
     valid_non_zero = running_non_zero
 
     #Logging
