@@ -34,6 +34,9 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
         if parameters.BOUNDARY_LOSS.lower() == "weight":
             save_path += "BoundaryWeight-" + str(parameters.BOUNDARY_WEIGHT) + "_"
 
+    if parameters.SHIFT_WINDOWS:
+        save_path += "ShiftWindows_"
+
     save_path +=  str(save_time)
     
     return save_path

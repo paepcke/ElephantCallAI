@@ -4,7 +4,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
-NUM_EPOCHS = 300
+NUM_EPOCHS = 1000
 EVAL_PERIOD = 1
 
 ADVERSARIAL_LOOPS = 10
@@ -26,7 +26,7 @@ ADVERSARIAL_SAMPLES = 0.5
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
 
-FALSE_NEGATIVE_THRESHOLD = 10
+FALSE_NEGATIVE_THRESHOLD = 15 # Test this!
 # Specify 'same' to keep training Model_0
 HIERARCHICAL_MODEL = 17
 # Specify the number of repeats for ONLY the 
@@ -49,9 +49,10 @@ FOCAL_ALPHA = 0.25
 
 NEG_SAMPLES = 1
 TEST_NEG_SAMPLES = 1
-CALL_REPEATS = 10
+CALL_REPEATS = 1
 NORM = "norm"
 SCALE = True
+SHIFT_WINDOWS = True
 
 # Flags for how to deal with boundaries!!
 # If > 0 then use boundaries else no boundaries
@@ -86,6 +87,7 @@ REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs/'
 LOCAL_SAVE_PATH = '../models/'
 REMOTE_SAVE_PATH = '/home/data/elephants/models/'
 
+CHUNK_SIZE = 256
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
 

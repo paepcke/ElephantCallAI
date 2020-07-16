@@ -62,10 +62,16 @@ def main():
         include_boundaries = True
         train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
         test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
+    shift_windows = False
+    if parameters.SHIFT_WINDOWS:
+        shift_windows = True
+        train_data_path += '_OversizeCalls'
     
     
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=include_boundaries, shift_windows=shift_windows)
     test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
 
