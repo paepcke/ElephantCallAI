@@ -283,7 +283,7 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, boundary_mask_
         # For now skip if at edges
         if chunk_start < 0 or (chunk_end >= raw_audio.shape[0]):
             print ("skipping too long of call") # Maybe don't need this let us se
-            return None, None
+            return None, None, None
     else:
         # Convert from window size in spectrogram frames to raw audio size
         # Note we use the -1 term to force the correct number of frames
@@ -297,7 +297,7 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, boundary_mask_
         # but still want to go to the next!!
         if padding_length < 0:
             print ("skipping too long of call") # Maybe don't need this let us se
-            return None, None
+            return None, None, None
         
         # Randomly split the pad to before and after
         pad_front = np.random.randint(0, padding_length + 1)
