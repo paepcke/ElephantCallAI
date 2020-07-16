@@ -46,7 +46,7 @@ parser.add_argument('--full_24_hr', action='store_true',
     help="Determines whether to create all chunks or just ones corresponding to labels and negative samples")
 parser.add_argument('--seed', type=int, default=8,
     help="Set the random seed used for creating the datasets. This is primarily important for determining the negative samples")
-parser.add_argument('--call_repeats', type=int, default=10,
+parser.add_argument('--call_repeats', type=int, default=1,
     help="For each call, determine the number of random positions that we sample for that call within its given chunk. Serves as a form of oversampling")
 parser.add_argument('--fudge_factor', type=int, default=0, 
     help="Determines how lenient for the boarders of the elephant calls." \
@@ -55,6 +55,19 @@ parser.add_argument('--fudge_factor', type=int, default=0,
 parser.add_argument('--overlap_boundaries', action='store_true', 
     help="Flag indicating that we calculate 'fuzzy' call boundaries based on 0/1 boundaries rather than for each individual call." +\
     "This allows us to potentially deal with strange issues of overlapping calls.")
+
+# Trying now to add a flag to save oversized windows to allow for random location sampling
+"""
+    Specifics: 
+        Elephant Call Window: Sample a window of size 2 * 256 - len_call, where the call
+        is centered in the window. Namely, this creates a window such that the right end
+        of the call is 256 units from the left window boundary and the left end of the call
+        is 256 units from the right window boundary.
+
+        Empyt Window: Sample a window always of size 256 * 2, so we can sample any chunk!
+"""
+parser.add_argument('--oversize', action='store_true',
+    help="Save oversized windows centered on a call to allow for random location sampling")
 
 '''
 parser.add_argument('--val_size', type=float, default=0.1, help='Determines the relative size of the val set if we are creating one')
@@ -158,6 +171,10 @@ def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogra
     valid_starts = []
     window_size = spectrogram_info['window']
     updated_labels = label_vec + boundary_mask_vec
+    # Flag for whether to sample oversized windows
+    oversize = spectrogram_info['oversize_windows']
+    if oversize:
+        window_size *= 2
     # Step backwards and keep track of how far away the
     # last elephant call was
     last_elephant = 0  # For now is the size of the window
@@ -195,7 +212,7 @@ def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogra
         # the raw audio index in raw audio frames
         # Number of hops in we are marks the first raw audio frame to use
         chunk_start = start * spectrogram_info['hop']
-        chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
+        chunk_size = (window_size - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
         chunk_end = int(chunk_start + chunk_size)
 
         # Get the spectrogram chunk
@@ -205,7 +222,7 @@ def generate_empty_chunks(n, raw_audio, label_vec, boundary_mask_vec, spectrogra
         
         # Cutout the high frequencies that are not of interest
         spectrum = spectrum[(freqs <= max_freq)]
-        assert(spectrum.shape[1] == spectrogram_info['window'])
+        assert(spectrum.shape[1] == window_size)
 
         data_labels = label_vec[start : start + spectrum.shape[1]]
         # Make sure that no call exists in the chunk
@@ -239,46 +256,71 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, boundary_mask_
         - boundary_mask_vec: Gives the location of the "fuzzy" boundary regions around each call
         where we want to allow for flexability in prediction
     '''
+    window_size = spectrogram_info['window']
+    # Flag for whether to sample oversized windows
+    oversize = spectrogram_info['oversize_windows']    
+
     # Convert the times to .wav frames to help ensure
     # robustness of approach
     start_frame = int(math.floor(start_time * spectrogram_info['samplerate']))
     end_frame = int(math.ceil(end_time * spectrogram_info['samplerate']))
-    # Convert from window size in spectrogram frames to raw audio size
-    # Note we use the -1 term to force the correct number of frames
-    # wav = frames * hop - hop + window ==> wav = frames * hop + overlap
-    chunk_size = (spectrogram_info['window'] - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
 
-    # Padding to call
-    call_length = end_frame - start_frame # In .wav frames
-    padding_length = chunk_size - call_length
-    # if padding_frame is neg skip call
-    # but still want to go to the next!!
-    if padding_length < 0:
-        print ("skipping too long of call") # Maybe don't need this let us se
-        return None, None
-    
-    # Randomly split the pad to before and after
-    pad_front = np.random.randint(0, padding_length + 1)
+    # Generate oversized windows to allow for random location sampling of the calls.
+    if oversize:
+        # Formula is: spect_frames = floor((wav_frames - overlap) / hop)
+        len_call_spect_frames = math.floor(((end_frame - start_frame) - (spectrogram_info['NFFT'] - spectrogram_info['hop'])) / spectrogram_info['hop'])
+        window_size = 2 * window_size - len_call_spect_frames
+        
+        # Calculate the start first based on true window size
+        true_chunk_size = (window_size - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
+        chunk_start = end_frame - true_chunk_size
 
-    # Do some stuff to avoid the front and end!
-    chunk_start = start_frame - pad_front
-    chunk_end  = start_frame + call_length + (padding_length - pad_front)
-    
-    # Do some quick voodo - assume cant have issue where 
-    # the window of 64 frames is lareger than the sound file!
-    if (chunk_start < 0):
-        # Amount to transfer to end
-        chunk_start = 0
-        chunk_end = chunk_size
-    # See if we have passed the end of the sound file.
-    # Note divide by sr to get sound file length in seconds
-    if (chunk_end >= raw_audio.shape[0]):
-        chunk_end = raw_audio.shape[0]
-        chunk_start = raw_audio.shape[0] - chunk_size
+        # Add the size of the new window
+        chunk_size = ((window_size  - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'])
+        chunk_end = chunk_start + chunk_size
+        #chunk_end = start_frame + true_chunk_size # Somehow off by one?
 
-    assert(chunk_end - chunk_start == chunk_size)
-    # Make sure the call is fully in the region
-    assert(chunk_start <= start_frame and chunk_end >= end_frame)
+        # For now skip if at edges
+        if chunk_start < 0 or (chunk_end >= raw_audio.shape[0]):
+            print ("skipping too long of call") # Maybe don't need this let us se
+            return None, None
+    else:
+        # Convert from window size in spectrogram frames to raw audio size
+        # Note we use the -1 term to force the correct number of frames
+        # wav = frames * hop - hop + window ==> wav = frames * hop + overlap
+        chunk_size = (window_size - 1) * spectrogram_info['hop'] + spectrogram_info['NFFT'] 
+
+        # Padding to call
+        call_length = end_frame - start_frame # In .wav frames
+        padding_length = chunk_size - call_length
+        # if padding_frame is neg skip call
+        # but still want to go to the next!!
+        if padding_length < 0:
+            print ("skipping too long of call") # Maybe don't need this let us se
+            return None, None
+        
+        # Randomly split the pad to before and after
+        pad_front = np.random.randint(0, padding_length + 1)
+
+        # Do some stuff to avoid the front and end!
+        chunk_start = start_frame - pad_front
+        chunk_end  = start_frame + call_length + (padding_length - pad_front)
+        
+        # Do some quick voodo - assume cant have issue where 
+        # the window of 64 frames is lareger than the sound file!
+        if (chunk_start < 0):
+            # Amount to transfer to end
+            chunk_start = 0
+            chunk_end = chunk_size
+        # See if we have passed the end of the sound file.
+        # Note divide by sr to get sound file length in seconds
+        if (chunk_end >= raw_audio.shape[0]):
+            chunk_end = raw_audio.shape[0]
+            chunk_start = raw_audio.shape[0] - chunk_size
+
+        assert(chunk_end - chunk_start == chunk_size)
+        # Make sure the call is fully in the region
+        assert(chunk_start <= start_frame and chunk_end >= end_frame)
 
     NFFT = spectrogram_info['NFFT']
     samplerate = spectrogram_info['samplerate']
@@ -290,7 +332,7 @@ def generate_chunk(start_time, end_time, raw_audio, truth_labels, boundary_mask_
                 NFFT=NFFT, Fs=samplerate, noverlap=(NFFT - hop), window=ml.window_hanning, pad_to=pad_to)
 
     # Check our math
-    assert(spectrum.shape[1] == spectrogram_info['window'])
+    assert(spectrum.shape[1] == window_size)
     
     # Cutout the high frequencies that are not of interest
     spectrum = spectrum[(freqs <= max_freq)]
@@ -398,7 +440,8 @@ if __name__ == '__main__':
                         'neg_fact': args.neg_fact,
                         'fudge_factor': args.fudge_factor,
                         'num_random_call_positions': args.call_repeats,
-                        'individual_boarders': not args.overlap_boundaries}
+                        'individual_boarders': not args.overlap_boundaries,
+                        'oversize_windows': args.oversize}
 
     print(args)
 
@@ -541,9 +584,9 @@ if __name__ == '__main__':
     if args.fudge_factor > 0:
         out_dir += '_FudgeFact_' + str(args.fudge_factor) + '_Individual-Boarders_' + str(spectrogram_info['individual_boarders'])
     
-    #out_dir += '/Neg_Samples_x' + str(args.neg_fact) + '_Seed_' \
-    #            + str(args.seed) + '_FudgeFact_' + str(args.fudge_factor) + '_CallRepeats_' + str(args.call_repeats)
-
+    if args.oversize:
+        out_dir += '_OversizeCalls'
+    
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
 

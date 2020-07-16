@@ -303,6 +303,7 @@ def main():
     model_1_train_data_path = model_0_train_data_path
     model_1_test_data_path = model_0_test_data_path
     if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
+        # SHould prob just have neg samples x1 since doesnt matter!
         model_1_train_data_path, _ = create_dataset_path(train_data_path, parameters.NEG_SAMPLES, parameters.HIERARCHICAL_REPEATS)
     
     

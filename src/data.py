@@ -11,6 +11,7 @@ import os
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import glob
+import parameters
 
 Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
 
@@ -71,6 +72,7 @@ def get_loader_fuzzy(data_dir,
                norm="norm",
                scale=False,
                include_boundaries=False,
+               shift_windows=False,
                augment=False,
                shuffle=True,
                num_workers=16,
@@ -100,7 +102,7 @@ def get_loader_fuzzy(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries)
+    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, shift_windows=shift_windows)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -109,6 +111,7 @@ def get_loader_fuzzy(data_dir,
     def _init_fn(worker_id):
         # Assign each worker its own seed
         np.random.seed(int(random_seed) + worker_id)
+        torch.manual_seed(int(random_seed) + worker_id)
 
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
         shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, worker_init_fn=_init_fn)
@@ -227,13 +230,14 @@ class ElephantDataset(data.Dataset):
 
 
 class ElephantDatasetFuzzy(data.Dataset):
-    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False):
+    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, shift_windows=False):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
         self.preprocess = preprocess
         self.scale = scale
         self.include_boundaries = include_boundaries
+        self.shift_windows = shift_windows
 
         #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
         #self.initialize_labels()
@@ -322,6 +326,9 @@ class ElephantDatasetFuzzy(data.Dataset):
         label = np.load(self.labels[index])
 
         feature = self.apply_transforms(feature)
+        if self.shift_windows:
+            feature, label = self.sample_chunk(feature, label)
+
         if self.user_transforms:
             feature = self.user_transforms(feature)
             
@@ -338,6 +345,20 @@ class ElephantDatasetFuzzy(data.Dataset):
             return feature, label, masks, self.features[index]
         else:
             return feature, label, self.features[index] # Include the data file
+
+    def sample_chunk(self, feature, label):
+        """
+            Selected a random chunk within the oversized window.
+            Figure out the call length as: -(window_size - 2*256).
+            Then sample starting slice as rand in range [0, 256 - call_length]
+        """
+        call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
+        # Draw this out but it should be correct!
+        # Use torch.randint because of weird numpy seeding issues
+        start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
+        end_slice = start_slice + parameters.CHUNK_SIZE
+
+        return feature[start_slice : end_slice, :], label[start_slice : end_slice]
 
     def apply_transforms(self, data):
         if self.scale:
