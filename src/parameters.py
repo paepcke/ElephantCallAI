@@ -4,7 +4,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
 VERBOSE = False
 
-NUM_EPOCHS = 150
+NUM_EPOCHS = 300
 EVAL_PERIOD = 1
 
 ADVERSARIAL_LOOPS = 10

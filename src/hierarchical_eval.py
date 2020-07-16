@@ -610,7 +610,7 @@ def main(args):
     hierarchical_model_path = args.models
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
     model_1_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + \
-                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS) + "/model.pt"
+                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower() + "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
     # Want the model id to match that of the second model! Then 
@@ -619,8 +619,6 @@ def main(args):
     # Put in eval mode!
     model_0.eval()
     model_1.eval()
-    print (model_id)
-    quit()
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
