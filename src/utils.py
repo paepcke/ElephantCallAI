@@ -38,6 +38,17 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     
     return save_path
 
+def create_dataset_path(init_path, neg_samples, call_repeats):
+    init_path += 'Neg_Samples_x' + str(neg_samples) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+                        "_CallRepeats_" + str(call_repeats)
+    # Include boundary uncertainty in training
+    include_boundaries = False
+    if parameters.LOSS == "BOUNDARY":
+        include_boundaries = True
+        init_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
+    return init_path, include_boundaries
+
 def is_eval_epoch(cur_epoch):
     """Determines if the model should be evaluated at the current epoch."""
     return (

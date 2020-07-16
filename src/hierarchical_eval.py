@@ -34,8 +34,8 @@ parser.add_argument('--full_stats', action='store_true',
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
-parser.add_argument('--model', type=str,
-    help = 'Path to the model to test on') # Now is path
+parser.add_argument('--models', type=str,
+    help = 'Path to the hierarchical models to test on') 
 
 
 '''
@@ -607,9 +607,10 @@ def main(args):
 
     """
     # Load Model_0 and Model_1 of the hierarchical models
-    hierarchical_model_path = args.model
+    hierarchical_model_path = args.models
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
-    model_1_name = "Model_1_" + str(parameters.HIERARCHICAL_MODEL) + "/model.pt"
+    model_1_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + \
+                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS) + "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
     # Want the model id to match that of the second model! Then 
