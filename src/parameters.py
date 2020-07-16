@@ -29,6 +29,10 @@ ADVERSARIAL_THRESHOLD = 0
 FALSE_NEGATIVE_THRESHOLD = 10
 # Specify 'same' to keep training Model_0
 HIERARCHICAL_MODEL = 17
+# Specify the number of repeats for ONLY the 
+# positive examples for model_1. 
+# 'same' - use the same dataloader from model_0
+HIERARCHICAL_REPEATS = 1
 
 MODEL_ID = 17
 
@@ -45,7 +49,7 @@ FOCAL_ALPHA = 0.25
 
 NEG_SAMPLES = 1
 TEST_NEG_SAMPLES = 1
-CALL_REPEATS = 1
+CALL_REPEATS = 10
 NORM = "norm"
 SCALE = True
 

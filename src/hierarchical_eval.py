@@ -34,8 +34,8 @@ parser.add_argument('--full_stats', action='store_true',
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
-parser.add_argument('--model', type=str,
-    help = 'Path to the model to test on') # Now is path
+parser.add_argument('--models', type=str,
+    help = 'Path to the hierarchical models to test on') 
 
 
 '''
@@ -55,11 +55,13 @@ def loadModel(model_path, is_hierarchical=True):
     print (model)
     # Get the model name from the path
     tokens = model_path.split('/')
-    # For now since the hierarchical models are the same
+    # If hierarchical, create a sub-folder 
+    # with the model_1 that was used
     if (is_hierarchical):
-        model_id = tokens[-3]
+        model_id = os.path.join(tokens[-3], tokens[-2])
     else:
         model_id = tokens[-2]
+
     return model, model_id
 
 
@@ -108,7 +110,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
             pred_counts = torch.sum(binary_preds)
             # Run second model
             if pred_counts.item() > hierarchy_threshold:
-                print ("Doing hierarchy! With number predicted:", pred_counts.item())
+                #print ("Doing hierarchy! With number predicted:", pred_counts.item())
                 outputs = hierarchical_model(spect_slice)
                 compressed_out = outputs.view(-1, 1).squeeze()
 
@@ -193,11 +195,11 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
 
         # Save preditions
         # Save for now to a folder determined by the model id
-        path = predictions_path + '/' + model_id
+        path = os.path.join(predictions_path,model_id)
         if not os.path.isdir(path):
             os.mkdir(path)
         # The data id associates predictions with a particular spectrogram
-        np.save(path + '/' + data_id  + '.npy', predictions)
+        np.save(os.path.join(path, data_id  + '.npy'), predictions)
 
 def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
     """
@@ -503,7 +505,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
-        predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
+        predictions = np.load(os.path.join(predictions_path, model_id, data_id + '.npy'))
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
 
@@ -605,17 +607,20 @@ def main(args):
 
     """
     # Load Model_0 and Model_1 of the hierarchical models
-    hierarchical_model_path = args.model
+    hierarchical_model_path = args.models
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
-    model_1_name = "Model_1_" + str(parameters.HIERARCHICAL_MODEL) + "/model.pt"
+    model_1_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + \
+                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS) + "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
-    model_0, model_id = loadModel(model_0_path)
-    model_1, _ = loadModel(model_1_path)
+    # Want the model id to match that of the second model! Then 
+    model_0, _ = loadModel(model_0_path)
+    model_1, model_id = loadModel(model_1_path)
     # Put in eval mode!
     model_0.eval()
     model_1.eval()
     print (model_id)
+    quit()
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],

@@ -1623,7 +1623,7 @@ def main(mode, model, train_loader, test_loader, save_path):
 if __name__ == '__main__':
     #train_loader = get_loader("/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
     #test_loader = get_loader("/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "/", parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, norm=parameters.NORM, scale=parameters.SCALE)
-    train_data_path = "../elephant_dataset/Train/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+    train_data_path = "/home/data/elephants/processed_data/Train_nouab/Neg_Samples_x" + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
                 "_CallRepeats_" + str(parameters.CALL_REPEATS)
     # Include boundary uncertainty in training
     include_boundaries = False

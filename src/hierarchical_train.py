@@ -10,7 +10,7 @@ import argparse
 
 import parameters
 from data import get_loader, get_loader_fuzzy
-from utils import create_save_path
+from utils import create_save_path, create_dataset_path
 from models import get_model
 from loss import get_loss
 from train import train
@@ -30,7 +30,7 @@ parser.add_argument('--adversarial', dest='adversarial', action='store_true',
     help='Flag specifying to generate a new set of adversarial_examples.')
 parser.add_argument('--model_1', dest='model1', action='store_true',
     help='Flag specifying to just train Model_1.')
-parser.add_argument('--model_path', type=str,
+parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
 
 """
@@ -191,8 +191,8 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     test_loader.dataset.set_neg_features(adversarial_test_files)
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    # Train the first model!
-    second_model_save_path = os.path.join(save_path, "Model_1_" + str(parameters.HIERARCHICAL_MODEL))
+    second_model_save_path = os.path.join(save_path, "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL)) + \
+                        '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS)
     if not os.path.exists(second_model_save_path):
             os.makedirs(second_model_save_path)
 
@@ -244,7 +244,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
 
     return adversarial_train_files, adversarial_test_files
 
-def train_model_0(dloaders, save_path):
+def train_model_0(train_loader, test_loader, save_path):
     """
         Train the "sound" detector - Model_0
     """
@@ -255,6 +255,7 @@ def train_model_0(dloaders, save_path):
     if not os.path.exists(first_model_save_path):
             os.makedirs(first_model_save_path)
 
+    dloaders = {'train':train_loader, 'valid':test_loader}
     start_time = time.time()
     model_0, loss_func, include_boundaries, optimizer, scheduler, writer = initialize_training(parameters.MODEL_ID, first_model_save_path)
     model_0_wts = train(dloaders, model_0, loss_func, optimizer, scheduler, 
@@ -294,39 +295,44 @@ def main():
         full_train_path = parameters.REMOTE_FULL_TRAIN
         full_test_path = parameters.REMOTE_FULL_TEST
 
-    train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
-                        "_CallRepeats_" + str(parameters.CALL_REPEATS)
-    # Probably make call repeats and neg samples default to 1 for test data!!!!
-    test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
-                    "_CallRepeats_" + str(1)
+    model_0_train_data_path, include_boundaries = create_dataset_path(train_data_path, parameters.NEG_SAMPLES, parameters.CALL_REPEATS)
+    model_0_test_data_path, _ = create_dataset_path(test_data_path, parameters.TEST_NEG_SAMPLES, 1)
     
-    # Include boundary uncertainty in training
-    include_boundaries = False
-    if parameters.LOSS == "BOUNDARY":
-        include_boundaries = True
-        train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
-        test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
 
-    train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+    # Check if a different dataset is being used for Model_1
+    model_1_train_data_path = model_0_train_data_path
+    model_1_test_data_path = model_0_test_data_path
+    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
+        model_1_train_data_path, _ = create_dataset_path(train_data_path, parameters.NEG_SAMPLES, parameters.HIERARCHICAL_REPEATS)
+    
+    
+    # Model 0 Loaders
+    model_0_train_loader = get_loader_fuzzy(model_0_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
-    test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+    model_0_test_loader = get_loader_fuzzy(model_0_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     
-    dloaders = {'train':train_loader, 'valid':test_loader}
+    # Model 1 Loaders
+    model_1_train_loader = get_loader_fuzzy(model_1_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+    model_1_test_loader = get_loader_fuzzy(model_1_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+    
 
-    if args.model_path is None:
+    if args.models_path is None:
         save_path = create_save_path(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()), args.save_local, save_prefix='Hierarchical_')
     else:
-        save_path = args.model_path
+        save_path = args.models_path
 
     # Case 1) Do the entire pipeline! Can break now the pipeline into 3 helper functions!
     if args.full_pipeline:
         # Train and save model_0
-        model_0 = train_model_0(dloaders, save_path)
+        #model_0 = train_model_0(dloaders, save_path)
+        model_0 = train_model_0(model_0_train_loader, model_0_test_loader , save_path)
         # Do the adversarial discovery
         adversarial_train_files, adversarial_test_files = adversarial_discovery(full_train_path, full_test_path, model_0, save_path)
         # Train and save model 1
-        train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path)
+        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, save_path)
     
     # Just generate new adversarial examples 
     elif args.adversarial:
@@ -352,7 +358,7 @@ def main():
             for file in files:
                 adversarial_test_files.append(file.strip())
 
-        train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path)
+        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, save_path)
 
     else:
         print ("Invalid running mode!")
