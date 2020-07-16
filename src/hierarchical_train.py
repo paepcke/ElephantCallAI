@@ -192,7 +192,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     dloaders = {'train':train_loader, 'valid':test_loader}
 
     second_model_save_path = os.path.join(save_path, "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL)) + \
-                        '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS)
+                        '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
     if not os.path.exists(second_model_save_path):
             os.makedirs(second_model_save_path)
 
