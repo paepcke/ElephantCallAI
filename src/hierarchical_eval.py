@@ -58,7 +58,7 @@ def loadModel(model_path, is_hierarchical=True):
     # If hierarchical, create a sub-folder 
     # with the model_1 that was used
     if (is_hierarchical):
-        model_id = os.path.join(tokens[-3], tokens[-2])
+        model_id = tokens[-3] + "_" + tokens[-2]
     else:
         model_id = tokens[-2]
 
