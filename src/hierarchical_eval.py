@@ -613,7 +613,7 @@ def main(args):
                     '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower() 
     if parameters.HIERARCHICAL_SHIFT_WINDOWS:
         model_1_name += '_OversizeCalls'
-    model_1_path += "/model.pt"
+    model_1_name += "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
     # Want the model id to match that of the second model! Then 
