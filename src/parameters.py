@@ -33,6 +33,7 @@ HIERARCHICAL_MODEL = 17
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
 HIERARCHICAL_REPEATS = 1
+HIERARCHICAL_SHIFT_WINDOWS = True
 
 MODEL_ID = 17
 
@@ -52,7 +53,7 @@ TEST_NEG_SAMPLES = 1
 CALL_REPEATS = 1
 NORM = "norm"
 SCALE = True
-SHIFT_WINDOWS = True
+SHIFT_WINDOWS = False
 
 # Flags for how to deal with boundaries!!
 # If > 0 then use boundaries else no boundaries
@@ -73,13 +74,13 @@ BATCH_SIZE = 32
 
 LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
 LOCAL_TEST_FILES = '../elephant_dataset/Test/'
-LOCAL_FULL_TRAIN = '../elephant_dataset/Train/Full_24_hrs/'
-LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs/'
+LOCAL_FULL_TRAIN = '../elephant_dataset/Train/Full_24_hrs'
+LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs'
 
 REMOTE_TRAIN_FILES = '/home/data/elephants/processed_data/Train_nouab/'
 REMOTE_TEST_FILES = "/home/data/elephants/processed_data/Test_nouab/"
-REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs/'
-REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs/'
+REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs'
+REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs'
 
 
 #Local

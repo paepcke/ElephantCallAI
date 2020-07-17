@@ -73,6 +73,7 @@ def get_loader_fuzzy(data_dir,
                scale=False,
                include_boundaries=False,
                shift_windows=False,
+               is_full_dataset=False,
                augment=False,
                shuffle=True,
                num_workers=16,
@@ -95,14 +96,20 @@ def get_loader_fuzzy(data_dir,
       True if using GPU.
     - data_file_paths: If you know what particular data file names you want to load, 
       pass them in as a list of strings.
+
+    -is_full_dataset: Is important for when we are shifting the windows, because
+    when using the full 24 hr dataset for adversarial discover we always want to 
+    use the middle of the oversized window
     Returns
     -------
     - train_loader: training set iterator.
     - valid_loader: validation set iterator.
+
     """
     # Note here we could do some data preprocessing!
     # define transform
-    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, shift_windows=shift_windows)
+    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, 
+                        shift_windows=shift_windows, is_full_dataset=is_full_dataset)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -230,7 +237,8 @@ class ElephantDataset(data.Dataset):
 
 
 class ElephantDatasetFuzzy(data.Dataset):
-    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, shift_windows=False):
+    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, 
+            shift_windows=False, is_full_dataset=False):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
@@ -238,6 +246,7 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.scale = scale
         self.include_boundaries = include_boundaries
         self.shift_windows = shift_windows
+        self.is_full_dataset = is_full_dataset
 
         #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
         #self.initialize_labels()
@@ -350,13 +359,21 @@ class ElephantDatasetFuzzy(data.Dataset):
         """
             Selected a random chunk within the oversized window.
             Figure out the call length as: -(window_size - 2*256).
-            Then sample starting slice as rand in range [0, 256 - call_length]
+            Then sample starting slice as rand in range [0, 256 - call_length].
+
+            Note: if the flag 'is_full_dataset' is set then return the middle
+            256! This is for adversarial discovery mode
         """
-        call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
-        # Draw this out but it should be correct!
-        # Use torch.randint because of weird numpy seeding issues
-        start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
-        end_slice = start_slice + parameters.CHUNK_SIZE
+        if self.is_full_dataset:
+            # The full test set window sizes are 2 * (256 / normal)
+            start_slice = label.shape[0] // 4
+            end_slice = start_slice + label.shape[0] // 2
+        else:
+            call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
+            # Draw this out but it should be correct!
+            # Use torch.randint because of weird numpy seeding issues
+            start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
+            end_slice = start_slice + parameters.CHUNK_SIZE
 
         return feature[start_slice : end_slice, :], label[start_slice : end_slice]
 
