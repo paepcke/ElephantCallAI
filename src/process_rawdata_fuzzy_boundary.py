@@ -494,7 +494,7 @@ if __name__ == '__main__':
 
         spectrogram_info['samplerate'] = 8000
 
-        def wrapper_processFull24Hours(directory, data_pair):
+        def wrapper_processFull24Hours(directory, args, data_pair):
             """
             This worker function is called on every data sample
             """
@@ -503,6 +503,7 @@ if __name__ == '__main__':
             data_id = data_pair[2]
             curren_dir = data_pair[3]
 
+            window_size = args.window
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
             full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
@@ -513,14 +514,19 @@ if __name__ == '__main__':
 
             # Save the individual files seperately for each location!
             num_chunks = 0
-            for i in range(math.floor(full_24_hr_spectogram.shape[0] / 256)):
-                feature = full_24_hr_spectogram[i * 256:(i + 1) * 256, :]
-                label = labels[i * 256:(i + 1) * 256]
+            for i in range(math.floor(full_24_hr_spectogram.shape[0] / window_size)):
+                # Determines how large a window to create
+                delta = 2 if args.oversize else 1
 
-                if feature.shape[0] != 256:
-                    print("MAJOR PROBLEMSSSS WHY DOESNT MULTIPROCESSING SURFACE ERRORS")
-                assert feature.shape[0] == 256
-                assert label.shape[0] == 256
+                feature = full_24_hr_spectogram[i * window_size : (i + delta) * window_size, :]
+                label = labels[i * window_size : (i + delta) * window_size]
+
+                if feature.shape[0] != window_size * delta:
+                    print("We have reached the end of the file!")
+                    break
+
+                #assert feature.shape[0] == window_size * delta
+                #assert label.shape[0] == window_size * delta
 
                 np.save(directory + '/' + data_id + "_features_" + str(i), feature)
                 np.save(directory + '/' + data_id + "_labels_" + str(i), label)
@@ -530,6 +536,8 @@ if __name__ == '__main__':
             print("Saved successfully {} chunks.".format(num_chunks))
 
         out_dir += '/Full_24_hrs'
+        if args.oversize:
+            out_dir += '_Oversize'
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
 
@@ -542,7 +550,7 @@ if __name__ == '__main__':
         pool = multiprocessing.Pool(20)
         print('Multiprocessing')
         start_time = time.time()
-        pool.map(partial(wrapper_processFull24Hours, out_dir), file_pairs)
+        pool.map(partial(wrapper_processFull24Hours, out_dir, args), file_pairs)
         print('Multiprocessed took {}'.format(time.time()-start_time))
         pool.close()
         print('Multiprocessed took {}'.format(time.time()-start_time))
