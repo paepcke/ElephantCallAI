@@ -375,7 +375,7 @@ class AmplitudeGater(object):
              
            o Optionally: if spectrogram_dest is a file path
                 destination, create a spectrogram over the full
-                duration, and save it to that path as a numpy array.
+                duration, and save it to that path as a DataFrame
                 All frequencies above spectrogram_freq_cap are
                 removed from the spectrogram before saving.
                 

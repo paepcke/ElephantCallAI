@@ -5,6 +5,7 @@ Created on Apr 5, 2020
 '''
 
 from collections import OrderedDict
+import csv
 from enum import Enum
 import os
 import re
@@ -29,6 +30,31 @@ class DSPUtils(object):
     '''
     classdocs
     '''
+
+    #------------------------------------
+    # overlap_percentage 
+    #-------------------
+    
+    @classmethod
+    def overlap_percentage(cls, interval1, interval2):
+        '''
+        Given two Pandas Interval instances, return
+        percentage overlap as a number between 0 and 1.
+        The percentage is number seconds overlap as
+        a percentage of interval2
+        
+        @param interval1: numeric interval
+        @type interval1: pdInterval
+        @param interval2: numeric interval
+        @type interval2: pdInterval
+        '''
+        num_overlap_seconds = \
+             max(0, 
+                 min(interval1.right, interval2.right) - \
+                 max(interval1.left, interval2.left)
+                 )
+        percentage = num_overlap_seconds / interval2.length
+        return percentage
 
     #------------------------------------
     # prec_recall_file_name
@@ -226,6 +252,44 @@ class DSPUtils(object):
                 'freq_labels' : df.index,
                 'time_labels' : df.columns
                 })
+        
+    #------------------------------------
+    # load_label_time_intervals 
+    #-------------------
+    
+    @classmethod
+    def load_label_time_intervals(cls, label_file):
+        '''
+        Given a .txt file of elephant call labels as 
+        written by Raven, return a list of time intervals
+        
+        @param label_file: label time file in csv format
+        @type label_file: str
+        @return: list of pd.Interval instances, each holding
+            one inclusive start/end time pair of a call
+        @rtype: [pd.Interval]
+        '''
+        label_time_intervals = []
+        with open(label_file, 'r') as fd:
+            reader = csv.DictReader(fd, delimiter='\t')
+            begin_time_key = 'Begin Time (s)'
+            end_time_key   = 'End Time (s)'
+            # Get each el call time range spec in the labels:
+            for label_dict in reader:
+                try:
+                    begin_time = float(label_dict[begin_time_key])
+                    end_time   = float(label_dict[end_time_key])
+                except KeyError:
+                    raise IOError(f"Raven label file {label_file} does not contain one "
+                                  f"or both of keys '{begin_time_key}', {end_time_key}'")
+                
+                if end_time < begin_time:
+                    self.log.err(f"Bad label: end label less than begin label: {end_time} < {begin_time}")
+                    continue
+                label_time_intervals.append(pd.Interval(left=begin_time, right=end_time))
+        return label_time_intervals
+                
+
 
 # ---------------------------- Class SignalTreatment ------------
     

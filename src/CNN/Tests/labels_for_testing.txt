@@ -1,0 +1,6 @@
+Selection	View	Channel	Begin Time (s)	End Time (s)	Low Freq (Hz)	High Freq (Hz)	Begin Path	File Offset (s)	Begin File	site	hour	file date	date(raven)	Tag 1	Tag 2	notes	analyst
+1	Spectrogram 1	1	1.293	6.464999999991385	19.7	43.3	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	1.293	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al
+2	Spectrogram 1	1	68.372	72.58399999999953	12.9	47.8	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	68.372	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al
+3	Spectrogram 1	1	78.015	83.00199999999371	7.6	210.4	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	78.015	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al
+4	Spectrogram 1	1	88.729	92.2070000000028	10.6	201.9	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	88.729	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al
+5	Spectrogram 1	1	92.793	95.41599999999232	22.6	54.4	L:\ELP\Projects\GabonBais\gb_sounds\ceb1_oct2011\CEB1_20111107_000000.wav	92.793	CEB1_20111107_000000.wav	CEB1	0	7-Nov-2011	7-Nov-2011				al
