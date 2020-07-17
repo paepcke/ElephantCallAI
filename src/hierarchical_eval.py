@@ -610,7 +610,10 @@ def main(args):
     hierarchical_model_path = args.models
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
     model_1_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + \
-                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower() + "/model.pt"
+                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower() 
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        model_1_name += '_OversizeCalls'
+    model_1_path += "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
     # Want the model id to match that of the second model! Then 
