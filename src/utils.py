@@ -6,7 +6,7 @@ import sklearn
 from sklearn.metrics import f1_score
 
 
-def create_save_path(save_time, save_local=False, save_prefix=None):
+def create_save_path(save_time, save_local=False, save_prefix=None, ):
     save_path = ''
     if save_local:
         save_path += parameters.LOCAL_SAVE_PATH
@@ -41,7 +41,7 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     
     return save_path
 
-def create_dataset_path(init_path, neg_samples, call_repeats):
+def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):
     init_path += 'Neg_Samples_x' + str(neg_samples) + "_Seed_" + str(parameters.RANDOM_SEED) + \
                         "_CallRepeats_" + str(call_repeats)
     # Include boundary uncertainty in training
@@ -49,6 +49,9 @@ def create_dataset_path(init_path, neg_samples, call_repeats):
     if parameters.LOSS == "BOUNDARY":
         include_boundaries = True
         init_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
+    if shift_windows:
+        init_path += '_OversizeCalls'
 
     return init_path, include_boundaries
 

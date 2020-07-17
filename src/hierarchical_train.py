@@ -191,8 +191,12 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     test_loader.dataset.set_neg_features(adversarial_test_files)
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    second_model_save_path = os.path.join(save_path, "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL)) + \
-                        '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
+    model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
+    # Add if we are using shifting windows
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        model_name += '_OversizeCalls'
+
+    second_model_save_path = os.path.join(save_path, model_name)
     if not os.path.exists(second_model_save_path):
             os.makedirs(second_model_save_path)
 
@@ -223,9 +227,13 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     print ("++ Beginning False Positive Adversarial Discovery ++")
     print ('++================================================++')
     # Do not include boundary uncertainty in full train loader. We only need the model predictions, we do not
-    # calculate the loss!
+    # calculate the loss! Use the HIERARCH_SHIFT flag along to decide if the Heirarchical model will use
+    # randomly shifted windows. Note, we flag that this is the full dataset to make sure that during 
+    # adversarial discovery we alwas sample the midlle of oversized windows
     full_train_loader = get_loader_fuzzy(full_train_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=False, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS,
+                                        is_full_dataset=True)
     full_test_loader = get_loader_fuzzy(full_test_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
 
@@ -295,27 +303,37 @@ def main():
         full_train_path = parameters.REMOTE_FULL_TRAIN
         full_test_path = parameters.REMOTE_FULL_TEST
 
-    model_0_train_data_path, include_boundaries = create_dataset_path(train_data_path, parameters.NEG_SAMPLES, parameters.CALL_REPEATS)
-    model_0_test_data_path, _ = create_dataset_path(test_data_path, parameters.TEST_NEG_SAMPLES, 1)
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+            full_train_path += '_OversizeCalls'
+
+    model_0_train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
+                                                                    call_repeats=parameters.CALL_REPEATS, 
+                                                                    shift_windows=parameters.SHIFT_WINDOWS)
+    model_0_test_data_path, _ = create_dataset_path(test_data_path, neg_samples=parameters.TEST_NEG_SAMPLES, 
+                                                                call_repeats=1)
     
 
     # Check if a different dataset is being used for Model_1
     model_1_train_data_path = model_0_train_data_path
     model_1_test_data_path = model_0_test_data_path
     if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
-        # SHould prob just have neg samples x1 since doesnt matter!
-        model_1_train_data_path, _ = create_dataset_path(train_data_path, parameters.NEG_SAMPLES, parameters.HIERARCHICAL_REPEATS)
+        # SHould prob just have neg samples x1 since doesnt matter!!
+        model_1_train_data_path, _ = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
+                                                        call_repeats=parameters.HIERARCHICAL_REPEATS,
+                                                        shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS)
     
     
     # Model 0 Loaders
     model_0_train_loader = get_loader_fuzzy(model_0_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=include_boundaries, shift_windows=parameters.SHIFT_WINDOWS)
     model_0_test_loader = get_loader_fuzzy(model_0_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     
     # Model 1 Loaders
     model_1_train_loader = get_loader_fuzzy(model_1_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=include_boundaries, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS)
     model_1_test_loader = get_loader_fuzzy(model_1_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     

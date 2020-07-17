@@ -537,7 +537,7 @@ if __name__ == '__main__':
 
         out_dir += '/Full_24_hrs'
         if args.oversize:
-            out_dir += '_Oversize'
+            out_dir += '_OversizeCalls'
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
 
