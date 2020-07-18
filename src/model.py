@@ -1308,11 +1308,11 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
                 if phase == 'valid':
                     if valid_epoch_acc > best_valid_acc:
                         best_valid_acc = valid_epoch_acc
-                        #best_model_wts = model.state_dict()
+                        best_model_wts = model.state_dict()
 
                     if valid_epoch_fscore > best_valid_fscore:
                         best_valid_fscore = valid_epoch_fscore
-                        best_model_wts = model.state_dict()
+                        #best_model_wts = model.state_dict()
 
 
             print ('Epoch [{}/{}] Train Non-Zero: {} Val Non-Zero: {}'.format(epoch, num_epochs - 1, train_non_zero, valid_non_zero))
@@ -1335,10 +1335,10 @@ def train_model_fuzzy(dataloaders, model, criterion, optimizer,
 
             # Maybe stop based on f_score!!!
             # Check whether to early stop due to decreasing validation acc
-            #if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
-            if all([val_fscore < best_valid_fscore for val_fscore in last_validation_fscores]):
-                #print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
-                print("Early stopping because last {} validation f-scores have been {} and less than best val f-score {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_fscores, best_valid_fscore))
+            if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+            #if all([val_fscore < best_valid_fscore for val_fscore in last_validation_fscores]):
+                print("Early stopping because last {} validation accuracies have been {} and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_accuracies, best_valid_acc))
+                #print("Early stopping because last {} validation f-scores have been {} and less than best val f-score {}".format(parameters.TRAIN_STOP_ITERATIONS, last_validation_fscores, best_valid_fscore))
                 break
 
     except KeyboardInterrupt:
