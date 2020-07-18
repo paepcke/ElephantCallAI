@@ -118,7 +118,9 @@ def get_loader_fuzzy(data_dir,
     def _init_fn(worker_id):
         # Assign each worker its own seed
         np.random.seed(int(random_seed) + worker_id)
-        torch.manual_seed(int(random_seed) + worker_id)
+        # Is this bad??
+        # This seems bad as each epoch will be the same order of data! 
+        #torch.manual_seed(int(random_seed) + worker_id)
 
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, 
         shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, worker_init_fn=_init_fn)
@@ -248,11 +250,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
 
-        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        self.initialize_labels()
-        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        #self.intialize_data(init_pos=True, init_neg=True)
+        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        #self.initialize_labels()
+        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
