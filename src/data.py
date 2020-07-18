@@ -250,11 +250,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
 
-        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        #self.initialize_labels()
-        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        self.intialize_data(init_pos=True, init_neg=True)
+        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        self.initialize_labels()
+        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        #self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
@@ -268,7 +268,6 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.boundary_masks = []
         for feature_path in self.features:
             feature_parts = feature_path.split("features")
-            # Just out of curiosity
             self.labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
             if self.include_boundaries:
                 self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
