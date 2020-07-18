@@ -54,6 +54,9 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, incl
     train_non_zero = running_non_zero
     train_epoch_fscore = running_fscore / (idx + 1)
 
+    # Update the schedular
+    scheduler.step()
+
     #Logging
     #print ('Train Non-Zero: {}'.format(train_non_zero))
     print('Training loss: {:.6f}, acc: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
