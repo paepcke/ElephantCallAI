@@ -248,11 +248,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
 
-        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        #self.initialize_labels()
-        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        self.intialize_data(init_pos=True, init_neg=True)
+        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        self.initialize_labels()
+        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        #self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:

@@ -74,32 +74,33 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     running_fscore = 0.0
 
     print ("Num batches:", len(dataloader))
-    for idx, batch in enumerate(dataloader):
-        if (idx % 1000 == 0) and parameters.VERBOSE:
-            print ("Batch number {} of {}".format(idx, len(dataloader)))
-        # Cast the variables to the correct type and 
-        # put on the correct torch device
-        inputs = batch[0].clone().float()
-        labels = batch[1].clone().float()
-        inputs = inputs.to(parameters.device)
-        labels = labels.to(parameters.device)
+    with torch.no_grad(): 
+        for idx, batch in enumerate(dataloader):
+            if (idx % 1000 == 0) and parameters.VERBOSE:
+                print ("Batch number {} of {}".format(idx, len(dataloader)))
+            # Cast the variables to the correct type and 
+            # put on the correct torch device
+            inputs = batch[0].clone().float()
+            labels = batch[1].clone().float()
+            inputs = inputs.to(parameters.device)
+            labels = labels.to(parameters.device)
 
-        # Forward pass
-        logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
-        # Are we zeroing out the hidden state in the model???
+            # Forward pass
+            logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+            # Are we zeroing out the hidden state in the model???
 
-        if include_boundaries:
-            boundary_masks = batch[2]
-            loss = loss_func(logits, labels, boundary_masks)
-        else:
-            loss = loss_func(logits, labels)
+            if include_boundaries:
+                boundary_masks = batch[2]
+                loss = loss_func(logits, labels, boundary_masks)
+            else:
+                loss = loss_func(logits, labels)
 
 
-        running_loss += loss.item()
-        running_corrects += num_correct(logits, labels)
-        running_non_zero += num_non_zero(logits, labels)
-        running_samples += logits.shape[0] * logits.shape[1] #Count the number slices
-        running_fscore += get_f_score(logits, labels)
+            running_loss += loss.item()
+            running_corrects += num_correct(logits, labels)
+            running_non_zero += num_non_zero(logits, labels)
+            running_samples += logits.shape[0] * logits.shape[1] #Count the number slices
+            running_fscore += get_f_score(logits, labels)
 
     valid_epoch_loss = running_loss / (idx + 1)
     valid_epoch_acc = float(running_corrects) / running_samples
@@ -177,7 +178,7 @@ def train(dataloaders, model, loss_func, optimizer,
                             "and less than best val accuracy {}".format(parameters.TRAIN_STOP_ITERATIONS, 
                             last_validation_accuracies, best_valid_acc))
                         break
-                else:
+                elif parameters.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'fscore':
                     if all([val_fscore < best_valid_fscore for val_fscore in last_validation_fscores]):
                         print("Early stopping because last {} validation f-scores have been {} "
                             "and less than best val f-score {}".format(parameters.TRAIN_STOP_ITERATIONS, 

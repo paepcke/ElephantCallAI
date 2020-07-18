@@ -1,0 +1,910 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(base) jgs8@quatro:~/ElephantCallAI/src$ cd /home/data/
+birds/           corals/          elephants/       majors/          nyu_facebook/    propub_facebook/ 
+(base) jgs8@quatro:~/ElephantCallAI/src$ cd /home/data/
+birds/           corals/          elephants/       majors/          nyu_facebook/    propub_facebook/ 
+(base) jgs8@quatro:~/ElephantCallAI/src$ cd /home/data/elephants/processed_data/Test_nouab/
+(base) jgs8@quatro:/home/data/elephants/processed_data/Test_nouab$ ls
+Full_24_hrs                                                                Neg_Samples_x2_Seed_8_CallRepeats_1_FudgeFact_2_Individual-Boarders_False
+Neg_Samples_x1                                                             Neg_Samples_x2_Seed_8_CallRepeats_1_FudgeFact_2_Individual-Boarders_True
+Neg_Samples_x1_Seed_8_CallRepeats_1                                        Neg_Samples_x2_Seed_8_CallRepeats_1_FudgeFact_4_Individual-Boarders_False
+Neg_Samples_x1_Seed_8_CallRepeats_1_FudgeFact_2_Individual-Boarders_False  Neg_Samples_x2_Seed_8_CallRepeats_1_FudgeFact_4_Individual-Boarders_True
+Neg_Samples_x1_Seed_8_CallRepeats_1_FudgeFact_2_Individual-Boarders_True   Neg_Samples_x4
+Neg_Samples_x1_Seed_8_CallRepeats_1_FudgeFact_4_Individual-Boarders_False  Neg_Samples_x4_Seed_8_CallRepeats_1
+Neg_Samples_x1_Seed_8_CallRepeats_1_FudgeFact_4_Individual-Boarders_True   Neg_Samples_x6
+Neg_Samples_x2                                                             Neg_Samples_x8
+Neg_Samples_x2_Seed_8_CallRepeats_1
+(base) jgs8@quatro:/home/data/elephants/processed_data/Test_nouab$ clear
+
+(base) jgs8@quatro:/home/data/elephants/processed_data/Test_nouab$ cd ~/ElephantCallAI/
+(base) jgs8@quatro:~/ElephantCallAI$ ls
+AAAI_submission.pdf  Adversarial_experiments  CS231n_Final_report.pdf  elephant_dataset  Figures  Images  models  Papers  Predictions  README.md  requirements.txt  setup.py  src  weights  Writeups
+(base) jgs8@quatro:~/ElephantCallAI$ cd src/
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim parameters.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux ls
+data: 1 windows (created Fri Jul  3 13:39:02 2020) [197x48]
+g4: 1 windows (created Sat Jul  4 12:55:14 2020) [197x48]
+group_boarder: 1 windows (created Thu Jul  2 19:15:08 2020) [195x48]
+i4: 1 windows (created Sat Jul  4 13:08:04 2020) [197x48]
+ind_boarder: 1 windows (created Thu Jul  2 18:49:24 2020) [195x48]
+n1-7: 1 windows (created Thu Jul  9 14:26:23 2020) [197x48] (group n1)
+n10-11: 1 windows (created Thu Jul  9 14:29:37 2020) [199x48] (group n10)
+n2-8: 1 windows (created Thu Jul  9 14:27:25 2020) [199x48] (group n2)
+n5-9: 1 windows (created Thu Jul  9 14:28:23 2020) [199x48] (group n5)
+n7-10: 1 windows (created Thu Jul  9 14:29:04 2020) [199x48] (group n7)
+no_boarder: 1 windows (created Thu Jul  2 19:16:25 2020) [197x48]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a =t gr
+usage: attach-session [-dEr] [-c working-directory] [-t target-session]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t gr
+[exited]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t in
+[exited]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux ls
+data: 1 windows (created Fri Jul  3 13:39:02 2020) [197x48]
+g4: 1 windows (created Sat Jul  4 12:55:14 2020) [197x48]
+i4: 1 windows (created Sat Jul  4 13:08:04 2020) [197x48]
+n1-7: 1 windows (created Thu Jul  9 14:26:23 2020) [197x48] (group n1)
+n10-11: 1 windows (created Thu Jul  9 14:29:37 2020) [199x48] (group n10)
+n2-8: 1 windows (created Thu Jul  9 14:27:25 2020) [199x48] (group n2)
+n5-9: 1 windows (created Thu Jul  9 14:28:23 2020) [199x48] (group n5)
+n7-10: 1 windows (created Thu Jul  9 14:29:04 2020) [199x48] (group n7)
+no_boarder: 1 windows (created Thu Jul  2 19:16:25 2020) [197x48]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux new -s heirarch
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ logout
+Connection to quatro closed.
+jgs8@whale:~$ logout
+Connection to whale.stanford.edu closed.
+Jonathans-MacBook-Pro-8:src jonathangomesselman$ ssh jgs8@whale.stanford.edu
+jgs8@whale.stanford.edu's password: 
+Permission denied, please try again.
+jgs8@whale.stanford.edu's password: 
+Last login: Tue Jul 14 10:11:59 2020 from cpe-74-69-54-90.rochester.res.rr.com
+jgs8@whale:~$ ssh quatro
+jgs8@quatro's password: 
+Permission denied, please try again.
+jgs8@quatro's password: 
+Permission denied, please try again.
+jgs8@quatro's password: 
+Welcome to Ubuntu 18.04.1 LTS (GNU/Linux 4.15.0-108-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+ * "If you've been waiting for the perfect Kubernetes dev solution for
+   macOS, the wait is over. Learn how to install Microk8s on macOS."
+
+   https://www.techrepublic.com/article/how-to-install-microk8s-on-macos/
+
+ * Canonical Livepatch is available for installation.
+   - Reduce system reboots and improve kernel security. Activate at:
+     https://ubuntu.com/livepatch
+
+15 packages can be updated.
+0 updates are security updates.
+
+*** System restart required ***
+Last login: Tue Jul 14 10:12:11 2020 from 171.64.75.72
+(base) jgs8@quatro:~$ tmux a -t hie
+can't find session hie
+(base) jgs8@quatro:~$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~$ git status
+fatal: not a git repository (or any parent up to mount point /)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+(base) jgs8@quatro:~$ cd ElephantCallAI/
+(base) jgs8@quatro:~/ElephantCallAI$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   src/parameters.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	Figures/PR_CurveCall_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	Figures/PR_Curve_Call_model_17_norm_Negx1_2020-02-20_02:50:11adversarial_iteration_1.png
+	Figures/PR_Curve_Call_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	elephant_dataset/Full_24_hrs_mini/
+	elephant_dataset/Test_nouab/
+	elephant_dataset/Train_bai/
+	elephant_dataset/Train_nouab/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(base) jgs8@quatro:~/ElephantCallAI$ git pull
+remote: Enumerating objects: 6, done.
+remote: Counting objects: 100% (6/6), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 6 (delta 3), reused 5 (delta 3), pack-reused 0
+Unpacking objects: 100% (6/6), done.
+From https://github.com/N-Demir/ElephantCallAI
+   a613785..652a0c1  master        -> origin/master
+   4cd0685..458f17d  jon/workbench -> origin/jon/workbench
+Updating a613785..652a0c1
+Fast-forward
+ src/hierarchical_eval.py  | 401 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/hierarchical_train.py |   3 +-
+ 2 files changed, 403 insertions(+), 1 deletion(-)
+ create mode 100644 src/hierarchical_eval.py
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   src/hierarchical_eval.py
+	modified:   src/parameters.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	Figures/PR_CurveCall_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	Figures/PR_Curve_Call_model_17_norm_Negx1_2020-02-20_02:50:11adversarial_iteration_1.png
+	Figures/PR_Curve_Call_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	elephant_dataset/Full_24_hrs_mini/
+	elephant_dataset/Test_nouab/
+	elephant_dataset/Train_bai/
+	elephant_dataset/Train_nouab/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(base) jgs8@quatro:~/ElephantCallAI$ git checkout src/hierarchical_eval.py
+(base) jgs8@quatro:~/ElephantCallAI$ git pull
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 6 (delta 4), reused 5 (delta 4), pack-reused 0
+Unpacking objects: 100% (6/6), done.
+From https://github.com/N-Demir/ElephantCallAI
+   652a0c1..ffc8975  master        -> origin/master
+   458f17d..3469917  jon/workbench -> origin/jon/workbench
+Updating 652a0c1..ffc8975
+Fast-forward
+ src/hierarchical_eval.py | 5 +++--
+ src/utils.py             | 4 ++++
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   src/parameters.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	Figures/PR_CurveCall_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	Figures/PR_Curve_Call_model_17_norm_Negx1_2020-02-20_02:50:11adversarial_iteration_1.png
+	Figures/PR_Curve_Call_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	elephant_dataset/Full_24_hrs_mini/
+	elephant_dataset/Test_nouab/
+	elephant_dataset/Train_bai/
+	elephant_dataset/Train_nouab/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(base) jgs8@quatro:~/ElephantCallAI$ git pull
+remote: Enumerating objects: 8, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 5 (delta 3), reused 4 (delta 3), pack-reused 0
+Unpacking objects: 100% (5/5), done.
+From https://github.com/N-Demir/ElephantCallAI
+   ffc8975..95c7e54  master        -> origin/master
+   3469917..f2e41a3  jon/workbench -> origin/jon/workbench
+Updating ffc8975..95c7e54
+Fast-forward
+ src/hierarchical_eval.py | 256 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 255 insertions(+), 1 deletion(-)
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ git status
+On branch master
+Your branch is up to date with 'origin/master'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	modified:   src/parameters.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	Figures/PR_CurveCall_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	Figures/PR_Curve_Call_model_17_norm_Negx1_2020-02-20_02:50:11adversarial_iteration_1.png
+	Figures/PR_Curve_Call_model_17_norm_Negx8_2020-01-30_19:59:36.png
+	elephant_dataset/Full_24_hrs_mini/
+	elephant_dataset/Test_nouab/
+	elephant_dataset/Train_bai/
+	elephant_dataset/Train_nouab/
+	src/.utils.py.swp
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(base) jgs8@quatro:~/ElephantCallAI$ git pull
+remote: Enumerating objects: 13, done.
+remote: Counting objects: 100% (13/13), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 9 (delta 6), reused 8 (delta 6), pack-reused 0
+Unpacking objects: 100% (9/9), done.
+From https://github.com/N-Demir/ElephantCallAI
+   95c7e54..745f172  master        -> origin/master
+   f2e41a3..1227494  jon/workbench -> origin/jon/workbench
+Updating 95c7e54..745f172
+Fast-forward
+ src/hierarchical_eval.py | 2 +-
+ src/utils.py             | 7 +++++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ git pull
+remote: Enumerating objects: 8, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 5 (delta 3), reused 4 (delta 3), pack-reused 0
+Unpacking objects: 100% (5/5), done.
+From https://github.com/N-Demir/ElephantCallAI
+   745f172..06f9697  master        -> origin/master
+   1227494..db79a50  jon/workbench -> origin/jon/workbench
+Updating 745f172..06f9697
+Fast-forward
+ src/hierarchical_eval.py | 1 +
+ 1 file changed, 1 insertion(+)
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hei
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ cd weights/
+(base) jgs8@quatro:~/ElephantCallAI/weights$ ls
+Call_model_14.pt  Call_model_16.pt  Call_model_17.pt  Call_model_4.pt  Call_model_9.pt
+(base) jgs8@quatro:~/ElephantCallAI/weights$ cd ..
+(base) jgs8@quatro:~/ElephantCallAI$ cd models/
+(base) jgs8@quatro:~/ElephantCallAI/models$ ls
+Adversarial_training_Call_model_17_norm_Negx1_Seed_10_2020-03-03_13:16:45       Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_23:42:15
+Adversarial_training_Call_model_17_norm_Negx1_Seed_8_2020-03-03_13:15:06        Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_23:43:54
+Adversarial_training_Call_model_17_norm_Negx1_Seed_9_2020-03-03_13:16:17        Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_12:53:01
+Call_model_16_norm_Negx1_Loss_Focal_Chunk_2020-02-25_02:15:37                   Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_12:53:34
+Call_model_16_norm_Negx1_Loss_Focal_Chunk_2020-02-25_02:17:00                   Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_13:07:57
+Call_model_17_norm_Full_24_hr_Loss-Focal_Chunk_Weighting-Avg_Gamma-2_init-0.01  Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_13:09:08
+Call_model_17_norm_Full_24_hr_Loss-Focal_Chunk_Weighting-Avg_Gamma-3_init-0.01  Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:22:49
+Call_model_17_norm_Negx10_Loss_CE_2020-07-09_14:32:08                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:23:31
+Call_model_17_norm_Negx10_Loss_CE_2020-07-09_23:00:19                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:24:18
+Call_model_17_norm_Negx10_Loss_CE_2020-07-10_10:17:25                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:24:45
+Call_model_17_norm_Negx10_Loss_CE_2020-07-10_20:53:23                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-07_23:47:13
+Call_model_17_norm_Negx1_2020-03-02_03:05:00adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-07_23:47:23
+Call_model_17_norm_Negx1_2020-03-02_03:06:44adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-08_09:02:53
+Call_model_17_norm_Negx1_2020-03-02_03:12:16adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-08_09:03:56
+Call_model_17_norm_Negx1_2020-03-02_03:13:16adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_CE_2020-07-02_19:17:09
+Call_model_17_norm_Negx1_Loss_CE_2020-07-09_14:27:18                            Call_model_17_norm_Negx2_Loss_CE_2020-07-02_19:18:43
+Call_model_17_norm_Negx1_Loss_CE_2020-07-09_22:59:00                            Call_model_17_norm_Negx2_Loss_CE_2020-07-03_14:22:42
+Call_model_17_norm_Negx1_Loss_CE_2020-07-10_10:14:52                            Call_model_17_norm_Negx2_Loss_CE_2020-07-07_23:48:03
+Call_model_17_norm_Negx1_Loss_CE_2020-07-10_20:50:36                            Call_model_17_norm_Negx2_Loss_CE_2020-07-08_09:04:15
+Call_model_17_norm_Negx1_Loss_CE_2020-07-11_10:15:49                            Call_model_17_norm_Negx2_Loss_CE_2020-07-09_14:28:13
+Call_model_17_norm_Negx1_Loss_Focal_2020-02-23_18:36:03                         Call_model_17_norm_Negx2_Loss_CE_2020-07-09_19:05:50
+Call_model_17_norm_Negx1_Loss_Focal_2020-02-23_18:45:08                         Call_model_17_norm_Negx2_Loss_CE_2020-07-09_20:52:32
+Call_model_17_norm_Negx1_Loss_Focal_2020-02-23_19:04:54                         Call_model_17_norm_Negx2_Loss_CE_2020-07-09_20:53:21
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_01:41:51                   Call_model_17_norm_Negx2_Loss_CE_2020-07-10_10:15:33
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_01:43:29                   Call_model_17_norm_Negx2_Loss_CE_2020-07-10_20:50:56
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_01:45:10                   Call_model_17_norm_Negx2_Loss_CE_2020-07-11_10:16:04
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_01:48:57                   Call_model_17_norm_Negx5_Loss_CE_2020-07-09_14:28:56
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_16:34:40                   Call_model_17_norm_Negx5_Loss_CE_2020-07-09_22:59:26
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-24_18:02:42                   Call_model_17_norm_Negx5_Loss_CE_2020-07-10_10:16:04
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-25_02:48:53                   Call_model_17_norm_Negx5_Loss_CE_2020-07-10_20:51:17
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-25_02:50:43                   Call_model_17_norm_Negx5_Loss_CE_2020-07-11_10:16:54
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-25_13:57:14                   Call_model_17_norm_Negx7_Loss_CE_2020-07-09_14:29:44
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-02_18:54:26                      Call_model_17_norm_Negx7_Loss_CE_2020-07-09_23:00:03
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-02_19:09:24                      Call_model_17_norm_Negx7_Loss_CE_2020-07-10_10:16:39
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-02_19:13:54                      Call_model_17_norm_Negx7_Loss_CE_2020-07-10_20:52:05
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-02_19:16:11                      Call_model_17_norm_Negx7_Loss_CE_2020-07-11_10:17:22
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:26:23                      Call_model_18_norm_Negx1_2020-02-18_03:20:07
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:29:29                      Call_model_18_norm_Negx1_2020-02-18_14:46:23
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:34:03                      Call_model_18_norm_Negx1_2020-02-18_14:47:46
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:35:30                      Call_model_18_norm_Negx1_2020-02-18_14:58:21
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_16:25:39                      Call_model_18_norm_Negx1_2020-02-18_15:14:46
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_16:26:23                      Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10:25:37
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_17:47:07                      seed8_threshold_20.txt
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_17:54:49                      seed9_threshold_20.txt
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_17:55:25
+(base) jgs8@quatro:~/ElephantCallAI/models$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/models$ git pull
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 6 (delta 4), reused 5 (delta 4), pack-reused 0
+Unpacking objects: 100% (6/6), done.
+From https://github.com/N-Demir/ElephantCallAI
+   99e93eb..e7c3eed  master        -> origin/master
+   a5dbdd0..61094b4  jon/workbench -> origin/jon/workbench
+Updating 99e93eb..e7c3eed
+Fast-forward
+ src/data.py              | 8 ++++----
+ src/hierarchical_eval.py | 3 ++-
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+(base) jgs8@quatro:~/ElephantCallAI/models$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/models$ git pull
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 6 (delta 4), reused 5 (delta 4), pack-reused 0
+Unpacking objects: 100% (6/6), done.
+From https://github.com/N-Demir/ElephantCallAI
+   e7c3eed..8db8e28  master        -> origin/master
+   61094b4..629d564  jon/workbench -> origin/jon/workbench
+Updating e7c3eed..8db8e28
+Fast-forward
+ src/hierarchical_eval.py  |  2 +-
+ src/hierarchical_train.py | 16 ++++++++--------
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+(base) jgs8@quatro:~/ElephantCallAI/models$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/models$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/models$ cd ../Predictions/
+(base) jgs8@quatro:~/ElephantCallAI/Predictions$ ls
+16                                                                              Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_13:07:57
+17                                                                              Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_13:09:08
+Call_model_16_norm_Negx1_2020-02-20_02:05:57adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:22:49
+Call_model_16_norm_Negx1_2020-02-20_02:09:15adversarial_iteration_1             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:23:31
+Call_model_16_norm_Negx1_2020-02-20_02:24:35adversarial_iteration_2             Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:24:18
+Call_model_17_norm_full_24_hr                                                   Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_14:24:45
+Call_model_17_norm_Full_24_hr_Loss-Focal_Chunk_Weighting-Avg_Gamma-2_init-0.01  Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-07_23:47:13
+Call_model_17_norm_Full_24_hr_Loss-Focal_Chunk_Weighting-Avg_Gamma-3_init-0.01  Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-07_23:47:23
+Call_model_17_norm_Negx10_Loss_CE_2020-07-09_14:32:08                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-08_09:02:53
+Call_model_17_norm_Negx10_Loss_CE_2020-07-09_23:00:19                           Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-08_09:03:56
+Call_model_17_norm_Negx10_Loss_CE_2020-07-10_10:17:25                           Call_model_17_norm_Negx2_Loss_CE_2020-07-03_14:22:42
+Call_model_17_norm_Negx10_Loss_CE_2020-07-10_20:53:23                           Call_model_17_norm_Negx2_Loss_CE_2020-07-07_23:48:03
+Call_model_17_norm_Negx1_2020-02-20_01:47:24adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_CE_2020-07-08_09:04:15
+Call_model_17_norm_Negx1_2020-02-20_02:42:24adversarial_iteration_0             Call_model_17_norm_Negx2_Loss_CE_2020-07-09_14:28:13
+Call_model_17_norm_Negx1_2020-02-20_02:50:11adversarial_iteration_1             Call_model_17_norm_Negx2_Loss_CE_2020-07-09_19:05:50
+Call_model_17_norm_Negx1_2020-02-20_03:15:03adversarial_iteration_2             Call_model_17_norm_Negx2_Loss_CE_2020-07-09_20:52:32
+Call_model_17_norm_Negx1_Loss_CE_2020-07-09_14:27:18                            Call_model_17_norm_Negx2_Loss_CE_2020-07-09_20:53:21
+Call_model_17_norm_Negx1_Loss_CE_2020-07-09_22:59:00                            Call_model_17_norm_Negx2_Loss_CE_2020-07-10_10:15:33
+Call_model_17_norm_Negx1_Loss_CE_2020-07-10_10:14:52                            Call_model_17_norm_Negx2_Loss_CE_2020-07-10_20:50:56
+Call_model_17_norm_Negx1_Loss_CE_2020-07-10_20:50:36                            Call_model_17_norm_Negx2_Loss_CE_2020-07-11_10:16:04
+Call_model_17_norm_Negx1_Loss_CE_2020-07-11_10:15:49                            Call_model_17_norm_Negx4_nouab_and_bai
+Call_model_17_norm_Negx1_Loss_Focal_Chunk_2020-02-25_13:57:14                   Call_model_17_norm_Negx5_Loss_CE_2020-07-09_14:28:56
+Call_model_17_norm_Negx1_Seed_8_adversarial_iteration_0_2020-03-06_15:18:12     Call_model_17_norm_Negx5_Loss_CE_2020-07-09_22:59:26
+Call_model_17_norm_Negx1_Seed_8_adversarial_iteration_0_2020-03-10_00:36:23     Call_model_17_norm_Negx5_Loss_CE_2020-07-10_10:16:04
+Call_model_17_norm_Negx1_Seed_8_adversarial_iteration_1_2020-03-10_06:01:22     Call_model_17_norm_Negx5_Loss_CE_2020-07-10_20:51:17
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:34:03                      Call_model_17_norm_Negx5_Loss_CE_2020-07-11_10:16:54
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_14:35:30                      Call_model_17_norm_Negx7_Loss_CE_2020-07-09_14:29:44
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_16:25:39                      Call_model_17_norm_Negx7_Loss_CE_2020-07-09_23:00:03
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_16:26:23                      Call_model_17_norm_Negx7_Loss_CE_2020-07-10_10:16:39
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_17:54:49                      Call_model_17_norm_Negx7_Loss_CE_2020-07-10_20:52:05
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_17:55:25                      Call_model_17_norm_Negx7_Loss_CE_2020-07-11_10:17:22
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_23:42:15                      Call_model_17_norm_Negx8_2020-01-30_19:59:36
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-03_23:43:54                      Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10:25:37
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_12:53:01                      Model_0
+Call_model_17_norm_Negx2_Loss_BOUNDARY_2020-07-04_12:53:34
+(base) jgs8@quatro:~/ElephantCallAI/Predictions$ cd Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10\:25\:37/
+(base) jgs8@quatro:~/ElephantCallAI/Predictions/Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10:25:37$ ls
+nn01d_20180127.npy  nn03c_20180625.npy  nn04b_20180611.npy  nn05a_20181029.npy  nn06a_20171228.npy  nn06a_20180830.npy  nn06b_20180827.npy  nn06d_20180829.npy  nn07c_20180603.npy  nn10b_20180416.npy
+nn02e_20180906.npy  nn03e_20180806.npy  nn04d_20181030.npy  nn05c_20180410.npy  nn06a_20180319.npy  nn06a_20180912.npy  nn06b_20180902.npy  nn06e_20180820.npy  nn08b_20180722.npy  nn10b_20180907.npy
+nn03a_20180709.npy  nn04a_20180629.npy  nn05a_20180316.npy  nn05c_20180619.npy  nn06a_20180417.npy  nn06b_20180310.npy  nn06b_20181204.npy  nn07a_20190614.npy  nn09b_20180907.npy
+(base) jgs8@quatro:~/ElephantCallAI/Predictions/Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10:25:37$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/Predictions/Hierarchical_Model-17_Norm-norm_NegFactor-x1_CallRepeats-1_TestNegFactor-x1_Loss-CE_2020-07-14_10:25:37$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux ls
+data: 1 windows (created Fri Jul  3 13:39:02 2020) [199x48]
+g4: 1 windows (created Sat Jul  4 12:55:14 2020) [197x48]
+heirarch: 1 windows (created Tue Jul 14 10:16:15 2020) [199x48]
+i4: 1 windows (created Sat Jul  4 13:08:04 2020) [197x48]
+n1-7: 1 windows (created Thu Jul  9 14:26:23 2020) [197x48] (group n1)
+n10-11: 1 windows (created Thu Jul  9 14:29:37 2020) [199x48] (group n10)
+n2-8: 1 windows (created Thu Jul  9 14:27:25 2020) [199x48] (group n2)
+n5-9: 1 windows (created Thu Jul  9 14:28:23 2020) [199x48] (group n5)
+n7-10: 1 windows (created Thu Jul  9 14:29:04 2020) [199x48] (group n7)
+no_boarder: 1 windows (created Thu Jul  2 19:16:25 2020) [197x48]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux new -s h-2
+[exited]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux new -s h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux new -s hi
+[exited]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux new -s h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5
+can't find session h-5
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hi
+can't find session hi
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t hi
+can't find session hi
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI$ logout
+Connection to quatro closed.
+jgs8@whale:~$ logout
+Connection to whale.stanford.edu closed.
+Jonathans-MacBook-Pro-8:src jonathangomesselman$ ssh jgs8@whale.stanford.edu
+jgs8@whale.stanford.edu's password: 
+Last login: Wed Jul 15 14:59:06 2020 from cpe-74-69-54-90.rochester.res.rr.com
+jgs8@whale:~$ ssh quatro
+jgs8@quatro's password: 
+Welcome to Ubuntu 18.04.1 LTS (GNU/Linux 4.15.0-108-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+ * "If you've been waiting for the perfect Kubernetes dev solution for
+   macOS, the wait is over. Learn how to install Microk8s on macOS."
+
+   https://www.techrepublic.com/article/how-to-install-microk8s-on-macos/
+
+ * Canonical Livepatch is available for installation.
+   - Reduce system reboots and improve kernel security. Activate at:
+     https://ubuntu.com/livepatch
+
+15 packages can be updated.
+0 updates are security updates.
+
+*** System restart required ***
+Last login: Wed Jul 15 14:59:11 2020 from 171.64.75.72
+(base) jgs8@quatro:~$ tmux ls
+data: 1 windows (created Fri Jul  3 13:39:02 2020) [199x48]
+g4: 1 windows (created Sat Jul  4 12:55:14 2020) [197x48]
+h-5-1: 1 windows (created Wed Jul 15 15:16:10 2020) [199x48]
+h-5-2: 1 windows (created Wed Jul 15 15:18:41 2020) [199x48]
+heirarch: 1 windows (created Tue Jul 14 10:16:15 2020) [199x48]
+i4: 1 windows (created Sat Jul  4 13:08:04 2020) [197x48]
+n1-7: 1 windows (created Thu Jul  9 14:26:23 2020) [197x48] (group n1)
+n10-11: 1 windows (created Thu Jul  9 14:29:37 2020) [199x48] (group n10)
+n2-8: 1 windows (created Thu Jul  9 14:27:25 2020) [199x48] (group n2)
+n5-9: 1 windows (created Thu Jul  9 14:28:23 2020) [199x48] (group n5)
+n7-10: 1 windows (created Thu Jul  9 14:29:04 2020) [199x48] (group n7)
+no_boarder: 1 windows (created Thu Jul  2 19:16:25 2020) [197x48]
+(base) jgs8@quatro:~$ tmux a -t h5-1
+can't find session h5-1
+(base) jgs8@quatro:~$ tmux a -t h-5-
+can't find session h-5-
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-1
+[detached (from session h-5-1)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux ls
+data: 1 windows (created Fri Jul  3 13:39:02 2020) [199x48]
+g4: 1 windows (created Sat Jul  4 12:55:14 2020) [197x48]
+h-5-1: 1 windows (created Wed Jul 15 15:16:10 2020) [199x48]
+h-5-2: 1 windows (created Wed Jul 15 15:18:41 2020) [199x48]
+heirarch: 1 windows (created Tue Jul 14 10:16:15 2020) [199x48]
+i4: 1 windows (created Sat Jul  4 13:08:04 2020) [197x48]
+n1-7: 1 windows (created Thu Jul  9 14:26:23 2020) [197x48] (group n1)
+n10-11: 1 windows (created Thu Jul  9 14:29:37 2020) [199x48] (group n10)
+n2-8: 1 windows (created Thu Jul  9 14:27:25 2020) [199x48] (group n2)
+n5-9: 1 windows (created Thu Jul  9 14:28:23 2020) [199x48] (group n5)
+n7-10: 1 windows (created Thu Jul  9 14:29:04 2020) [199x48] (group n7)
+no_boarder: 1 windows (created Thu Jul  2 19:16:25 2020) [197x48]
+(base) jgs8@quatro:~$ tmux a -t n5-
+[detached (from session n5-9)]
+(base) jgs8@quatro:~$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~$ cd ElephantCallAI/elephant_dataset/Train_
+-bash: cd: ElephantCallAI/elephant_dataset/Train_: No such file or directory
+(base) jgs8@quatro:~$ cd ElephantCallAI/elephant_dataset/Train_nouab/
+(base) jgs8@quatro:~/ElephantCallAI/elephant_dataset/Train_nouab$ ls
+Full_24_hr_Mini  Neg_Samples_x1  Neg_Samples_x2  Neg_Samples_x4  Neg_Samples_x6  Neg_Samples_x8
+(base) jgs8@quatro:~/ElephantCallAI/elephant_dataset/Train_nouab$ cd ../../
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI$ nvidia-smi
+Wed Jul 15 19:16:05 2020       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 440.100      Driver Version: 440.100      CUDA Version: 10.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 1070    Off  | 00000000:03:00.0 Off |                  N/A |
+| 49%   74C    P2   140W / 151W |   1467MiB /  8116MiB |     94%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  GeForce RTX 208...  Off  | 00000000:81:00.0 Off |                  N/A |
+| 29%   23C    P8    18W / 250W |     12MiB / 11019MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+|   2  GeForce RTX 208...  Off  | 00000000:82:00.0 Off |                  N/A |
+| 30%   23C    P8    20W / 250W |     12MiB / 11019MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      2365      G   /usr/lib/xorg/Xorg                            64MiB |
+|    0      2964      G   /usr/bin/gnome-shell                          78MiB |
+|    0     22066      C   python                                      1311MiB |
++-----------------------------------------------------------------------------+
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI$ cd src/
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim parameters.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-2-5
+can't find session h-2-5
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim model.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim parameters.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim parameters.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ nvidia-smi
+Wed Jul 15 19:46:58 2020       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 440.100      Driver Version: 440.100      CUDA Version: 10.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 1070    Off  | 00000000:03:00.0 Off |                  N/A |
+| 52%   79C    P2   126W / 151W |   1467MiB /  8116MiB |     88%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  GeForce RTX 208...  Off  | 00000000:81:00.0 Off |                  N/A |
+| 44%   72C    P2   239W / 250W |   1711MiB / 11019MiB |     73%      Default |
++-------------------------------+----------------------+----------------------+
+|   2  GeForce RTX 208...  Off  | 00000000:82:00.0 Off |                  N/A |
+| 51%   84C    P2   222W / 250W |   1711MiB / 11019MiB |     78%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      2365      G   /usr/lib/xorg/Xorg                            64MiB |
+|    0      2964      G   /usr/bin/gnome-shell                          78MiB |
+|    0     22066      C   python                                      1311MiB |
+|    1      1998      C   python                                      1699MiB |
+|    2     16217      C   python                                      1699MiB |
++-----------------------------------------------------------------------------+
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t he
+[detached (from session heirarch)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ vim parameters.py 
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t n2
+[detached (from session n2-8)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ nvidia-smi
+Wed Jul 15 20:46:28 2020       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 440.100      Driver Version: 440.100      CUDA Version: 10.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 1070    Off  | 00000000:03:00.0 Off |                  N/A |
+| 52%   76C    P2   131W / 151W |   1467MiB /  8116MiB |     92%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  GeForce RTX 208...  Off  | 00000000:81:00.0 Off |                  N/A |
+| 32%   54C    P2    91W / 250W |   1711MiB / 11019MiB |     12%      Default |
++-------------------------------+----------------------+----------------------+
+|   2  GeForce RTX 208...  Off  | 00000000:82:00.0 Off |                  N/A |
+| 30%   33C    P8    20W / 250W |     12MiB / 11019MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      2365      G   /usr/lib/xorg/Xorg                            64MiB |
+|    0      2964      G   /usr/bin/gnome-shell                          78MiB |
+|    0     22066      C   python                                      1311MiB |
+|    1      1998      C   python                                      1699MiB |
++-----------------------------------------------------------------------------+
+(base) jgs8@quatro:~/ElephantCallAI/src$ nvidia-smi
+Wed Jul 15 20:46:31 2020       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 440.100      Driver Version: 440.100      CUDA Version: 10.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 1070    Off  | 00000000:03:00.0 Off |                  N/A |
+| 52%   76C    P2   134W / 151W |   1467MiB /  8116MiB |     89%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  GeForce RTX 208...  Off  | 00000000:81:00.0 Off |                  N/A |
+| 32%   54C    P2   228W / 250W |   1711MiB / 11019MiB |     13%      Default |
++-------------------------------+----------------------+----------------------+
+|   2  GeForce RTX 208...  Off  | 00000000:82:00.0 Off |                  N/A |
+| 30%   33C    P8    20W / 250W |     12MiB / 11019MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      2365      G   /usr/lib/xorg/Xorg                            64MiB |
+|    0      2964      G   /usr/bin/gnome-shell                          78MiB |
+|    0     22066      C   python                                      1311MiB |
+|    1      1998      C   python                                      1699MiB |
++-----------------------------------------------------------------------------+
+(base) jgs8@quatro:~/ElephantCallAI/src$ nvidia-smi
+Wed Jul 15 20:46:33 2020       
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 440.100      Driver Version: 440.100      CUDA Version: 10.2     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  GeForce GTX 1070    Off  | 00000000:03:00.0 Off |                  N/A |
+| 52%   76C    P2   141W / 151W |   1467MiB /  8116MiB |     88%      Default |
++-------------------------------+----------------------+----------------------+
+|   1  GeForce RTX 208...  Off  | 00000000:81:00.0 Off |                  N/A |
+| 32%   53C    P2    91W / 250W |   1711MiB / 11019MiB |     21%      Default |
++-------------------------------+----------------------+----------------------+
+|   2  GeForce RTX 208...  Off  | 00000000:82:00.0 Off |                  N/A |
+| 30%   33C    P8    20W / 250W |     12MiB / 11019MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+
+                                                                               
++-----------------------------------------------------------------------------+
+| Processes:                                                       GPU Memory |
+|  GPU       PID   Type   Process name                             Usage      |
+|=============================================================================|
+|    0      2365      G   /usr/lib/xorg/Xorg                            64MiB |
+|    0      2964      G   /usr/bin/gnome-shell                          78MiB |
+|    0     22066      C   python                                      1311MiB |
+|    1      1998      C   python                                      1699MiB |
++-----------------------------------------------------------------------------+
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+[detached (from session no_boarder)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t h-5-2
+[detached (from session h-5-2)]
+(base) jgs8@quatro:~/ElephantCallAI/src$ tmux a -t no
+
+Epoch [103/999] Training loss: 0.007363 acc: 0.9971 Validation loss: 0.110940 acc: 0.9795 f-score: 0.8739 time: 86.0651                                                                     [1176/1923]
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [104/999] Train Non-Zero: 845725.0 Val Non-Zero: 41152.0                                                                                                                                         
+Epoch [104/999] Training loss: 0.007518 acc: 0.9970 Validation loss: 0.116476 acc: 0.9795 f-score: 0.8696 time: 87.0266                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [105/999] Train Non-Zero: 845990.0 Val Non-Zero: 41167.0                                                                                                                                         
+Epoch [105/999] Training loss: 0.007684 acc: 0.9969 Validation loss: 0.115053 acc: 0.9788 f-score: 0.8692 time: 88.0121                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [106/999] Train Non-Zero: 845901.0 Val Non-Zero: 41833.0                                                                                                                                         
+Epoch [106/999] Training loss: 0.007110 acc: 0.9972 Validation loss: 0.114381 acc: 0.9791 f-score: 0.8711 time: 88.9817                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [107/999] Train Non-Zero: 845927.0 Val Non-Zero: 42564.0                                                                                                                                         
+Epoch [107/999] Training loss: 0.007111 acc: 0.9972 Validation loss: 0.119404 acc: 0.9791 f-score: 0.8762 time: 89.8688                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [108/999] Train Non-Zero: 846011.0 Val Non-Zero: 41547.0                                                                                                                                         
+Epoch [108/999] Training loss: 0.008812 acc: 0.9965 Validation loss: 0.109754 acc: 0.9793 f-score: 0.8734 time: 90.6369                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [109/999] Train Non-Zero: 845886.0 Val Non-Zero: 41780.0                                                                                                                                         
+Epoch [109/999] Training loss: 0.006890 acc: 0.9973 Validation loss: 0.111038 acc: 0.9795 f-score: 0.8741 time: 91.3827                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [110/999] Train Non-Zero: 845995.0 Val Non-Zero: 41306.0                                                                                                                                         
+Epoch [110/999] Training loss: 0.006762 acc: 0.9974 Validation loss: 0.114299 acc: 0.9790 f-score: 0.8737 time: 92.1378                                                                                
+Num batches: 1162                                                                                                                                                                                      
+Num batches: 63                                                                                                                                                                                        
+Epoch [111/999] Train Non-Zero: 845894.0 Val Non-Zero: 40428.0                                                                                                                                         
+Epoch [111/999] Training loss: 0.006897 acc: 0.9973 Validation loss: 0.121473 acc: 0.9786 f-score: 0.8654 time: 92.9045                                                                                
+Early stopping because last 30 validation accuracies have been deque([0.9799193724974975, 0.9797473254504504, 0.9801207457457457, 0.979346534034034, 0.9795127158408409, 0.9781656656656657, 0.97871113
+3008008, 0.9790454517017017, 0.9794462431181181, 0.9782673298298298, 0.9787267736486487, 0.9789027308558559, 0.9789476976976977, 0.9797219094094094, 0.9792800613113113, 0.979712134009009, 0.979080643
+1431431, 0.978855808933934, 0.9792996121121121, 0.9790063501001001, 0.9790728228228228, 0.9794892548798799, 0.9794716591591591, 0.9788010666916916, 0.9790591372622622, 0.9791080142642643, 0.979254645
+2702703, 0.9795068506006006, 0.9790415415415415, 0.9785605918418419], maxlen=30) and less than best val accuracy 0.9804648398398398                                                                    
+Best val Acc: 0.980465                                                                                                                                                                                 
+Best val F-score: 0.879317    
