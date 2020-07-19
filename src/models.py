@@ -806,10 +806,13 @@ class Model17(nn.Module):
 
 
 """
-ResNet-18
+ResNet-18 for entire chunk classification!
 """
 class Model18(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        """
+            Note output size is not actually used here!
+        """
         super(Model18, self).__init__()
 
         self.input_size = input_size # Number of frequency bins
@@ -818,7 +821,8 @@ class Model18(nn.Module):
         self.model.fc = nn.Sequential(
            nn.Linear(512, 128),
            nn.ReLU(inplace=True),
-           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
+           nn.Linear(128, 1)) # Single window output!
+
 
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")

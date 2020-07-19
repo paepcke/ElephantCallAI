@@ -1,20 +1,13 @@
 import numpy as np
 import torch
-import torch.nn as nn
 from torch import optim
 from torch.autograd import Variable
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import precision_recall_curve
-from data import get_loader, get_loader_fuzzy
 from torchsummary import summary
 import time
 from tensorboardX import SummaryWriter
-import sklearn
 import sys
 import copy
 import os
-import torch.nn.functional as F
 
 import parameters
 import argparse
@@ -29,6 +22,7 @@ from models import get_model
 from loss import get_loss
 from train import train
 from utils import create_save_path
+from data import get_loader, get_loader_fuzzy
 
 parser = argparse.ArgumentParser()
 
@@ -55,13 +49,8 @@ def main():
     # Probably make call repeats and neg samples default to 1 for test data!!!!
     test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
                     "_CallRepeats_" + str(1)
-    
-    # Include boundary uncertainty in training
-    include_boundaries = False
-    if parameters.LOSS.upper() == "BOUNDARY":
-        include_boundaries = True
-        train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
-        test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
+
+    # Just for now let me try training on the non full datasets then we will tweak this!
 
     shift_windows = False
     if parameters.SHIFT_WINDOWS:
@@ -71,10 +60,11 @@ def main():
     
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        include_boundaries=include_boundaries, shift_windows=shift_windows)
+                                        shift_windows=shift_windows, full_window_predict=True)
     test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, full_window_predict=True)
 
+    # For now model 18 signifies this!!!
     save_path = create_save_path(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()), args.save_local)
 
     dloaders = {'train':train_loader, 'valid':test_loader}
@@ -89,7 +79,6 @@ def main():
     writer.add_scalar('batch_size', parameters.BATCH_SIZE)
     writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[parameters.MODEL_ID]['l2_reg'])
 
-    # Want to use focal loss! Next thing to check on!
     loss_func, include_boundaries = get_loss()
 
     # Honestly probably do not need to have hyper-parameters per model, but leave it for now.
@@ -122,5 +111,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
