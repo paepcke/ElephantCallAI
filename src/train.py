@@ -6,7 +6,7 @@ from collections import deque
 
 
 def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, 
-            include_boundaries=False, ):
+            include_boundaries=False):
     model.train(True)
     time_start = time.time()
 
@@ -23,7 +23,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
-        if (idx % 1000 == 0) and parameters.VERBOSE:
+        if (idx % 250 == 0) and parameters.VERBOSE:
             print ("Batch number {} of {}".format(idx, len(dataloader)))
             print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
 
@@ -91,7 +91,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
         for idx, batch in enumerate(dataloader):
-            if (idx % 1000 == 0) and parameters.VERBOSE:
+            if (idx % 250 == 0) and parameters.VERBOSE:
                 print ("Batch number {} of {}".format(idx, len(dataloader)))
                 print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
             # Cast the variables to the correct type and 
