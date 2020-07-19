@@ -74,6 +74,7 @@ def get_loader_fuzzy(data_dir,
                include_boundaries=False,
                shift_windows=False,
                is_full_dataset=False,
+               full_window_predict=False,
                augment=False,
                shuffle=True,
                num_workers=16,
@@ -99,7 +100,7 @@ def get_loader_fuzzy(data_dir,
 
     -is_full_dataset: Is important for when we are shifting the windows, because
     when using the full 24 hr dataset for adversarial discover we always want to 
-    use the middle of the oversized window
+    use the middle of the oversized window!
     Returns
     -------
     - train_loader: training set iterator.
@@ -109,7 +110,7 @@ def get_loader_fuzzy(data_dir,
     # Note here we could do some data preprocessing!
     # define transform
     dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, 
-                        shift_windows=shift_windows, is_full_dataset=is_full_dataset)
+                        shift_windows=shift_windows, is_full_dataset=is_full_dataset, full_window_predict=full_window_predict)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -240,7 +241,7 @@ class ElephantDataset(data.Dataset):
 
 class ElephantDatasetFuzzy(data.Dataset):
     def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, 
-            shift_windows=False, is_full_dataset=False):
+            shift_windows=False, is_full_dataset=False, full_window_predict=False):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
@@ -249,12 +250,14 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.include_boundaries = include_boundaries
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
+        self.full_window_predict = full_window_predict
 
-        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        self.initialize_labels()
-        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        #self.intialize_data(init_pos=True, init_neg=True)
+        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        #self.initialize_labels()
+
+        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
@@ -341,10 +344,17 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         if self.user_transforms:
             feature = self.user_transforms(feature)
-            
+
         # Honestly may be worth pre-process this
         feature = torch.from_numpy(feature).float()
-        label = torch.from_numpy(label).float()
+        if self.full_window_predict:
+            # Make the label a binary 0/1 if an elephant 
+            # call is present (May be some weird boundary cases
+            # with call being on the edge, but we'll cross that
+            # bridge later).
+            label = 1. if np.sum(label) > 0 else 0.
+        else:    
+            label = torch.from_numpy(label).float()
 
         # Return the boundary masks
         if self.include_boundaries:

@@ -5,7 +5,8 @@ import parameters
 from collections import deque
 
 
-def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, include_boundaries=False):
+def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, 
+            include_boundaries=False, ):
     model.train(True)
     time_start = time.time()
 
@@ -30,7 +31,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, incl
         labels = labels.to(parameters.device)
 
         # Forward pass
-        logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+        logits = model(inputs).squeeze() 
         # Are we zeroing out the hidden state in the model???
 
         # Include boundary positions if necessary
@@ -46,7 +47,10 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, incl
         running_loss += loss.item()
         running_corrects += num_correct(logits, labels)
         running_non_zero += num_non_zero(logits, labels)
-        running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
+        if len(logits.shape) == 2:
+            running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
+        else: # For the binary window classification
+            running_samples += logits.shape[0]
         running_fscore += get_f_score(logits, labels)
 
     train_epoch_loss = running_loss / (idx + 1)
@@ -102,7 +106,10 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
             running_loss += loss.item()
             running_corrects += num_correct(logits, labels)
             running_non_zero += num_non_zero(logits, labels)
-            running_samples += logits.shape[0] * logits.shape[1] #Count the number slices
+            if len(logits.shape) == 2:
+                running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
+            else: # For the binary window classification
+                running_samples += logits.shape[0]
             running_fscore += get_f_score(logits, labels)
 
     valid_epoch_loss = running_loss / (idx + 1)
