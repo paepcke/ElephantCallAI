@@ -16,13 +16,17 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     # May ditch these!
     running_non_zero = 0
     running_fscore = 0.0
-    iterations = 0
+
+    # For focal loss purposes
+    running_true_non_zero = 0
 
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
-        if (idx % 100 == 0) and parameters.VERBOSE:
+        if (idx % 1000 == 0) and parameters.VERBOSE:
             print ("Batch number {} of {}".format(idx, len(dataloader)))
+            print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
+
         # Cast the variables to the correct type and 
         # put on the correct torch device
         inputs = batch[0].clone().float()
@@ -31,7 +35,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         labels = labels.to(parameters.device)
 
         # Forward pass
-        logits = model(inputs).squeeze() 
+        logits = model(inputs).squeeze()
         # Are we zeroing out the hidden state in the model???
 
         # Include boundary positions if necessary
@@ -43,6 +47,8 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
 
         loss.backward()
         optimizer.step()
+
+        running_true_non_zero += torch.sum(labels).item()
         running_loss += loss.item()
         running_corrects += num_correct(logits, labels)
         running_non_zero += num_non_zero(logits, labels)
@@ -61,7 +67,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     scheduler.step()
 
     #Logging
-    #print ('Train Non-Zero: {}'.format(train_non_zero))
+    print ('Train Non-Zero: {}'.format(train_non_zero))
     print('Training loss: {:.6f}, acc: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
         train_epoch_loss, train_epoch_acc, train_epoch_fscore ,(time.time()-time_start)/60))
     
@@ -79,11 +85,15 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     running_non_zero = 0
     running_fscore = 0.0
 
+    # For focal loss purposes
+    running_true_non_zero = 0
+
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
         for idx, batch in enumerate(dataloader):
             if (idx % 1000 == 0) and parameters.VERBOSE:
                 print ("Batch number {} of {}".format(idx, len(dataloader)))
+                print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
             # Cast the variables to the correct type and 
             # put on the correct torch device
             inputs = batch[0].clone().float()
@@ -102,6 +112,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
                 loss = loss_func(logits, labels)
 
 
+            running_true_non_zero += torch.sum(labels).item()
             running_loss += loss.item()
             running_corrects += num_correct(logits, labels)
             running_non_zero += num_non_zero(logits, labels)
@@ -117,7 +128,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     valid_non_zero = running_non_zero
 
     #Logging
-    #print ('Val Non-Zero: {}'.format(valid_non_zero))
+    print ('Val Non-Zero: {}'.format(valid_non_zero))
     print('Validation loss: {:.6f} acc: {:.4f} f-score: {:.4f} time: {:.4f}'.format(
             valid_epoch_loss, valid_epoch_acc, 
             valid_epoch_fscore, (time.time()-time_start)/60))
