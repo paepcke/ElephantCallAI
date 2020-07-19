@@ -86,7 +86,6 @@ class FocalLoss(nn.Module):
         # Select the appropriate alpha based on label y
         alpha_t = alpha[targets.data.view(-1).long()].view_as(targets)
         
-        print ("Weights", (1-pt) ** self.gamma)
         focal_loss = alpha_t * (1 - pt)**self.gamma * bce_loss
 
         # Let us look a bit into the amount of loss that goes into 
