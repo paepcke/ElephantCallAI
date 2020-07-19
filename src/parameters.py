@@ -2,7 +2,7 @@ import torch
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
-VERBOSE = False
+VERBOSE = True
 
 NUM_EPOCHS = 1000
 EVAL_PERIOD = 1
@@ -45,9 +45,9 @@ DATASET = 'Call'
 
 LOSS = "FOCAL"
 CHUNK_WEIGHTING = "count"
-FOCAL_WEIGHT_INIT = 0.01 
-FOCAL_GAMMA = 15
-FOCAL_ALPHA = 0.25
+FOCAL_WEIGHT_INIT = 0.1 
+FOCAL_GAMMA = 5
+FOCAL_ALPHA = 0.99
 
 NEG_SAMPLES = 1
 TEST_NEG_SAMPLES = 1
@@ -71,7 +71,7 @@ BOUNDARY_WEIGHT = 0.5
 RANDOM_SEED = 8
 DATA_LOADER_SEED = 33
 
-BATCH_SIZE = 32
+BATCH_SIZE = 256 # Was 32
 
 LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
 LOCAL_TEST_FILES = '../elephant_dataset/Test/'

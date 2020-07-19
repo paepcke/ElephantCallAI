@@ -68,7 +68,7 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
         self.reduce = reduce
-        self.bce = nn.BCEWithLogitsLoss(reduce='none')
+        self.bce = nn.BCEWithLogitsLoss(reduction='none')
 
     def forward(self, inputs, targets):
         # Calculate the standard BCE loss and then 
@@ -86,6 +86,7 @@ class FocalLoss(nn.Module):
         # Select the appropriate alpha based on label y
         alpha_t = alpha[targets.data.view(-1).long()].view_as(targets)
         
+        print ("Weights", (1-pt) ** self.gamma)
         focal_loss = alpha_t * (1 - pt)**self.gamma * bce_loss
 
         # Let us look a bit into the amount of loss that goes into 
@@ -116,7 +117,7 @@ class ChunkFocalLoss(nn.Module):
         self.gamma = gamma
         self.batch_size = batch_size
         self.reduce = reduce
-        self.bce = nn.BCEWithLogitsLoss(reduce='none')
+        self.bce = nn.BCEWithLogitsLoss(reduction='none')
 
     def forward(self, inputs, targets):
         """
