@@ -103,7 +103,7 @@ class Model0(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":  # NEED to think about this later! Not on top of priority!
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -139,7 +139,7 @@ class Model1(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
 
     def forward(self, inputs):
@@ -179,7 +179,7 @@ class Model2(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -221,7 +221,7 @@ class Model3(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -266,7 +266,7 @@ class Model4(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -301,7 +301,7 @@ class Model5(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -331,7 +331,7 @@ class Model6(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -367,7 +367,7 @@ class Model7(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -410,7 +410,7 @@ class Model8(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -456,7 +456,7 @@ class Model9(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size*2, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -492,7 +492,7 @@ class Model10(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -530,7 +530,7 @@ class Model11(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -567,7 +567,7 @@ class Model12(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -606,7 +606,7 @@ class Model13(nn.Module):
         self.hiddenToClass = nn.Linear(self.hidden_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -645,7 +645,7 @@ class Model14(nn.Module):
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -704,7 +704,7 @@ class Model15(nn.Module):
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
 
         if loss.lower() == "focal":
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
 
     def make_layers(cfg, batch_norm=False):
@@ -760,7 +760,7 @@ class Model16(nn.Module):
 
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")
-            self.hiddenToClass.weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
     def forward(self, inputs):
         # input shape - (batch, seq_len, input_size)
@@ -794,8 +794,8 @@ class Model17(nn.Module):
 
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")
-            print ("Init:", -np.log((1 - weight_init) / weight_init))
-            self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
 
     def forward(self, inputs):
@@ -826,8 +826,9 @@ class Model18(nn.Module):
 
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")
-            print ("Init:", -np.log((1 - weight_init) / weight_init))
-            self.model.fc[2].weight.data.fill_(-np.log((1 - weight_init) / weight_init))
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+            #print (self.model.fc[2].bias)
 
 
     def forward(self, inputs):

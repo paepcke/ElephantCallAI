@@ -68,14 +68,14 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
         self.reduce = reduce
-        self.bce = nn.BCEWithLogitsLoss()
+        self.bce = nn.BCEWithLogitsLoss(reduce='none')
 
     def forward(self, inputs, targets):
         # Calculate the standard BCE loss and then 
         # re-weight it by the term (a_t (1 - p_t)^gamma)
         # Let us see how the weighting term would actually apply here later!
         # Let us compare how this works an added alpha term
-        bce_loss = self.bce(inputs, targets, reduction='none')
+        bce_loss = self.bce(inputs, targets)
         # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
         pt = torch.exp(-bce_loss)
 
@@ -116,7 +116,7 @@ class ChunkFocalLoss(nn.Module):
         self.gamma = gamma
         self.batch_size = batch_size
         self.reduce = reduce
-        self.bce = nn.BCEWithLogitsLoss()
+        self.bce = nn.BCEWithLogitsLoss(reduce='none')
 
     def forward(self, inputs, targets):
         """
@@ -129,7 +129,7 @@ class ChunkFocalLoss(nn.Module):
             inputs - [batch_size, chunk_length]
             targets - [batch_size, chunk_length]
         """
-        bce_loss = self.bce(inputs, targets, reduction='none')
+        bce_loss = self.bce(inputs, targets)
         # Small hack for now!
         bce_loss = bce_loss.view(self.batch_size, -1)
 

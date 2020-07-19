@@ -77,7 +77,7 @@ def num_correct(logits, labels):
         binary_preds = pred > parameters.THRESHOLD
         # Cast to proper type!
         binary_preds = binary_preds.float()
-        num_correct = (binary_preds == labels).sum()
+        num_correct = (binary_preds == labels).sum().item()
 
     return num_correct
 
@@ -88,7 +88,7 @@ def num_non_zero(logits, labels):
         binary_preds = pred > parameters.THRESHOLD
         # Cast to proper type!
         binary_preds = binary_preds.float()
-        num_non_zero = binary_preds.sum()
+        num_non_zero = binary_preds.sum().item()
 
     return num_non_zero
 

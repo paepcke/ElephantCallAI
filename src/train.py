@@ -21,7 +21,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
-        if (idx % 1000 == 0) and parameters.VERBOSE:
+        if (idx % 100 == 0) and parameters.VERBOSE:
             print ("Batch number {} of {}".format(idx, len(dataloader)))
         # Cast the variables to the correct type and 
         # put on the correct torch device
@@ -43,7 +43,6 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
 
         loss.backward()
         optimizer.step()
-
         running_loss += loss.item()
         running_corrects += num_correct(logits, labels)
         running_non_zero += num_non_zero(logits, labels)
