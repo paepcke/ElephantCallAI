@@ -37,20 +37,14 @@ parser.add_argument('--save_local', dest='save_local', action='store_true',
 def main():
     args = parser.parse_args()
 
+    # Use the 24hr datasets!
+
     if args.local_files:
-        train_data_path = parameters.LOCAL_TRAIN_FILES
-        test_data_path = parameters.LOCAL_TEST_FILES
+        train_data_path = parameters.LOCAL_FULL_TRAIN
+        test_data_path = parameters.LOCAL_FULL_TEST
     else:
-        train_data_path = parameters.REMOTE_TRAIN_FILES
-        test_data_path = parameters.REMOTE_TEST_FILES
-
-    train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
-                        "_CallRepeats_" + str(parameters.CALL_REPEATS)
-    # Probably make call repeats and neg samples default to 1 for test data!!!!
-    test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
-                    "_CallRepeats_" + str(1)
-
-    # Just for now let me try training on the non full datasets then we will tweak this!
+        train_data_path = parameters.REMOTE_FULL_TRAIN
+        test_data_path = parameters.REMOTE_FULL_TEST
 
     shift_windows = False
     if parameters.SHIFT_WINDOWS:
