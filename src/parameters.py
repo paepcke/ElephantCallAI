@@ -2,7 +2,7 @@ import torch
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 THRESHOLD = 0.5
-VERBOSE = True
+VERBOSE = False
 
 NUM_EPOCHS = 1000
 EVAL_PERIOD = 1
@@ -28,12 +28,12 @@ ADVERSARIAL_THRESHOLD = 0
 
 FALSE_NEGATIVE_THRESHOLD = 15 # Test this!
 # Specify 'same' to keep training Model_0
-HIERARCHICAL_MODEL = 17
+HIERARCHICAL_MODEL = 18
 # Specify the number of repeats for ONLY the 
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
 HIERARCHICAL_REPEATS = 1
-HIERARCHICAL_SHIFT_WINDOWS = True
+HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
 MODEL_ID = 18
@@ -43,7 +43,7 @@ DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
-LOSS = "FOCAL"
+LOSS = "CE"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.01 
 FOCAL_GAMMA = 2
@@ -71,7 +71,7 @@ BOUNDARY_WEIGHT = 0.5
 RANDOM_SEED = 8
 DATA_LOADER_SEED = 33
 
-BATCH_SIZE = 256 # Was 32
+BATCH_SIZE = 32 # Was 32
 
 LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
 LOCAL_TEST_FILES = '../elephant_dataset/Test/'
@@ -205,7 +205,7 @@ HYPERPARAMETERS = {
         },
 18: {
         'lr': 1e-3,
-        'lr_decay_step': 20, # Let us almost try not having this for now
+        'lr_decay_step': 20, # Let us almost try not having this for now for the focal loss!
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
         }

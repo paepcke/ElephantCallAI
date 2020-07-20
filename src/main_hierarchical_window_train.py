@@ -43,7 +43,6 @@ parser.add_argument('--models_path', type=str,
     the negative samples of the dataset, or creates a new dataset! For now let
     us try the re-initializes the negative samples:
 """
-# Option 2:
 #   We have multiple options in this file that given different flags does different things.
 #   1) the option to do the full pipeline. Train Model_0 save it, get the adversarial examples
 #   and write a file containing the adversarial files and the threshold used, and finally train
@@ -62,14 +61,12 @@ parser.add_argument('--models_path', type=str,
 #   2 and 3 as expected.
 
 
-def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, num_files_to_return=-1):
+def adversarial_discovery_helper(dataloader, model, threshold=0.5, num_files_to_return=-1):
     """
         Given a trained model, we identify and save false negative data chunks. 
         These false negatives are then used as the negative examples for the 
         training of a second heirarchical model. By default return all false
         positive data chunks (i.e. num_files_to_return = -1). 
-        We define a false positive data chunk "loosely" for now as having 
-        more than 'min_length' predicted slices (prediction = 1)
     """
     # Note there may be edge cases where an adversarial example exists right
     # near an elephant call and is not included in the training dataset because
@@ -103,17 +100,15 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
         # Pre-compute the number of pos. slices in each chunk
         # Threshold the predictions - May add guassian blur
         binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
-        pred_counts = torch.sum(binary_preds, dim=1).squeeze().cpu().detach().numpy() # Shape - (batch_size)
-        # Get ground truth label counts
-        gt_counts = torch.sum(labels, dim=1).cpu().detach().numpy() # Shape - (batch_size)
-        
-        # We want to look for chunks that have gt_counts = 0
-        # and pred_counts > min_length. Create masks for each
-        gt_empty = (gt_counts == 0)
-        predicted_chunks = (pred_counts >= min_length)
+        binary_preds = binary_preds.cpu().detach().numpy()
+        labels = labels.cpu().detach().numpy()
+        # We want to look for chunks where the prediction is
+        # a false negative for the entire window
+        gt_empty = (labels == 0.)
+        predicted_chunks = (binary_preds == 1.)
 
-        epoch_adversarial_examples = list(data_files[gt_empty & predicted_chunks])
-        adversarial_examples += epoch_adversarial_examples
+        iter_adversarial_examples = list(data_files[gt_empty & predicted_chunks])
+        adversarial_examples += iter_adversarial_examples
 
         # Visualize every 100 selected examples
         # NEED to figure this out a bit
@@ -121,7 +116,7 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
             adversarial_features = inputs[torch.tensor(gt_empty & predicted_chunks)]
             adversarial_predictions = predictions[torch.tensor(gt_empty & predicted_chunks)]
             adversarial_label = labels[torch.tensor(gt_empty & predicted_chunks)]
-            for idx, data_file in enumerate(epoch_adversarial_examples):
+            for idx, data_file in enumerate(iter_adversarial_examples):
                 if (idx + 1) % 100 == 0:
                     print ("Adversarial Example:", (idx + 1))
                     features = adversarial_features[idx].cpu().detach().numpy()
@@ -214,18 +209,19 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     full_train_loader = get_loader_fuzzy(full_train_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
                                         include_boundaries=False, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS,
-                                        is_full_dataset=True)
+                                        is_full_dataset=True, full_window_predict=True)
     full_test_loader = get_loader_fuzzy(full_test_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=False, full_window_predict=True)
 
     # For now let us try including all of the false negatives!
-    adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
+    adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0)
     adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
     with open(adversarial_train_save_path, 'w') as f:
         for file in adversarial_train_files:
             f.write('{}\n'.format(file))
 
-    adversarial_test_files = adversarial_discovery_helper(full_test_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
+    adversarial_test_files = adversarial_discovery_helper(full_test_loader, model_0)
     adversarial_test_save_path = os.path.join(save_path, "model_0-False_Pos_Test.txt")
     with open(adversarial_test_save_path, 'w') as f:
         for file in adversarial_test_files:
@@ -307,16 +303,21 @@ def main():
     # Model 0 Loaders
     model_0_train_loader = get_loader_fuzzy(model_0_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        include_boundaries=include_boundaries, shift_windows=parameters.SHIFT_WINDOWS)
+                                        include_boundaries=include_boundaries, shift_windows=parameters.SHIFT_WINDOWS,
+                                        full_window_predict=True)
     model_0_test_loader = get_loader_fuzzy(model_0_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=include_boundaries, full_window_predict=True)
     
     # Model 1 Loaders
     model_1_train_loader = get_loader_fuzzy(model_1_train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        include_boundaries=include_boundaries, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS)
+                                        include_boundaries=include_boundaries, 
+                                        shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS, 
+                                        full_window_predict=True)
     model_1_test_loader = get_loader_fuzzy(model_1_test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
-                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
+                                        norm=parameters.NORM, scale=parameters.SCALE, 
+                                        include_boundaries=include_boundaries, full_window_predict=True)
     
 
     if args.models_path is None:
