@@ -128,6 +128,174 @@ def get_loader_fuzzy(data_dir,
 
     return data_loader
 
+
+class ElephantDatasetFuzzy(data.Dataset):
+    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, 
+            shift_windows=False, is_full_dataset=False, full_window_predict=False):
+        # Plan: Load in all feature and label names to create a list
+        self.data_path = data_path
+        self.user_transforms = transform
+        self.preprocess = preprocess
+        self.scale = scale
+        self.include_boundaries = include_boundaries
+        self.shift_windows = shift_windows
+        self.is_full_dataset = is_full_dataset
+        self.full_window_predict = full_window_predict
+
+        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        #self.initialize_labels()
+
+        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        self.intialize_data(init_pos=True, init_neg=True)
+
+        assert len(self.features) == len(self.labels)
+        if self.include_boundaries:
+            assert len(self.features) == len(self.boundary_masks)
+
+        print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
+        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+
+    def initialize_labels(self):
+        self.labels = []
+        self.boundary_masks = []
+        for feature_path in self.features:
+            feature_parts = feature_path.split("features")
+            self.labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
+            if self.include_boundaries:
+                self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+    def set_pos_features(self, pos_features):
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
+        self.pos_features = pos_features
+        self.intialize_data(init_pos=True, init_neg=False)
+
+    def set_neg_features(self, neg_features):
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
+        self.neg_features = neg_features
+        self.intialize_data(init_pos=False, init_neg=True)
+
+    def set_featues(self, pos_features, neg_features):
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
+        self.pos_features = pos_features
+        self.neg_features = neg_features
+        self.intialize_data(init_pos=True, init_neg=True)
+
+    def intialize_data(self, init_pos=True, init_neg=True):
+        """
+            Initialize both the positive and negative label and boundary
+            mask data arrays if indicated by the initialization flags 
+            'init_pos' and 'init_neg'. After initializing any necessary
+            data, combine the positive and negative examples!
+        """
+        # Initialize the positive examples
+        if init_pos:
+            self.pos_labels = []
+            self.pos_boundary_masks = []
+            for feature_path in self.pos_features:
+                feature_parts = feature_path.split("features")
+                # Just out of curiosity
+                self.pos_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
+                if self.include_boundaries:
+                    self.pos_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+        # Initialize the negative examples
+        if init_neg:
+            self.neg_labels = []
+            self.neg_boundary_masks = []
+            for feature_path in self.neg_features:
+                feature_parts = feature_path.split("features")
+                # Just out of curiosity
+                self.neg_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
+                if self.include_boundaries:
+                    self.neg_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
+        # Combine the positive and negative examples!
+        self.features = self.pos_features + self.neg_features
+        self.labels = self.pos_labels + self.neg_labels
+        if self.include_boundaries:
+            self.boundary_masks = self.pos_boundary_masks + self.neg_boundary_masks
+
+        # Let us try having multiple duplicate copies of data when 
+        # using the shift windows setting
+        if self.shift_windows:
+            self.features *= 5 # Try for now!
+            self.labels *= 5
+
+
+    def __len__(self):
+        return len(self.features)
+
+    """
+    Return a single element at provided index
+    """
+    def __getitem__(self, index):
+        feature = np.load(self.features[index])
+        label = np.load(self.labels[index])
+
+        feature = self.apply_transforms(feature)
+        if self.shift_windows:
+            feature, label = self.sample_chunk(feature, label)
+
+        if self.user_transforms:
+            feature = self.user_transforms(feature)
+
+        # Honestly may be worth pre-process this
+        feature = torch.from_numpy(feature).float()
+        if self.full_window_predict:
+            # Make the label a binary 0/1 if an elephant 
+            # call is present (May be some weird boundary cases
+            # with call being on the edge, but we'll cross that
+            # bridge later).
+            label = 1. if np.sum(label) > 0 else 0.
+        else:    
+            label = torch.from_numpy(label).float()
+
+        # Return the boundary masks
+        if self.include_boundaries:
+            masks = np.load(self.boundary_masks[index])
+            # Cast to a bool tensor to allow for array masking
+            masks = torch.from_numpy(masks) == 1
+
+            return feature, label, masks, self.features[index]
+        else:
+            return feature, label, self.features[index] # Include the data file
+
+    def sample_chunk(self, feature, label):
+        """
+            Selected a random chunk within the oversized window.
+            Figure out the call length as: -(window_size - 2*256).
+            Then sample starting slice as rand in range [0, 256 - call_length].
+
+            Note: if the flag 'is_full_dataset' is set then return the middle
+            256! This is for adversarial discovery mode
+        """
+        if self.is_full_dataset:
+            # The full test set window sizes are 2 * (256 / normal)
+            start_slice = label.shape[0] // 4
+            end_slice = start_slice + label.shape[0] // 2
+        else:
+            call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
+            # Draw this out but it should be correct!
+            # Use torch.randint because of weird numpy seeding issues
+            start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
+            end_slice = start_slice + parameters.CHUNK_SIZE
+
+        return feature[start_slice : end_slice, :], label[start_slice : end_slice]
+
+    def apply_transforms(self, data):
+        if self.scale:
+            data = 10 * np.log10(data)
+
+        # Normalize Features
+        if self.preprocess == "norm":
+            data = (data - np.mean(data)) / np.std(data)
+        elif self.preprocess == "globalnorm":
+            data = (data - 132.228) / 726.319 # Calculated these over the training dataset 
+
+        return data
+
 """
     Notes
     - Preprocess = Norm, Scale = False ===> seems bad
@@ -239,166 +407,7 @@ class ElephantDataset(data.Dataset):
         #     self.features = (self.features - np.mean(self.features, axis=(0, 1))) / np.std(self.features, axis=(0,1))
 
 
-class ElephantDatasetFuzzy(data.Dataset):
-    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, 
-            shift_windows=False, is_full_dataset=False, full_window_predict=False):
-        # Plan: Load in all feature and label names to create a list
-        self.data_path = data_path
-        self.user_transforms = transform
-        self.preprocess = preprocess
-        self.scale = scale
-        self.include_boundaries = include_boundaries
-        self.shift_windows = shift_windows
-        self.is_full_dataset = is_full_dataset
-        self.full_window_predict = full_window_predict
 
-        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        #self.initialize_labels()
-
-        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        self.intialize_data(init_pos=True, init_neg=True)
-
-        assert len(self.features) == len(self.labels)
-        if self.include_boundaries:
-            assert len(self.features) == len(self.boundary_masks)
-
-        print("ElephantDataset number of features {} and number of labels {}".format(len(self.features), len(self.labels)))
-        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
-
-    def initialize_labels(self):
-        self.labels = []
-        self.boundary_masks = []
-        for feature_path in self.features:
-            feature_parts = feature_path.split("features")
-            self.labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
-            if self.include_boundaries:
-                self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
-
-    def set_pos_features(self, pos_features):
-        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
-        self.pos_features = pos_features
-        self.intialize_data(init_pos=True, init_neg=False)
-
-    def set_neg_features(self, neg_features):
-        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
-        self.neg_features = neg_features
-        self.intialize_data(init_pos=False, init_neg=True)
-
-    def set_featues(self, pos_features, neg_features):
-        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
-        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
-        self.pos_features = pos_features
-        self.neg_features = neg_features
-        self.intialize_data(init_pos=True, init_neg=True)
-
-    def intialize_data(self, init_pos=True, init_neg=True):
-        """
-            Initialize both the positive and negative label and boundary
-            mask data arrays if indicated by the initialization flags 
-            'init_pos' and 'init_neg'. After initializing any necessary
-            data, combine the positive and negative examples!
-        """
-        # Initialize the positive examples
-        if init_pos:
-            self.pos_labels = []
-            self.pos_boundary_masks = []
-            for feature_path in self.pos_features:
-                feature_parts = feature_path.split("features")
-                # Just out of curiosity
-                self.pos_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
-                if self.include_boundaries:
-                    self.pos_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
-
-        # Initialize the negative examples
-        if init_neg:
-            self.neg_labels = []
-            self.neg_boundary_masks = []
-            for feature_path in self.neg_features:
-                feature_parts = feature_path.split("features")
-                # Just out of curiosity
-                self.neg_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
-                if self.include_boundaries:
-                    self.neg_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
-
-        # Combine the positive and negative examples!
-        self.features = self.pos_features + self.neg_features
-        self.labels = self.pos_labels + self.neg_labels
-        if self.include_boundaries:
-            self.boundary_masks = self.pos_boundary_masks + self.neg_boundary_masks
-
-
-    def __len__(self):
-        return len(self.features)
-
-    """
-    Return a single element at provided index
-    """
-    def __getitem__(self, index):
-        feature = np.load(self.features[index])
-        label = np.load(self.labels[index])
-
-        feature = self.apply_transforms(feature)
-        if self.shift_windows:
-            feature, label = self.sample_chunk(feature, label)
-
-        if self.user_transforms:
-            feature = self.user_transforms(feature)
-
-        # Honestly may be worth pre-process this
-        feature = torch.from_numpy(feature).float()
-        if self.full_window_predict:
-            # Make the label a binary 0/1 if an elephant 
-            # call is present (May be some weird boundary cases
-            # with call being on the edge, but we'll cross that
-            # bridge later).
-            label = 1. if np.sum(label) > 0 else 0.
-        else:    
-            label = torch.from_numpy(label).float()
-
-        # Return the boundary masks
-        if self.include_boundaries:
-            masks = np.load(self.boundary_masks[index])
-            # Cast to a bool tensor to allow for array masking
-            masks = torch.from_numpy(masks) == 1
-
-            return feature, label, masks, self.features[index]
-        else:
-            return feature, label, self.features[index] # Include the data file
-
-    def sample_chunk(self, feature, label):
-        """
-            Selected a random chunk within the oversized window.
-            Figure out the call length as: -(window_size - 2*256).
-            Then sample starting slice as rand in range [0, 256 - call_length].
-
-            Note: if the flag 'is_full_dataset' is set then return the middle
-            256! This is for adversarial discovery mode
-        """
-        if self.is_full_dataset:
-            # The full test set window sizes are 2 * (256 / normal)
-            start_slice = label.shape[0] // 4
-            end_slice = start_slice + label.shape[0] // 2
-        else:
-            call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
-            # Draw this out but it should be correct!
-            # Use torch.randint because of weird numpy seeding issues
-            start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
-            end_slice = start_slice + parameters.CHUNK_SIZE
-
-        return feature[start_slice : end_slice, :], label[start_slice : end_slice]
-
-    def apply_transforms(self, data):
-        if self.scale:
-            data = 10 * np.log10(data)
-
-        # Normalize Features
-        if self.preprocess == "norm":
-            data = (data - np.mean(data)) / np.std(data)
-        elif self.preprocess == "globalnorm":
-            data = (data - 132.228) / 726.319 # Calculated these over the training dataset 
-
-        return data
 
 
 """

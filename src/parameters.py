@@ -208,5 +208,12 @@ HYPERPARAMETERS = {
         'lr_decay_step': 20, # Let us almost try not having this for now for the focal loss!
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
+        },
+19: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
         }
 }
+

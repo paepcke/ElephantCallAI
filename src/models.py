@@ -84,6 +84,8 @@ def get_model(model_id):
         return Model17(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 18:
         return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 19:
+        return Model19(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -837,3 +839,40 @@ class Model18(nn.Module):
         inputs = inputs.repeat(1, 3, 1, 1)
         out = self.model(inputs)
         return out
+
+"""
+ResNet-50! for entire chunk classification!
+"""
+class Model19(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        """
+            Note output size is not actually used here!
+        """
+        super(Model19, self).__init__()
+
+        self.input_size = input_size # Number of frequency bins
+
+        self.model = models.resnet50()
+        # Need to figure out what the sizes will be here!!
+        self.model.fc = nn.Sequential(
+           nn.Linear(2048, 512),
+           nn.ReLU(inplace=True),
+           nn.Linear(512, 1)) # Single window output!
+
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+            #print (self.model.fc[2].bias)
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
+
+
+
+
