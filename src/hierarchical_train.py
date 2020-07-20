@@ -219,12 +219,18 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
 
     # For now let us try including all of the false negatives!
+    train_adversarial_file = "model_0-False_Pos_Train.txt"
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
     adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
-    adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
+    adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
     with open(adversarial_train_save_path, 'w') as f:
         for file in adversarial_train_files:
             f.write('{}\n'.format(file))
 
+    train_adversarial_file = "model_0-False_Pos_Test.txt"
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        train_adversarial_file = "model_0-False_Pos_Test_Shift.txt"
     adversarial_test_files = adversarial_discovery_helper(full_test_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
     adversarial_test_save_path = os.path.join(save_path, "model_0-False_Pos_Test.txt")
     with open(adversarial_test_save_path, 'w') as f:
