@@ -808,6 +808,7 @@ class Model17(nn.Module):
 """
 ResNet-18 for entire chunk classification!
 """
+# Consider a deeper resnet
 class Model18(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
         """
