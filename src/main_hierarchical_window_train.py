@@ -215,8 +215,11 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
                                         include_boundaries=False, full_window_predict=True)
 
     # For now let us try including all of the false negatives!
+    train_adversarial_file = "model_0-False_Pos_Train.txt"
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
     adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0)
-    adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
+    adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
     with open(adversarial_train_save_path, 'w') as f:
         for file in adversarial_train_files:
             f.write('{}\n'.format(file))
@@ -345,7 +348,10 @@ def main():
     # Train just model_1
     elif args.model1:
         # Read in the adversarial files
-        adversarial_train_save_path = os.path.join(save_path, "model_0-False_Pos_Train.txt")
+        train_adversarial_file = "model_0-False_Pos_Train.txt"
+        if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+            train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
+        adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
         adversarial_train_files = []
         with open(adversarial_train_save_path, 'r') as f:
             files = f.readlines()
@@ -363,7 +369,6 @@ def main():
 
     else:
         print ("Invalid running mode!")
-
 
 
 
