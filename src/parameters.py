@@ -46,8 +46,8 @@ DATASET = 'Call'
 LOSS = "FOCAL"
 CHUNK_WEIGHTING = "count"
 FOCAL_WEIGHT_INIT = 0.01 
-FOCAL_GAMMA = 5
-FOCAL_ALPHA = 0.99
+FOCAL_GAMMA = 2
+FOCAL_ALPHA = 0.75
 
 NEG_SAMPLES = 1
 TEST_NEG_SAMPLES = 1
@@ -205,7 +205,7 @@ HYPERPARAMETERS = {
         },
 18: {
         'lr': 1e-3,
-        'lr_decay_step': 4,
+        'lr_decay_step': 20, # Let us almost try not having this for now
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
         }
