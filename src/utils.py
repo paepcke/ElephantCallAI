@@ -6,7 +6,7 @@ import sklearn
 from sklearn.metrics import f1_score
 
 
-def create_save_path(save_time, save_local=False, save_prefix=None, ):
+def create_save_path(save_time, save_local=False, save_prefix=None):
     save_path = ''
     if save_local:
         save_path += parameters.LOCAL_SAVE_PATH
@@ -27,12 +27,18 @@ def create_save_path(save_time, save_local=False, save_prefix=None, ):
     save_path += "TestNegFactor-x" + str(parameters.TEST_NEG_SAMPLES) + "_"
     save_path += "Loss-" + parameters.LOSS + "_"
 
+    if parameters.LOSS.upper() == "FOCAL":
+        save_path += "Alpha-" + str(parameters.FOCAL_ALPHA) + "_"
+        save_path += "Gamma-" + str(parameters.FOCAL_GAMMA) + "_"
+        save_path += "WeightInit-" + str(parameters.FOCAL_WEIGHT_INIT) + "_"
+
     if parameters.LOSS == "BOUNDARY":
         save_path += "BoundaryFudgeFac-" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_"
         save_path += "IndividualBoundaries-" + str(parameters.INDIVIDUAL_BOUNDARIES) + "_"
         save_path += "BoundaryLoss-" + str(parameters.BOUNDARY_LOSS) + "_"
         if parameters.BOUNDARY_LOSS.lower() == "weight":
             save_path += "BoundaryWeight-" + str(parameters.BOUNDARY_WEIGHT) + "_"
+
 
     if parameters.SHIFT_WINDOWS:
         save_path += "ShiftWindows_"
