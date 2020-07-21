@@ -19,6 +19,7 @@ import torch.nn.functional as F
 import parameters
 from visualization import visualize
 import torchvision.models as models
+import pdb
 #from torchvision import transforms
 #import matplotlib
 #import matplotlib.pyplot as plt
@@ -88,6 +89,8 @@ def get_model(model_id):
         return Model19(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 20:
         return Model20(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 21:
+        return Model21(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -936,5 +939,78 @@ class Model20(nn.Module):
         logits = self.hiddenToClass(out)
         
         return logits
+
+# For segmentation!
+class Model21(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01,
+                cnn_nb_filt=128, cnn_pool_size=[5, 2, 2]):#, filter_size=[3, 3, 3]):
+        super(Model21, self).__init__()
+
+        self.input_size = input_size
+        self.output_size = output_size
+        # May want to make this an array as wel
+        self.cnn_nb_filt = cnn_nb_filt
+        self.cnn_pool_size = cnn_pool_size
+        self.kernal_size = [3, 3, 3]
+        self.lin_size = 32
+        self.hidden_size = 32 # made it small maybe to avoid overfitting
+        self.num_layers = 2 # lstm
+        self.dropout_val = 0.5
+
+        # Create the layers
+        # For now just have 1 input chanell
+        self.conv_layers = []
+        feature_dim = input_size
+        for layer in range(len(cnn_pool_size)):
+            in_channels = cnn_nb_filt
+            if layer == 0:
+                # Maybe try 
+                in_channels = 1
+            # Try just 3 for now
+            conv2d = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, padding = 1)
+            #batchnorm = nn.BatchNorm2d()
+            # Curious to try layer norm which should normalize just over each individual frequency
+            layer_norm = nn.LayerNorm(feature_dim)
+            # Max pool - consier doing just conv to downsample!
+            max_pool = nn.MaxPool2d(kernel_size=[1, cnn_pool_size[layer]])
+            feature_dim = feature_dim // cnn_pool_size[layer]
+
+            self.conv_layers += [conv2d, layer_norm, nn.ReLU(inplace=True), max_pool]#, nn.Dropout(self.dropout_val)]
+
+        self.conv_layers = nn.Sequential(*self.conv_layers)
+
+        # This reflects our new cnn extracted feature dim
+        feature_dim = self.cnn_nb_filt * feature_dim
+        self.lstm = nn.LSTM(feature_dim, self.hidden_size, num_layers=self.num_layers, 
+                                batch_first=True, bidirectional=True, dropout=self.dropout_val)
+        # For bi-directional add *2
+        self.linear_1 = nn.Linear(self.hidden_size * 2, self.lin_size)
+        self.out = nn.Linear(self.lin_size, self.output_size)
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        # Shape - [batch, channels, seq_len, conv_features]
+        conv_features = self.conv_layers(inputs) 
+
+        # Stach all of the conv-layers to form new sequential
+        # features - [batch, seq_len, channels * conv_features]
+        conv_features = conv_features.permute(0, 2, 1, 3).contiguous()
+        conv_features = conv_features.view(conv_features.shape[0], conv_features.shape[1], -1)
+
+        # Feed through the LSTM
+        # Get the final hidden states (h_t for t = seq_len) for the forward and backwards directions!
+        # Shape - [num_layers * num_directions, batch, hidden_size]
+        lstm_out, _ = self.lstm(conv_features)
+        # Final fully connected layers
+        linear_out = self.linear_1(lstm_out)
+        linear_out = nn.ReLU()(linear_out)
+        logits = self.out(linear_out)
+
+        return logits
+
+
+
+
+
 
 
