@@ -888,6 +888,7 @@ class Model20(nn.Module):
         self.hidden_size = 128
         self.num_layers = 2 # lstm
         self.output_size = output_size
+        self.dropout_val = .4
 
         self.hidden_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
         self.cell_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
@@ -896,11 +897,16 @@ class Model20(nn.Module):
         self.linear = nn.Linear(self.input_size, self.lin_size)
         self.linear2 = nn.Linear(self.lin_size, self.hidden_size)
         # Consider some dropout??
-        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, num_layers=self.num_layers, 
+                                batch_first=True, bidirectional=True, dropout=self.dropout_val)
         
-        self.linear3 = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
+        self.linear3 = nn.Linear(self.hidden_size * 2, self.lin_size)
+        #self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
         self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
+
+        # Create Dropout Layer that can be used on the
+        # output of layers where we want to add dropout 
+        self.dropout = nn.Dropout(self.dropout_val)
 
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")
@@ -923,10 +929,10 @@ class Model20(nn.Module):
         # Reshape to - [num_layers, directions, batch, hidden_size]
         final_hiddens = final_hiddens.view(self.num_layers, 2, final_hiddens.shape[1], self.hidden_size)
         linear_input = torch.cat((final_hiddens[-1, 0, :, :], final_hiddens[-1, 1, : :]), dim=1)
-        
-        out = self.linear3(linear_input)
+
+        # Let us see
+        out = self.linear3(self.dropout(linear_input))
         out = nn.ReLU()(out)
-        out = self.linear4(out)
         logits = self.hiddenToClass(out)
         
         return logits
