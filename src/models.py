@@ -86,6 +86,8 @@ def get_model(model_id):
         return Model18(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 19:
         return Model19(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 20:
+        return Model20(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -808,7 +810,7 @@ class Model17(nn.Module):
 
 
 """
-ResNet-18 for entire chunk classification!
+ResNet-18 for entire window classification!
 """
 # Consider a deeper resnet
 class Model18(nn.Module):
@@ -841,7 +843,7 @@ class Model18(nn.Module):
         return out
 
 """
-ResNet-50! for entire chunk classification!
+ResNet-50! for entire window classification!
 """
 class Model19(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
@@ -874,5 +876,59 @@ class Model19(nn.Module):
         return out
 
 
+"""
+Go bigger with lstm for window classification
+"""
+class Model20(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model20, self).__init__()
+
+        self.input_size = input_size
+        self.lin_size = 64
+        self.hidden_size = 128
+        self.num_layers = 2 # lstm
+        self.output_size = output_size
+
+        self.hidden_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+        self.cell_state = nn.Parameter(torch.rand(2 * self.num_layers, 1, self.hidden_size), requires_grad=True).to(parameters.device)
+
+        self.batchnorm = nn.BatchNorm1d(self.input_size)
+        self.linear = nn.Linear(self.input_size, self.lin_size)
+        self.linear2 = nn.Linear(self.lin_size, self.hidden_size)
+        # Consider some dropout??
+        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size, num_layers=self.num_layers, batch_first=True, bidirectional=True)
+        
+        self.linear3 = nn.Linear(self.hidden_size * 2, self.hidden_size)
+        self.linear4 = nn.Linear(self.hidden_size, self.lin_size)
+        self.hiddenToClass = nn.Linear(self.lin_size, self.output_size)
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            self.hiddenToClass.bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+
+    def forward(self, inputs):
+        # input shape - (batch, seq_len, input_size)
+        batch_norm_inputs = self.batchnorm(inputs.view(-1, self.input_size)).view(inputs.shape)
+        out = self.linear(batch_norm_inputs)
+        out = nn.ReLU()(out)
+        out = self.linear2(out)
+        out = nn.ReLU()(out)
+        # Get the final hidden states (h_t for t = seq_len) for the forward and backwards directions!
+        # Shape - [num_layers * num_directions, batch, hidden_size]
+        _, (final_hiddens, final_cells) = self.lstm(out, [self.hidden_state.repeat(1, inputs.shape[0], 1), 
+                                         self.cell_state.repeat(1, inputs.shape[0], 1)])
+
+        # For classification, we take the last hidden units for the forward 
+        # and backward directions, concatenate them and predict
+        # Reshape to - [num_layers, directions, batch, hidden_size]
+        final_hiddens = final_hiddens.view(self.num_layers, 2, final_hiddens.shape[1], self.hidden_size)
+        linear_input = torch.cat((final_hiddens[-1, 0, :, :], final_hiddens[-1, 1, : :]), dim=1)
+        
+        out = self.linear3(linear_input)
+        out = nn.ReLU()(out)
+        out = self.linear4(out)
+        logits = self.hiddenToClass(out)
+        
+        return logits
 
 
