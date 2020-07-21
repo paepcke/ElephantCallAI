@@ -18,22 +18,17 @@ import pandas as pd
 from pandas.core.frame import DataFrame
 from torch.utils.data import Dataset
 from DSP.dsp_utils import DSPUtils
+from DSP.dsp_utils import AudioType
+import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__),
                              '..'
                              ))
 from elephant_utils.logging_service import LoggingService
-import numpy as np
 
 
 TESTING = False
 #TESTING = True
-
-class AudioType(enumerate):
-    WAV = 0         # Audio sound wave
-    SPECTRO = 1     # 24-hr spectrogram
-    SNIPPET = 2     # Snippet of spectrogram 
-    LABEL = 3       # Raven label file
 
 # To change spectrogram snippet width time,
 # see class variable in SpectrogramDataset.
@@ -427,7 +422,7 @@ class SpectrogramDataset(FrozenDataset):
         full_spectrograms_queued = {}
 
         for file in files_to_do:
-            file_info = self.decode_filename(file)
+            file_info = DSPUtils.decode_filename(file)
             # Name without path and extention:
             file_root = file_info['file_root']
             if file_info['file_type'] == AudioType.SPECTRO:
@@ -477,7 +472,7 @@ class SpectrogramDataset(FrozenDataset):
         for (spectro_file, label_file) in spectro_dict.items():
             # Get dict with file names that are by convention
             # derived from the original .wav file:
-            curr_file_family = self.decode_filename(spectro_file)
+            curr_file_family = DSPUtils.decode_filename(spectro_file)
             spect_df = pd.read_pickle(spectro_file)
             
             # Create the name for an Sqlite db file that
@@ -540,7 +535,7 @@ class SpectrogramDataset(FrozenDataset):
         @type snippet_outdir: str
         @param curr_file_family: dict with information about the
             various file names associated with the spectrogram.
-            See decode_filename()
+            See DSPUtils.decode_filename()
         @type curr_file_family: {str : str}
         '''
         
@@ -1143,87 +1138,5 @@ class SpectrogramDataset(FrozenDataset):
                     ''')
         self.db.commit()
         return self.db
-
-    
-    #------------------------------------
-    # decode_filename 
-    #-------------------
-    
-    def decode_filename(self, filename):
-        '''
-        Given a file name with or without 
-        path that is one of: 
-           o .wav file
-           o .txt file
-           o _spectrogram.pickle
-           o _spectrogram_<n>.pickle
-        return a dict with the other file 
-        names:
-        
-           {file_type : <AudioType enum>,
-            file_root : <no path, stripped ext and [_<n>]_spectrogram
-            wav : <.wav file>
-            txt : <.txt file>
-            spect : <_spectrogram.pickle>
-            snippet_id : <the <n> if in given filename, else None>,
-            path : <path portion of filename if given, else None>
-        
-        If a full path is returned, the path up to the filename
-        is placed int the path key. All other entries are 
-        only the filenames.
-        
-        @param filename: filename to decode. 
-        @type filename: str
-        '''
-        
-        res = {}
-        # Will correct later if appropriate:
-        res['snippet_id']  = None
-        
-        fpath = Path(filename)
-        # Regex to find foo_1.pickle, or foo_30.pickle,
-        # or /foo/bar_2.pickle. The group will contain:
-        # /foo/bar
-        snippet_search_pattern = re.compile(r"(.*)_([0-9]+)_spectrogram[.]pickle")
-
-        # Name without path and extension:
-        file_root = fpath.stem
-        # If it's foo_spectrogram.pickle or foo_<n>_spectrogram.pickle: 
-        if filename.endswith('_spectrogram.pickle'):
-            file_root = filename[:-len('_spectrogram.pickle')]
-            # Get spectro_id if file is a spectrogram snippet:        
-            matched_fragments = snippet_search_pattern.search(filename)
-            if matched_fragments is not None:
-                (_path, snippet_id) = matched_fragments.groups()
-                res['snippet_id']  = int(snippet_id)
-                # Remove the snippet id from file root:
-                # The 1+ is for the leading underscore
-                # before the number:
-                file_root = file_root[:-(1+len(snippet_id))]
-                res['file_type'] = AudioType.SNIPPET # snippet of spectrogram
-            else:
-                res['file_type'] = AudioType.SPECTRO # 24 hr spectrogram
-
-        res['file_root'] = file_root
-
-        # Just the path to the file without filename:
-        path = str(fpath.parent)
-        # If filename is just a name w/o a
-        # path: set path to None:
-        if path == '.':
-            path = None
-        res['path'] = path
-
-        if fpath.suffix == '.wav':
-            res['file_type'] = AudioType.WAV
-        elif fpath.suffix == '.txt':
-            res['file_type'] = AudioType.LABEL
-        
-        res['wav']     = file_root + '.wav'
-        res['label']   = file_root + '.txt'
-        res['spectro'] = file_root + '_spectrogram.pickle'
-
-            
-        return res
 
 

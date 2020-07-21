@@ -87,13 +87,13 @@ class WavMaker(object):
                 self.log.warn(f"File {infile} does not exist or is a directory.")
                 continue
 
-            #************
-            start_time = time.time()
-            sig = (framerate, sig) = wavfile.read(infile)
-            spect_t = transformer(torch.Tensor(sig))
-            print(f"{time.time()-start_time} secs")
-            continue
-            #************
+#             #************
+#             start_time = time.time()
+#             sig = (framerate, sig) = wavfile.read(infile)
+#             spect_t = transformer(torch.Tensor(sig))
+#             print(f"{time.time()-start_time} secs")
+#             continue
+#             #************
             self.log.info(f"Processing {infile}...")
             try:
                 gater = AmplitudeGater(infile,

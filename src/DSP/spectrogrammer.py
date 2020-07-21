@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Created on Feb 23, 2020
 
@@ -29,8 +30,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.dirname(__file__))
 
 
-
-
 class Spectrogrammer(object):
     '''
     Create and manipulate spectrograms. Includes starting
@@ -44,6 +43,8 @@ class Spectrogrammer(object):
     WIN_LENGTH = NFFT
     OVERLAP = 1/2    
     HOP_LENGTH = int(WIN_LENGTH * OVERLAP)
+    # Maximum frequency retained in spectrograms if 
+    # they are cleaned:
     FREQ_MAX = 150
     DEFAULT_FRAMERATE=8000
 
@@ -58,7 +59,7 @@ class Spectrogrammer(object):
     def __init__(self, 
                  infiles,
                  actions,
-                 clean_spectrogram=False,
+                 outdir=None,
                  label_files=None,
                  start_sec=0,
                  end_sec=None,
@@ -67,20 +68,21 @@ class Spectrogrammer(object):
                  threshold_db=-40, # dB
                  low_freq=10,      # Hz 
                  high_freq=50,     # Hz
-                 spectrogram_freq_cap=FREQ_MAX,
-                 model_input_plot=False,
+                 spectrogram_freq_cap=None,
                  nfft=None,
                  testing=False
                  ):
         '''
         @param infiles:
         @type infiles:
-        @param actions: the tasks to accomplish: {spectro|melspectro|plot|labelmask}
+        @param actions: the tasks to accomplish: 
+            {spectro|melspectro|plot|plotexcerpts|labelmask}
         @type actions: [str] 
-        @param clean_spectrogram: whether or not to clean the spectrogram
-        @type clean_spectrogram: bool
-        @param max_f: max frequency to keep in the spectrogram(s)
-        @type max_f: float
+        @param outdir: if provided, everything that is created is written
+            to this directory (spectrograms, label masks, gated versions of 
+            wav files. If None, is written to the directory of the file
+            on which computed was based.
+        @type outdir {None | str}
         @param label_files: text files with manually produced labels
         @type label_files: str
         @param start_sec: start second in the wav file
@@ -92,11 +94,14 @@ class Spectrogrammer(object):
         @param framerate: framerate of the recording. Normally 
             obtained from the wav file itself.
         @type framerate: int
-        @param model_input_plot: whether or not to plot the model
-            as seen by the classifier.
-        @type model_input_plot: bool
+        @param low_freq: low frequency bound of leading bandpass filter
+        @type low_freq: int
+        @param high_freq: high frequency bound of leading bandpass filter
+        @type high_freq: int
         @param nfft: window width
-        @type nfft: int
+        @type nfft: int,
+        @param testing: if True, only create the instance, and return
+        @type testing: bool
         '''
 
         self.log = LoggingService()
@@ -107,8 +112,180 @@ class Spectrogrammer(object):
         
         # Depending on what caller wants us to do,
         # different arguments must be passed. Make
-        # all those checks:
+        # all those checks to avoid caller waiting a long
+        # time for processing to be done only to fail
+        # at the end:
+
+        # Prerequisites:
+
+        self._ensure_prerequisites(infiles,
+                                   actions,
+                                   framerate,
+                                   threshold_db,
+                                   low_freq,
+                                   high_freq,
+                                   nfft,
+                                   outdir)
+
+        # Go through each infile, which could we label
+        # masks, spectrogram dataframes, or label csv files.
+        # Do appropriate work, and operate on the result
+        # accoring to spectified 'actions':
         
+        # Compute data structures:
+        
+        for infile in infiles:
+            if not os.path.exists(infile):
+                print(f"File {infile} does not exist.")
+                continue
+
+            spect = None
+            clean_spect = None
+            spectro_outfile = None
+            label_mask = None
+
+            # Get a dict with the file_root and 
+            # names related to the infile in our
+            # file naming scheme:
+            file_family = DSPUtils.decode_filename(infile)
+
+            if outdir is None:
+                outdir = file_family['path']
+            
+            
+            if infile.endswith('.wav'):
+                
+                try:
+                    self.log.info(f"Reading wav file {infile}...")
+                    (self.framerate, samples) = wavfile.read(infile)
+                    self.log.info(f"Processing wav file {infile}...")
+                    # Get as a dict:
+                    #    the gated samples:                           'gated_samples',
+                    #    the percent of the wav file that was zeroed: 'perc_zeroed'
+                    #    path to the gated wav file on disk:          'result_file'
+                    #    path to untreated excerpt file if requested: 'excerpt_file'
+                    
+                    process_result_dict = \
+                        self.process_wav_file(samples, 
+                                              start_sec=start_sec, 
+                                              end_sec=end_sec, 
+                                              normalize=normalize,
+                                              threshold_db=threshold_db,
+                                              low_freq=low_freq,
+                                              high_freq=high_freq,
+                                              outdir=outdir
+                                              )
+                except Exception as e:
+                    print(f"Cannot process .wav file: {repr(e)}")
+                    sys.exit(1)
+
+                if 'spectro' in actions:
+                    try:
+                        # Create spectrogram, receiving a dataframe
+                        # with magnitudes in dB:
+                        spect = \
+                            self.make_spectrogram(process_result_dict['gated_samples'])
+                    except Exception as e:
+                        print(f"Cannot create spectrogram for {infile}: {repr(e)}")
+                        sys.exit(1)
+                    # Save the spectrogram:
+                    spectro_outfile = os.path.join(outdir,file_family['spectro'])
+                    DSPUtils.save_spectrogram(spect, spectro_outfile)
+
+            elif infile.endswith('.txt'):
+                # Infile is a label text file created with Raven
+                # Make sure caller wants to create a mask file:
+                #if not 'labelmask' in actions:
+                #    continue
+                label_mask = self.create_label_mask_from_raven_table(infile)
+                DSPUtils.save_label_mask(label_mask, os.path.join(outdir,file_family['mask']))
+                
+            elif infile.endswith('.pickle'):
+                # Infile is a .pickle spectrogram file:
+                self.log.info(f"Loading spectrogram file {infile}...")
+                try:
+                    spect = DSPUtils.load_spectrogram(infile)
+                except Exception as e:
+                    print(f"Could not read spectrogram {infile}: {repr(e)}")
+                    sys.exit(1)
+                self.log.info(f"Done loading spectrogram file {infile}.")
+                
+                maybe_mask_file = os.path.join(file_family['path'], file_family['mask'])
+                if os.path.exists(maybe_mask_file):
+                    self.log.info("Reading label mask...")
+                    label_mask = DSPUtils.load_label_mask(maybe_mask_file)
+                    self.log.info("Done reading label mask.")
+                else:
+                    self.log.info("No corresponding label mask file (that's fine).")
+
+            # Perform requested actions:
+            
+            clean_spect = spect
+            if 'cleanspectro' in actions:
+                self.log.info(f"Cleaning spectrogram...")
+                clean_spect = self.process_spectrogram(spect, spectrogram_freq_cap=spectrogram_freq_cap)
+                self.log.info(f"Done cleaning spectrogram.")
+                
+            if 'plotexcerpts' in actions and clean_spect is not None:
+                # The default for the following call is to plot 
+                # regularly spaced excerpts of a given spectrogram:
+                self.log.info("Plotting spectrogram excerpts...")
+                self.plotter.plot_spectrogram_from_magnitudes(
+                    clean_spect,
+                    title=f"{os.path.basename(infile)}"
+                    )
+                self.log.info("Done plotting spectrogram excerpts.")
+            if 'plot' in actions and clean_spect is not None:
+                self.log.info("Plotting entire spectrogram ...")
+                # Plot the whole 24 hour spectro in on chart:
+                self.plotter.plot_spectrogram_from_magnitudes(
+                    clean_spect,
+                    time_intervals_to_cover=[], # Plot whole spectrogram
+                    title=f"{os.path.basename(infile)}"
+                    )
+                self.log.info("Done plotting entire spectrogram")
+
+            # Plot spectro pieces with labeled calls below?
+            if 'plothits' in actions and clean_spect is not None:
+                relevant_label_file = os.path.join(file_family['path'], file_family['label'])
+                if not os.path.exists(relevant_label_file):
+                    self.log.err(f"The plothits option requires label_file {relevant_label_file} to exist; it doen't. Skipping {infile}")
+                    continue
+                label_intervals = self.create_label_intervals_from_raven_table(
+                    relevant_label_file,
+                    clean_spect)
+                label_mask      = self.create_label_mask_from_raven_table(
+                    relevant_label_file,
+                    clean_spect)
+                self.log.info("Plotting spectrogram plus truths ...")
+                self.plotter.visualize_predictions(
+                    label_intervals,
+                    clean_spect,
+                    label_mask=label_mask,
+                    title=f"{os.path.basename(infile)}: True Positives", 
+                    filters=None
+                    )
+                self.log.info("Done plotting spectrogram plus truths ...")
+
+    #------------------------------------
+    # _ensure_prerequisites 
+    #-------------------
+    
+    def _ensure_prerequisites(self,
+                              infiles,
+                              actions,
+                              framerate,
+                              threshold_db,
+                              low_freq,
+                              high_freq,
+                              nfft,
+                              outdir
+                              ):
+        # Prerequisites:
+
+        if outdir is not None and not os.path.exists(outdir):
+                os.makedirs(outdir)
+
         if 'labelmask' in actions:
             # Need true framerate and spectrogram bin size
             # to compute time ranges in spectrogram:
@@ -140,7 +317,7 @@ class Spectrogrammer(object):
                              )
                 self.exit(-1)
                 
-        if 'plot' in actions:
+        if 'plot' in actions or 'plotexcerpts' in actions or 'plothits' in actions: 
             # We either need a .pickle file that must be
             # a spectrogram, or we need a .wav file that will
             # be turned into a spectrogram to be plotted
@@ -150,6 +327,7 @@ class Spectrogrammer(object):
                              "or a .wav file"
                              )
                 sys.exit(1)
+            self.plotter = Plotter()
 
         if framerate is None:
             self.framerate = self.DEFAULT_FRAMERATE
@@ -158,149 +336,60 @@ class Spectrogrammer(object):
             self.log.info(f"Assuming NFFT == {Spectrogrammer.NFFT}")
             nfft = Spectrogrammer.NFFT
         
-        if 'plot' in actions:
-            self.plotter = Plotter()
-
         if type(infiles) != list:
             infiles = [infiles]
-        for infile in infiles:
-            if not os.path.exists(infile):
-                print(f"File {infile} does not exist.")
-                continue
-    
-            if infile.endswith('.wav'):
-                try:
-                    self.log.info(f"Reading wav file {infile}...")
-                    (self.framerate, samples) = wavfile.read(infile)
-                    self.log.info(f"Processing wav file {infile}...")
-                    process_result_dict = \
-                        self.process_wav_file(samples, 
-                                              start_sec=start_sec, 
-                                              end_sec=end_sec, 
-                                              normalize=normalize,
-                                              threshold_db=threshold_db,
-                                              low_freq=low_freq,
-                                              high_freq=high_freq,
-                                              spectrogram_freq_cap=spectrogram_freq_cap                                              
-                                              )
-                except Exception as e:
-                    print(f"Cannot process .wav file: {repr(e)}")
-                    sys.exit(1)
 
-                try:
-                    # Create spectrogram:
-                    (freq_labels, time_labels, freq_time_dB) = \
-                        self.make_spectrogram(process_result_dict['gated_samples'])
-                except Exception as e:
-                    print(f"Cannot create spectrogram for {infile}: {repr(e)}")
-                    sys.exit(1)
-                spect = freq_time_dB
-            elif infile.endswith('.pickle'):
-                # Infile is a .pickle spectrogram file:
-                label_mask = None
-                self.log.info(f"Loading spectrogram file {infile}...")
-                try:
-                    spect = pd.read_pickle(infile)
-                except Exception as e:
-                    print(f"Could not read spectrogram {infile}: {repr(e)}")
-                    sys.exit(1)
-                freq_labels = spect.index
-                time_labels = spect.columns
-                self.log.info(f"Done loading spectrogram file {infile}.")
-                
-                if label_files is not None:
-                    # One or more .npy label masks was provided. See
-                    # any of them match the .npy infile by name pattern:
-                    label_file = self.get_label_filename(infile)
-                    if label_file in label_files:
-                        self.log.info("Reading label mask...")
-                        label_mask = np.load(label_file)
 
-                if clean_spectrogram:
-                    self.log.info(f"Cleaning spectrogram...")
-                    clean_spect = self.process_spectrogram(spect)
-                    self.log.info(f"Done cleaning spectrogram.")
-                else:
-                    clean_spect = spect
-                if 'plot' in actions:
-                    self.plotter.plot_spectrogram_excerpts(
-                        [(0,len(time_labels)-1)], 
-                        clean_spect, 
-                        time_labels, 
-                        freq_labels, 
-                        plot_grid_width=1, 
-                        plot_grid_height=1, 
-                        title=f"{os.path.basename(infile)}")
-                    
-                if model_input_plot:
-                    if label_files is None:
-                        self.log.err("The model_input_plot option requires label_files to be specified.")
-                    self.plot_spectrogram_with_labels_truths(clean_spect, 
-                                                     labels=label_mask,
-                                                     title=os.path.basename(infile), 
-                                                     vert_lines=None, 
-                                                     filters=None)
-
-            elif infile.endswith('.txt'):
-                # Infile is a label text file created with Raven
-                # Make sure caller wants to create a mask file:
-                if not 'labelmask' in actions:
-                    continue
-                self.create_label_mask_from_raven_table(infile)
-
-#     #------------------------------------
-#     # process_wav_file 
-#     #-------------------
-#     
-#     def process_wav_file(self,
-#                          samples,
-#                          start_sec,
-#                          end_sec,
-#                          normalize,
-#                          plot=True
-#                          ):
-# 
-#         # Total time in seconds:
-#         audio_secs = math.floor(samples.size / self.framerate)
-#         
-#         # Seek in to start time, and cut all beyond stop time:
-#         if end_sec is None or end_sec > audio_secs:
-#             end_sec = audio_secs
-#         start_sample = self.framerate * start_sec
-#         stop_sample  = self.framerate * end_sec
-#         
-#         if normalize:
-#             samples_to_use = self.normalize(samples[start_sample : stop_sample])
-#         else:
-#             samples_to_use = samples
-#             
-#         (freq_labels, time_labels, freq_time) = \
-#             self.make_spectrogram(samples_to_use)
-#             
-#         if plot:
-#             (_spectrum,_freqs,_t_bins,_im) = \
-#                 self.plot_spectrogram_from_magnitudes(samples_to_use, 
-#                                       self.framerate,
-#                                       start_sec,
-#                                       end_sec
-#                                       )
-#         return (freq_labels, time_labels, freq_time)
 
     #------------------------------------
     # process_spectrogram 
     #-------------------
     
-    def process_spectrogram(self, freq_time):
+    def process_spectrogram(self, 
+                            spectro,
+                            energy_suppression=None,
+                            spectrogram_freq_cap=None):
+        '''
+        Given a spectrogram, return a new spectrogram with
+        the following modifications:
         
-        max_energy = np.amax(freq_time)
-        db_cutoff  = Spectrogrammer.ENERGY_SUPPRESSION # dB
-        low_energy_thres = max_energy * 10**(db_cutoff/20)
-        spect_low_energy_indices = np.nonzero(freq_time <= low_energy_thres)
-        freq_time[spect_low_energy_indices] = 0.0
+           o The magnitudes at energy_suppression dB
+             of maximum and below are zeroed
+           o Frequencies above spectrogram_freq_cap are
+             removed
+              
+        
+        @param spectro: spectrogram on which to operate
+        @type spectro: pd.DataFrame
+        @param energy_suppression: magnitudes in dB below max energy
+            in the spectrogram are zeroed
+        @type energy_suppression: int
+        @param spectrogram_freq_cap: frequency above which all
+            rows in the spectrogram are removed
+        @type spectrogram_freq_cap: int
+        @return: a new spectrogram.
+        @rtype: pd.DataFrame 
+        '''
+        
+        new_spectro = spectro.copy()
+        # Chop off high freqs:
+        if spectrogram_freq_cap is not None:
+            trimmed_spectro = new_spectro.iloc[spectro.index <= spectrogram_freq_cap]
+        else:
+            trimmed_spectro = new_spectro
 
-        #delete all but row <= 60?
-        #take the log
-        return freq_time
+        if energy_suppression is None:
+            energy_suppression = Spectrogrammer.ENERGY_SUPPRESSION
+        mags_only = trimmed_spectro.to_numpy()
+        max_energy = np.amax(mags_only)
+        low_energy_thres = max_energy * 10**(energy_suppression/20)
+        spect_low_energy_indices = np.nonzero(mags_only <= low_energy_thres)
+        mags_only[spect_low_energy_indices] = 0.0
+        
+        processed_spectro = pd.DataFrame(mags_only,
+                                         index=trimmed_spectro.index,
+                                         columns=trimmed_spectro.columns)
+        return processed_spectro
 
     #------------------------------------
     # make_spectrogram
@@ -328,8 +417,9 @@ class Spectrogrammer(object):
         
         @param data: the time/amplitude data
         @type data: np.array([float])
-        @return: (frequency_labels, time_labels, spectrogram_matrix)
-        @rtype: (np.array, np.array, np.array)
+        @return: spectrogram dataframe with index being frequencies,
+            and columns being time labels.
+        @rtype: pd.DataFrame
         
         '''
         
@@ -351,8 +441,12 @@ class Spectrogrammer(object):
         # Transformer for magnitude to power dB:
         amp_to_dB_transformer = torchaudio.transforms.AmplitudeToDB()
         freq_time_dB_tensor = amp_to_dB_transformer(torch.Tensor(freq_time))
-        
-        return (freq_labels, time_labels, freq_time_dB_tensor.numpy())
+
+        spectrogram = pd.DataFrame(freq_time_dB_tensor.numpy(),
+                                   index=freq_labels,
+                                   columns=time_labels
+                                   )
+        return spectrogram
 
     #------------------------------------
     # make_mel_spectrogram
@@ -377,9 +471,9 @@ class Spectrogrammer(object):
         (num_mel_bands, _num_timebins) = mel_spec_t.shape
         
         # Number of columns in the spectrogram:
-        num_time_label_choices = self.compute_timeticks(framerate, 
-                                                        mel_spec_db_t
-                                                        )
+        num_time_label_choices = DSPUtils.compute_timeticks(framerate, 
+                                                            mel_spec_db_t
+                                                            )
         # Enumeration of the mel bands to use as y-axis labels: 
         freq_labels = np.array(range(num_mel_bands))
         
@@ -593,11 +687,13 @@ class Spectrogrammer(object):
 
         try:
             try:
+                # Because we pass no spectrogram destination,
+                # none is created in AmplitudeGater; just the
+                # gated .wav file:
                 gater = AmplitudeGater(excerpt_infile.name,
                                        amplitude_cutoff=threshold_db,
                                        low_freq=low_freq,
                                        high_freq=high_freq,
-                                       spectrogram_freq_cap=spectrogram_freq_cap,
                                        outdir=outdir,
                                        normalize=normalize
                                        )
@@ -626,7 +722,7 @@ class Spectrogrammer(object):
                                            label_txt_file,
                                            spectrogram_or_spect_file):
         '''
-        Given a manually created selection mask as produced
+        Given a manually created selection table as produced
         by the Raven program, plus a spectrogram, create a
         mask file with 1s where the spectrogram time bins
         match labels, and 0s elsewhere.
@@ -644,74 +740,22 @@ class Spectrogrammer(object):
             or a path to a pickled DataFrame
         @type spectrogram_or_spect_file: {str|pandas.DataFrame}
         '''
-        if type(spectrogram_or_spect_file) == str:
-            # Spectrogram is in a file; get it:
-            try:
-                spect = DSPUtils.load_spectrogram(spectrogram_or_spect_file)
-            except Exception as e:
-                self.log.err(f"While reading spectrogram file: {repr(e)}")
-                raise IOError from e
-        else:
-            if type(spectrogram_or_spect_file) != pd.DataFrame:
-                raise ValueError(f"Argument must be path to pickled spectrogram, or a DataFrame; was {type(spectrogram_or_spect_file)}")
-            spect = spectrogram_or_spect_file
-
+        spect = self._read_spectrogram_if_needed(spectrogram_or_spect_file)
         # Start with an all-zero label mask:
         label_mask = np.zeros(len(spect.columns), dtype=int)
         # The x-axis time labels:
         label_times    = spect.columns.astype(float)
         
-        begin_time_key = 'Begin Time (s)'
-        end_time_key   = 'End Time (s)'
         try:
             if type(label_txt_file) == str:
                 fd = open(label_txt_file, 'r')
             else:
                 fd = label_txt_file 
             reader = csv.DictReader(fd, delimiter='\t')
-            # Get each el call time range spec in the labels:
-            for label_dict in reader:
-                try:
-                    begin_time = float(label_dict[begin_time_key])
-                    end_time   = float(label_dict[end_time_key])
-                except KeyError:
-                    raise IOError(f"Raven label file {label_txt_file} does not contain one "
-                                  f"or both of keys '{begin_time_key}', {end_time_key}'")
-                
-                if end_time < begin_time:
-                    self.log.err(f"Bad label: end label less than begin label: {end_time} < {begin_time}")
-                    continue
-                
-                if begin_time > label_times[-1]:
-                    self.log.err(f"Bad label: begin label after end of recording: {begin_time} > {label_times[-1]}")
-                    continue
-                if end_time < label_times[0]:
-                    self.log.err(f"Bad label: end label before start of recording: {end_time} < {label_times[0]}")
-                    continue
-                
-                # Want the time bin that's just below
-                # the start of the label's
-                # start time. Method nonzero returns a
-                # 1 el tuple for 1D arrays; therefore the [0] 
-                
-                pre_begin_indices = np.nonzero(label_times <= begin_time)[0]
-                # Is label start time beyond end of recording?
-                if len(pre_begin_indices) == 0:
-                    start_bin_idx = 0
-                else:
-                    # The last match is closest in the spectro
-                    # time line to the start time of the label:
-                    start_bin_idx = pre_begin_indices[-1]
-                
-                # Similarly with end time:
-                post_end_indices = np.nonzero(label_times > end_time)[0]
-                if len(post_end_indices) == 0:
-                    # Label end time is beyond recording. Just 
-                    # go up to the end:
-                    end_bin_idx = len(label_times)
-                else:
-                    end_bin_idx = post_end_indices[0]
-                
+            for (start_bin_idx, end_bin_idx) in self._get_label_indices(reader, 
+                                                                        label_times,
+                                                                        label_txt_file):
+            
                 # Fill the mask with 1s in the just-computed range:
                 label_mask[start_bin_idx:end_bin_idx] = 1
                 
@@ -723,8 +767,147 @@ class Spectrogrammer(object):
                 fd.close()
             
         return label_mask
+
+    #------------------------------------
+    # create_label_intervals_from_raven_table
+    #-------------------
+    
+    def create_label_intervals_from_raven_table(self, 
+                                                label_txt_file,
+                                                spectrogram_or_spect_file):
+        '''
+        Given a manually created selection table as produced
+        by the Raven program, plus a spectrogram, create a
+        list of time intervals ele calls occurred.
+        
+        Label files are of the form:
+        
+            Col1    ...    Begin Time (s)    End Time (s)    ... Coln
+             foo             6.326            4.653              bar
+                    ...
+
+        @param label_txt_file: either a path to a label file,
+            or an open fd to such a file:
+        @type label_txt_file: {str|file-like}
+        @param spectrogram_or_spect_file: either an in-memory spectrogram DataFrame
+            or a path to a pickled DataFrame
+        @type spectrogram_or_spect_file: {str|pandas.DataFrame}
+        '''
+        # Get the spectro from file, if needed:
+        spect = self._read_spectrogram_if_needed(spectrogram_or_spect_file)
+        label_intervals = []
+        # The x-axis time labels:
+        label_times    = spect.columns.astype(float)
+        
+        try:
+            if type(label_txt_file) == str:
+                fd = open(label_txt_file, 'r')
+            else:
+                fd = label_txt_file 
+            reader = csv.DictReader(fd, delimiter='\t')
+            for (start_bin_idx, end_bin_idx) in self._get_label_indices(reader, 
+                                                                        label_times,
+                                                                        label_txt_file):
             
-             
+                # Next time interval:
+                time_interval = pd.Interval(left=label_times[start_bin_idx], 
+                                            right=label_times[end_bin_idx]
+                                            )
+                
+                label_intervals.append(time_interval)
+                
+        finally:
+            # Only close an fd that we may have
+            # opened in this method. Fds passed
+            # in remain open for caller to close:
+            if type(label_txt_file) == str:
+                fd.close()
+            
+        return label_intervals
+
+    #------------------------------------
+    # _read_spectrogram_if_needed
+    #-------------------
+    
+    def _read_spectrogram_if_needed(self, spectrogram_or_spect_file):
+        '''
+        Given either a spectrogram dataframe, or a previously
+        saved spectrogram, return the spectrogram
+        
+        @param spectrogram_or_spect_file:
+        @type spectrogram_or_spect_file:
+        '''
+        if type(spectrogram_or_spect_file) == str:
+            # Spectrogram is in a file; get it:
+            try:
+                spect = DSPUtils.load_spectrogram(spectrogram_or_spect_file)
+            except Exception as e:
+                self.log.err(f"While reading spectrogram file: {repr(e)}")
+                raise IOError from e
+        else:
+            if type(spectrogram_or_spect_file) != pd.DataFrame:
+                raise ValueError(f"Argument must be path to pickled spectrogram, or a DataFrame; was {type(spectrogram_or_spect_file)}")
+            spect = spectrogram_or_spect_file
+        return spect
+
+            
+    #------------------------------------
+    # _get_label_indices 
+    #-------------------
+
+    def _get_label_indices(self, 
+                           reader,
+                           label_times,
+                           label_txt_file
+                           ):
+
+        
+        begin_time_key = 'Begin Time (s)'
+        end_time_key   = 'End Time (s)'
+
+        # Get each el call time range spec in the labels:
+        for label_dict in reader:
+            try:
+                begin_time = float(label_dict[begin_time_key])
+                end_time   = float(label_dict[end_time_key])
+            except KeyError:
+                raise IOError(f"Raven label file {label_txt_file} does not contain one "
+                              f"or both of keys '{begin_time_key}', {end_time_key}'")
+            
+            if end_time < begin_time:
+                self.log.err(f"Bad label: end label less than begin label: {end_time} < {begin_time}")
+                continue
+            
+            if begin_time > label_times[-1]:
+                self.log.err(f"Bad label: begin label after end of recording: {begin_time} > {label_times[-1]}")
+                continue
+            if end_time < label_times[0]:
+                self.log.err(f"Bad label: end label before start of recording: {end_time} < {label_times[0]}")
+                continue
+            
+            # Want the time bin that's just below
+            # the start of the label's
+            # start time. Method nonzero returns a
+            # 1 el tuple for 1D arrays; therefore the [0] 
+            
+            pre_begin_indices = np.nonzero(label_times <= begin_time)[0]
+            # Is label start time beyond end of recording?
+            if len(pre_begin_indices) == 0:
+                start_bin_idx = 0
+            else:
+                # The last match is closest in the spectro
+                # time line to the start time of the label:
+                start_bin_idx = pre_begin_indices[-1]
+            
+            # Similarly with end time:
+            post_end_indices = np.nonzero(label_times > end_time)[0]
+            if len(post_end_indices) == 0:
+                # Label end time is beyond recording. Just 
+                # go up to the end:
+                end_bin_idx = len(label_times)
+            else:
+                end_bin_idx = post_end_indices[0]
+            yield (start_bin_idx, end_bin_idx)
 
     #------------------------------------
     # normalize
@@ -760,7 +943,7 @@ class Spectrogrammer(object):
         normed_samples = normed_samples.astype('int16')
         
         #self.log.info("Done normalization.")
-        return normed_samples    
+        return normed_samples
 
     #------------------------------------
     # plot_simple
@@ -768,6 +951,7 @@ class Spectrogrammer(object):
     
     def plot_simple(self, spectrum, time):
         pass
+    
     #------------------------------------
     # plot
     #------------------- 
@@ -824,43 +1008,6 @@ class Spectrogrammer(object):
         time_scale = list(np.arange(num_times))
         return(freq_scale, time_scale)
 
-    #------------------------------------
-    # compute_timeticks 
-    #-------------------
-    
-    def compute_timeticks(self, framerate, spectrogram_t):
-        '''
-        Given a spectrogram, compute the x-axis
-        time ticks in seconds, minutes, and hours.
-        Return all three in a dict:
-           {'seconds' : num-of-ticks,
-            'minutes' : num-of-ticks,
-            'hours'   : num-of-ticks
-            }
-            
-        Recipient can pick 
-        
-        @param framerate:
-        @type framerate:
-        @param spectrogram_t:
-        @type spectrogram_t:
-        '''
-        
-        # Number of columns in the spectrogram:
-        estimate_every_samples = self.n_fft - self.overlap * self.n_fft
-        estimate_every_secs    = estimate_every_samples / framerate
-        one_sec_every_estimates= 1/estimate_every_secs
-        (_num_freqs, num_estimates) = spectrogram_t.shape
-        num_second_ticks = num_estimates / one_sec_every_estimates
-        num_minute_ticks = num_second_ticks / 60
-        num_hour_ticks   = num_second_ticks / 3600
-        num_time_ticks = {'seconds': int(num_second_ticks),
-                          'minutes': int(num_minute_ticks),
-                          'hours'  : int(num_hour_ticks)
-                          }
-        
-        #time_labels       = np.array(range(num_timeticks))
-        return num_time_ticks
                         
     #------------------------------------
     # get_label_filename 
@@ -934,11 +1081,20 @@ if __name__ == '__main__':
                         default=8000,
                         help='Framerate at which original .wav file was recorded; def: 8000')
 
-    parser.add_argument('--max_f', 
-                    dest='max_freq', 
+    parser.add_argument('--freq_cap', 
                     type=int, 
                     default=Spectrogrammer.FREQ_MAX, 
                     help='Deterimes the maximum frequency band in spectrogram')
+
+    parser.add_argument('--max_freq', 
+                    type=int, 
+                    default=100,
+                    help='Min frequency of leading bandpass filter')
+
+    parser.add_argument('--min_freq', 
+                    type=int, 
+                    default=10,
+                    help='Min frequency of leading bandpass filter')
 
     parser.add_argument('-s', '--start', 
                         type=int, 
@@ -956,27 +1112,9 @@ if __name__ == '__main__':
                         help='Normalize to fill 16-bit -32K to +32K dynamic range'
                         )
 
-    parser.add_argument('-c', '--clean', 
-                        default=False,
-                        action='store_true', 
-                        help='Clean spectrogram'
-                        )
-    
-    parser.add_argument('-p', '--plot', 
-                        default=False,
-                        action='store_true', 
-                        help='Plot charts as appropriate'
-                        )
-    
-    parser.add_argument('-m', '--modelplot', 
-                        default=False,
-                        action='store_true', 
-                        help='Plot spectrogram as classifier will see it.'
-                        )
-
-    parser.add_argument('-o', '--outfile', 
+    parser.add_argument('-o', '--outdir', 
                         default=None, 
-                        help='Outfile for cleaned spectrogram; only needed with -c'
+                        help='Outfile for any created files'
                         )
 
     parser.add_argument('--labelfiles',
@@ -986,7 +1124,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--actions',
                         nargs='+',
-                        help="Which tasks to do {spectro|melspectro|plot|labelmask} (repeatable)"
+                        choices=['spectro', 'melspectro','cleanspectro','plot',
+                                 'plotexcerpts','plothits', 'labelmask'],
+                        help="Which tasks to accomplish (repeatable)"
                         )
 
     parser.add_argument('infiles',
@@ -997,16 +1137,15 @@ if __name__ == '__main__':
     args = parser.parse_args();
     Spectrogrammer(args.infiles,
                    args.actions,
-                   args.clean,
-                   args.max_freq,
+                   outdir=args.outdir,
+                   low_freq=args.min_freq,
+                   high_freq=args.max_freq,
                    start_sec=args.start,
                    end_sec=args.end,
                    normalize=args.normalize,
                    framerate=args.framerate,
-                   plot=args.plot,
-                   model_input_plot=args.modelplot,
-                   label_mask_files=args.labelfiles,
-                   spectrogram_freq_cap=args.max_freq,
+                   #****label_files=args.labelfiles,
+                   spectrogram_freq_cap=args.freq_cap,
                    nfft=args.nfft
                    )
     # Keep charts up till user kills the windows:

@@ -7,6 +7,7 @@ import os, sys
 import shutil
 import sqlite3
 import unittest
+import glob
 
 import pandas as pd
 
@@ -14,8 +15,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from spectrogram_dataset import SpectrogramDataset, AudioType
 
-#*****TEST_ALL = True
-TEST_ALL = False
+TEST_ALL = True
+#TEST_ALL = False
 
 
 class Test(unittest.TestCase):
@@ -50,7 +51,19 @@ class Test(unittest.TestCase):
     
     @classmethod
     def tearDownClass(cls):
-        pass
+        for file in glob.glob('test_spectro*.pickle'):
+            os.remove(file)
+            
+        for file in glob.glob('test_spectro*.sqlite'):
+            os.remove(file)
+            
+        for file in glob.glob('labels_for_testing_*.pickle'):
+            os.remove(file)
+        
+        os.remove('test_spectroA.txt')
+        os.remove('test_spectroB.txt')
+        os.remove('SamplesTests.sqlite')
+
 
     #------------------------------------
     # setUp 

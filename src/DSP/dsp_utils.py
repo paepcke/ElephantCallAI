@@ -8,11 +8,15 @@ from collections import OrderedDict
 import csv
 from enum import Enum
 import os
+from pathlib import Path
 import re
+import time
 
 import torch
 from torchaudio import transforms
 
+from elephant_utils.logging_service import LoggingService
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -25,11 +29,20 @@ class PrecRecFileTypes(Enum):
     PREC_REC_RES = '_prec_rec_res'
     EXPERIMENT   = '_experiment'
     PICKLE       = '_pickle'
-        
+    
+class AudioType(enumerate):
+    WAV = 0         # Audio sound wave
+    SPECTRO = 1     # 24-hr spectrogram
+    SNIPPET = 2     # Snippet of spectrogram 
+    LABEL = 3       # Raven label file
+    MASK = 4        # Mask Call/No-Call from label file
+    IMAGE=5         # PNG of a spectgrogram
+
 class DSPUtils(object):
     '''
     classdocs
     '''
+    log = LoggingService()
 
     #------------------------------------
     # overlap_percentage 
@@ -130,29 +143,41 @@ class DSPUtils(object):
     
     @classmethod
     def save_spectrogram(cls, 
-                         spectrogram, 
+                         magnitudes_np_or_spectr_df, 
                          spectrogram_dest,
-                         freq_labels,
-                         time_labels
+                         freq_labels=None,
+                         time_labels=None
                          ):
         '''
-        Given spectrogram magnitudes, frequency
+        Given magnitudes_np_or_spectr_df magnitudes_np_or_spectr_df, frequency
         and time axes labels, save as a pickled
         dataframe
         
-        @param spectrogram: 2d array of magnitudes
-        @type spectrogram: np.array
+        @param magnitudes_np_or_spectr_df: either a
+             2d array of magnitudes, or a DataFrame
+             comprising the magnitudes, times and freqs.
+        @type magnitudes_np_or_spectr_df: {pd.DataFrame|np.array}
         @param spectrogram_dest: file name to save to
         @type spectrogram_dest: str
         @param freq_labels: array of y-axis labels
         @type freq_labels: np_array
         @param time_labels: array of x-axis labels
         @type time_labels: np_array
+        @raise ValueError if parameters are inconsistent.
         '''
-        # Save the spectrogram to file.
-        # Combine spectrogram, freq_labels, and time_labels
+        if type(magnitudes_np_or_spectr_df) == pd.DataFrame:
+            magnitudes_np_or_spectr_df.to_pickle(spectrogram_dest)
+            return
+        # Got an np array of magnitudes, not a ready-made
+        # df. In that case, freq_labels and time_labels must
+        # be available:
+        if freq_labels is None or time_labels is None:
+            raise ValueError("When magnitudes_np_or_spectr_df is an np array, freq/time labels must be provided.")
+        
+        # Save the magnitudes_np_or_spectr_df to file.
+        # Combine magnitudes_np_or_spectr_df, freq_labels, and time_labels
         # into a DataFrame:
-        df = pd.DataFrame(spectrogram,
+        df = pd.DataFrame(magnitudes_np_or_spectr_df,
                           columns=time_labels,
                           index=freq_labels
                           )
@@ -284,12 +309,174 @@ class DSPUtils(object):
                                   f"or both of keys '{begin_time_key}', {end_time_key}'")
                 
                 if end_time < begin_time:
-                    self.log.err(f"Bad label: end label less than begin label: {end_time} < {begin_time}")
+                    cls.log.err(f"Bad label: end label less than begin label: {end_time} < {begin_time}")
                     continue
                 label_time_intervals.append(pd.Interval(left=begin_time, right=end_time))
         return label_time_intervals
-                
 
+    #------------------------------------
+    # load_label_mask 
+    #-------------------
+
+    def load_label_mask(self, infile):
+        np.load(infile)
+    
+    #------------------------------------
+    # save_label_mask 
+    #-------------------
+
+    def save_label_mask(self, label_mask, outfile):
+        np.save(outfile, label_mask)
+
+
+    #------------------------------------
+    # decode_filename 
+    #-------------------
+
+    @classmethod
+    def decode_filename(cls, filename):
+        '''
+        Given a file name with or without 
+        path that is one of: 
+           o .wav file
+           o .txt file
+           o .png file
+           o _spectrogram.pickle
+           o _spectrogram_<n>.pickle
+        return a dict with the other file 
+        names:
+        
+           {file_type : <AudioType enum>,
+            file_root : <no path, stripped ext and [_<n>]_spectrogram
+            wav : <.wav file>
+            txt : <.txt file>
+            png : <.png file>
+            mask: <.npy file>
+            spectro : <_spectrogram.pickle>
+            snippet_id : <the <n> if in given filename, else None>,
+            path : <path portion of filename if given, else None>
+        
+        If a full path is returned, the path up to the filename
+        is placed int the path key. All other entries are 
+        only the filenames.
+        
+        @param filename: filename to decode. 
+        @type filename: str
+        @return: dict of file names derived from
+            infile.
+        @rtype: {str : str}
+        '''
+        
+        res = {}
+        # Will correct later if appropriate:
+        res['snippet_id']  = None
+        
+        fpath = Path(filename)
+        
+        # Regex to find spectrogram snippet files: 
+        # Ex.: nn05b_20180617_000000_5_spectrogram.pickle'
+        # A match group will contain: ('nn05b_20180617_000000', '5'). 
+        # However the following will not match: 
+        #    nn05b_20180617_000000_spectrogram.pickle
+        # This last one is a 24-hr, full spectrogram:
+        
+        snippet_search_pattern = re.compile(r"(.*_[0]+)_([0-9]+)_spectrogram[.]pickle") 
+
+        # Name without path and extension:
+        file_root = fpath.name
+        # If it's foo_spectrogram.pickle or foo_<n>_spectrogram.pickle: 
+        if filename.endswith('_spectrogram.pickle'):
+            # Lose the _spectrogram.pickle:
+            file_root = file_root[:-len('_spectrogram.pickle')]
+            # Get spectro_id if file is a spectrogram snippet:        
+            matched_fragments = snippet_search_pattern.search(filename)
+            if matched_fragments is not None:
+                (_path, snippet_id) = matched_fragments.groups()
+                res['snippet_id']  = int(snippet_id)
+                # Remove the snippet id from file root:
+                # The 1+ is for the leading underscore
+                # before the number:
+                file_root = file_root[:-(1+len(snippet_id))]
+                res['file_type'] = AudioType.SNIPPET # snippet of spectrogram
+            else:
+                res['file_type'] = AudioType.SPECTRO # 24 hr spectrogram
+
+        res['file_root'] = file_root
+
+        # Just the path to the file without filename:
+        path = str(fpath.parent)
+        # If filename is just a name w/o a
+        # path: set path to None:
+        if path == '.':
+            path = None
+        res['path'] = path
+
+        if fpath.suffix == '.wav':
+            res['file_type'] = AudioType.WAV
+        elif fpath.suffix == '.txt':
+            res['file_type'] = AudioType.LABEL
+        elif fpath.suffix == '.npy':
+            res['file_type'] = AudioType.Mask
+        elif fpath.suffix == '.png':
+            res['file_type'] = AudioType.IMAGE
+
+        res['wav']     = file_root + '.wav'
+        res['label']   = file_root + '.txt'
+        res['mask']    = file_root + '.npy'
+        res['png']     = file_root + '.png'
+        res['spectro'] = file_root + '_spectrogram.pickle'
+
+            
+        return res
+
+    #------------------------------------
+    # hrs_mins_secs_from_secs 
+    #-------------------
+
+    @classmethod
+    def hrs_mins_secs_from_secs(cls, secs):
+        return time.strftime("%H:%M:%S", time.gmtime(secs))
+    
+    #------------------------------------
+    # compute_timeticks 
+    #-------------------
+    
+    @classmethod
+    def compute_timeticks(cls, framerate, spectrogram):
+        '''
+        UNTESTED
+        
+        Given a spectrogram, compute the x-axis
+        time ticks in seconds, minutes, and hours.
+        Return all three in a dict:
+           {'seconds' : num-of-ticks,
+            'minutes' : num-of-ticks,
+            'hours'   : num-of-ticks
+            }
+            
+        Recipient can pick 
+        
+        @param framerate:
+        @type framerate:
+        @param spectrogram: spectrogram
+        @type spectrogram: pd.DataFrame
+        '''
+        
+        # Number of columns in the spectrogram:
+        estimate_every_samples = spectrogram.columns
+        estimate_every_secs    = estimate_every_samples / framerate
+        one_sec_every_estimates= 1/estimate_every_secs
+        (_num_freqs, num_estimates) = spectrogram.shape
+        num_second_ticks = num_estimates / one_sec_every_estimates
+        num_minute_ticks = num_second_ticks / 60
+        num_hour_ticks   = num_second_ticks / 3600
+        num_time_ticks = {'seconds': int(num_second_ticks),
+                          'minutes': int(num_minute_ticks),
+                          'hours'  : int(num_hour_ticks)
+                          }
+        
+        #time_labels       = np.array(range(num_timeticks))
+        return num_time_ticks
 
 # ---------------------------- Class SignalTreatment ------------
     

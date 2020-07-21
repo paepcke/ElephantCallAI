@@ -153,6 +153,7 @@ class AmplitudeGater(object):
         if not testing:
             if outdir is None:
                 outdir = os.path.dirname(infile)
+
             # Make sure the outfile can be opened for writing,
             # before going into lengthy computations:
     
@@ -161,7 +162,7 @@ class AmplitudeGater(object):
             fileroot   = os.path.basename(path)
             if outfile is None:
                 outfile = f"{os.path.join(outdir, fileroot)}_gated{ext}"
-            if os.path.isdir(spectrogram_dest):
+            if spectrogram_dest is not None and os.path.isdir(spectrogram_dest):
                 spectrogram_dest =\
                     f"{os.path.join(spectrogram_dest, fileroot)}_spectrogram.pickle"
     

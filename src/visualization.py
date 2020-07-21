@@ -20,7 +20,13 @@ parser.add_argument('--hop', type=int, default=800, help='Hop size used for crea
 parser.add_argument('--window', type=int, default=22, help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
-def visualize(features, outputs=None, labels=None, binary_preds=None, title=None, vert_lines=None):
+def visualize(features, 
+              outputs=None, 
+              labels=None, 
+              binary_preds=None, 
+              title=None, 
+              vert_lines=None,
+              to_dB=True):
     """
     Visualizes the spectogram and associated predictions/labels. 
     features is the entire spectrogram that will be visualized
@@ -39,10 +45,14 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, title=None
     # TODO: Delete above line?
     # For some reason it requires things in shape freq x timeseries
     new_features = features.T
-    min_dbfs = new_features.flatten().mean()
-    max_dbfs = new_features.flatten().mean()
-    min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-    max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+    if to_dB:
+        min_dbfs = new_features.flatten().mean()
+        max_dbfs = new_features.flatten().mean()
+        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+    else:
+        min_dbfs = np.amin(new_features)
+        max_dbfs = np.amax(new_features)
 
     ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
     
