@@ -73,7 +73,7 @@ class AmplitudeGater(object):
                  amplitude_cutoff=-40,   # dB of peak
                  low_freq=10, #
                  high_freq=50, #
-                 spectrogram_freq_cap=150, # Hz
+                 spectrogram_freq_cap=60, # Hz
                  normalize=True,
                  logfile=None,
                  framerate=None,  # Only used for testing.
