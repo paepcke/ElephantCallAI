@@ -7,6 +7,7 @@ Created on Mar 5, 2020
 from _collections import OrderedDict
 import argparse
 from collections import deque
+from pathlib import Path
 import os
 import pickle
 import sys
@@ -20,6 +21,7 @@ import numpy as np
 from plotting.plotter import PlotterTasks
 from precision_recall_from_wav import PerformanceResult
 from precision_recall_from_wav import PrecRecComputer
+
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -370,7 +372,6 @@ class PreprocessingCalibration(object):
                                                 low_freq=low_freq,
                                                 high_freq=high_freq,
                                                 spectrogram_freq_cap=spectrogram_freq_cap,
-                                                spectrogram_outfile=spectrogram_outfile,
                                                 outfile=outfile
                                                 )
                         #************
@@ -608,6 +609,13 @@ class Experiment(OrderedDict):
         @param outfile: name of destination file. Should end in .pickle
         @type outfile: str
         '''
+        # Sometimes empty experiment files are left
+        # around (need to fix that). Check whether
+        # outfile is one of those, as indicated
+        # by its length being zero:
+        if Path(outfile).stat().st_size == 0:
+            os.remove(outfile)
+         
         if append and os.path.exists(outfile):
             # To append we need to read the current
             # list of Experiment instances, add self
@@ -781,6 +789,7 @@ if __name__ == '__main__':
                         help='If provided, a spectrogram is created and written to outdir as .npy file')
     parser.add_argument('--plot',
                         nargs='+',
+                        default=[],
                         choices=['gated_wave_excerpt','samples_plus_envelope','spectrogram_excerpts','low_pass_filter'],
                         help="Plots to produce; repeatable; default: no plots"
                         )
