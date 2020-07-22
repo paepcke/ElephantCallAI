@@ -24,6 +24,8 @@ import pandas as pd
 from plotting.plotter import Plotter
 from wave_maker import WavMaker
 from DSP.dsp_utils import DSPUtils
+from DSP.dsp_utils import FileFamily
+from DSP.dsp_utils import AudioType
 
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
@@ -60,7 +62,6 @@ class Spectrogrammer(object):
                  infiles,
                  actions,
                  outdir=None,
-                 label_files=None,
                  start_sec=0,
                  end_sec=None,
                  normalize=False,
@@ -83,8 +84,6 @@ class Spectrogrammer(object):
             wav files. If None, is written to the directory of the file
             on which computed was based.
         @type outdir {None | str}
-        @param label_files: text files with manually produced labels
-        @type label_files: str
         @param start_sec: start second in the wav file
         @type start_sec: int
         @param end_sec: end second in the wav file
@@ -134,6 +133,14 @@ class Spectrogrammer(object):
         
         # Compute data structures:
         
+        # Need to create all spectrograms before creating
+        # masks or cleaning spectrograms. So sort infiles 
+        # to have .wav files first:
+        
+        infiles = sorted(infiles,
+                         key=lambda x: x.endswith('.wav'),
+                         reverse=True)
+
         for infile in infiles:
             if not os.path.exists(infile):
                 print(f"File {infile} does not exist.")
@@ -147,10 +154,10 @@ class Spectrogrammer(object):
             # Get a dict with the file_root and 
             # names related to the infile in our
             # file naming scheme:
-            file_family = DSPUtils.decode_filename(infile)
+            file_family = FileFamily(infile)
 
             if outdir is None:
-                outdir = file_family['path']
+                outdir = file_family.path
             
             
             if infile.endswith('.wav'):
@@ -166,7 +173,8 @@ class Spectrogrammer(object):
                     #    path to untreated excerpt file if requested: 'excerpt_file'
                     
                     process_result_dict = \
-                        self.process_wav_file(samples, 
+                        self.process_wav_file(samples,
+                                              file_family, 
                                               start_sec=start_sec, 
                                               end_sec=end_sec, 
                                               normalize=normalize,
@@ -189,7 +197,7 @@ class Spectrogrammer(object):
                         print(f"Cannot create spectrogram for {infile}: {repr(e)}")
                         sys.exit(1)
                     # Save the spectrogram:
-                    spectro_outfile = os.path.join(outdir,file_family['spectro'])
+                    spectro_outfile = os.path.join(outdir,file_family.spectro)
                     DSPUtils.save_spectrogram(spect, spectro_outfile)
 
             elif infile.endswith('.txt'):
@@ -197,8 +205,11 @@ class Spectrogrammer(object):
                 # Make sure caller wants to create a mask file:
                 #if not 'labelmask' in actions:
                 #    continue
-                label_mask = self.create_label_mask_from_raven_table(infile)
-                DSPUtils.save_label_mask(label_mask, os.path.join(outdir,file_family['mask']))
+                label_mask = self.create_label_mask_from_raven_table(infile,
+                                                                     file_family.fullpath(AudioType.SPECTRO)
+                                                                     )
+                DSPUtils.save_label_mask(label_mask, 
+                                         os.path.join(outdir,file_family.mask))
                 
             elif infile.endswith('.pickle'):
                 # Infile is a .pickle spectrogram file:
@@ -210,7 +221,7 @@ class Spectrogrammer(object):
                     sys.exit(1)
                 self.log.info(f"Done loading spectrogram file {infile}.")
                 
-                maybe_mask_file = os.path.join(file_family['path'], file_family['mask'])
+                maybe_mask_file = file_family.fullpath(AudioType.MASK)
                 if os.path.exists(maybe_mask_file):
                     self.log.info("Reading label mask...")
                     label_mask = DSPUtils.load_label_mask(maybe_mask_file)
@@ -247,7 +258,7 @@ class Spectrogrammer(object):
 
             # Plot spectro pieces with labeled calls below?
             if 'plothits' in actions and clean_spect is not None:
-                relevant_label_file = os.path.join(file_family['path'], file_family['label'])
+                relevant_label_file = file_family.fullpath(AudioType.LABEL)
                 if not os.path.exists(relevant_label_file):
                     self.log.err(f"The plothits option requires label_file {relevant_label_file} to exist; it doen't. Skipping {infile}")
                     continue
@@ -591,12 +602,12 @@ class Spectrogrammer(object):
 
     def process_wav_file(self,
                          infile_or_samples,
+                         file_family,
                          start_sec=None, 
                          end_sec=None,
                          threshold_db=-40, # dB
                          low_freq=10,      # Hz 
                          high_freq=50,     # Hz
-                         spectrogram_freq_cap=150,
                          normalize=False,
                          outdir=None,
                          keep_excerpt=False,
@@ -683,18 +694,19 @@ class Spectrogrammer(object):
                           self.framerate,
                           infile_or_samples  # These are samples
                           )
-            
 
         try:
             try:
                 # Because we pass no spectrogram destination,
                 # none is created in AmplitudeGater; just the
                 # gated .wav file:
+                gated_file_dest = file_family.fullpath(AudioType.GATED_WAV)
                 gater = AmplitudeGater(excerpt_infile.name,
                                        amplitude_cutoff=threshold_db,
                                        low_freq=low_freq,
                                        high_freq=high_freq,
                                        outdir=outdir,
+                                       outfile=gated_file_dest,
                                        normalize=normalize
                                        )
             except Exception as e:
@@ -1072,7 +1084,10 @@ if __name__ == '__main__':
                              'of the resulting spectrogram') 
                         # Default corresponds to 21s
 
-    parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
+    parser.add_argument('--pad', 
+                        dest='pad_to', 
+                        type=int, 
+                        default=4096, 
                         help='Deterimes the padded window size that we ' +
                              'want to give a particular grid spacing (i.e. 1.95hz')
 
@@ -1084,7 +1099,7 @@ if __name__ == '__main__':
     parser.add_argument('--freq_cap', 
                     type=int, 
                     default=Spectrogrammer.FREQ_MAX, 
-                    help='Deterimes the maximum frequency band in spectrogram')
+                    help='Determines the maximum frequency band in spectrogram')
 
     parser.add_argument('--max_freq', 
                     type=int, 
@@ -1095,6 +1110,11 @@ if __name__ == '__main__':
                     type=int, 
                     default=10,
                     help='Min frequency of leading bandpass filter')
+
+    parser.add_argument('--threshold_db', 
+                    type=int, 
+                    default=-40,
+                    help='Decibels relative to max signal below which signal is set to zero')
 
     parser.add_argument('-s', '--start', 
                         type=int, 
@@ -1144,7 +1164,6 @@ if __name__ == '__main__':
                    end_sec=args.end,
                    normalize=args.normalize,
                    framerate=args.framerate,
-                   #****label_files=args.labelfiles,
                    spectrogram_freq_cap=args.freq_cap,
                    nfft=args.nfft
                    )

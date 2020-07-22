@@ -16,7 +16,6 @@ import torch
 from torchaudio import transforms
 
 from elephant_utils.logging_service import LoggingService
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -37,6 +36,7 @@ class AudioType(enumerate):
     LABEL = 3       # Raven label file
     MASK = 4        # Mask Call/No-Call from label file
     IMAGE=5         # PNG of a spectgrogram
+    GATED_WAV=6     # .wav file DSP after processing
 
 class DSPUtils(object):
     '''
@@ -318,116 +318,18 @@ class DSPUtils(object):
     # load_label_mask 
     #-------------------
 
-    def load_label_mask(self, infile):
+    @classmethod
+    def load_label_mask(cls, infile):
         np.load(infile)
     
     #------------------------------------
     # save_label_mask 
     #-------------------
 
-    def save_label_mask(self, label_mask, outfile):
+    @classmethod
+    def save_label_mask(cls, label_mask, outfile):
         np.save(outfile, label_mask)
 
-
-    #------------------------------------
-    # decode_filename 
-    #-------------------
-
-    @classmethod
-    def decode_filename(cls, filename):
-        '''
-        Given a file name with or without 
-        path that is one of: 
-           o .wav file
-           o .txt file
-           o .png file
-           o _spectrogram.pickle
-           o _spectrogram_<n>.pickle
-        return a dict with the other file 
-        names:
-        
-           {file_type : <AudioType enum>,
-            file_root : <no path, stripped ext and [_<n>]_spectrogram
-            wav : <.wav file>
-            txt : <.txt file>
-            png : <.png file>
-            mask: <.npy file>
-            spectro : <_spectrogram.pickle>
-            snippet_id : <the <n> if in given filename, else None>,
-            path : <path portion of filename if given, else None>
-        
-        If a full path is returned, the path up to the filename
-        is placed int the path key. All other entries are 
-        only the filenames.
-        
-        @param filename: filename to decode. 
-        @type filename: str
-        @return: dict of file names derived from
-            infile.
-        @rtype: {str : str}
-        '''
-        
-        res = {}
-        # Will correct later if appropriate:
-        res['snippet_id']  = None
-        
-        fpath = Path(filename)
-        
-        # Regex to find spectrogram snippet files: 
-        # Ex.: nn05b_20180617_000000_5_spectrogram.pickle'
-        # A match group will contain: ('nn05b_20180617_000000', '5'). 
-        # However the following will not match: 
-        #    nn05b_20180617_000000_spectrogram.pickle
-        # This last one is a 24-hr, full spectrogram:
-        
-        snippet_search_pattern = re.compile(r"(.*_[0]+)_([0-9]+)_spectrogram[.]pickle") 
-
-        # Name without path and extension:
-        file_root = fpath.name
-        # If it's foo_spectrogram.pickle or foo_<n>_spectrogram.pickle: 
-        if filename.endswith('_spectrogram.pickle'):
-            # Lose the _spectrogram.pickle:
-            file_root = file_root[:-len('_spectrogram.pickle')]
-            # Get spectro_id if file is a spectrogram snippet:        
-            matched_fragments = snippet_search_pattern.search(filename)
-            if matched_fragments is not None:
-                (_path, snippet_id) = matched_fragments.groups()
-                res['snippet_id']  = int(snippet_id)
-                # Remove the snippet id from file root:
-                # The 1+ is for the leading underscore
-                # before the number:
-                file_root = file_root[:-(1+len(snippet_id))]
-                res['file_type'] = AudioType.SNIPPET # snippet of spectrogram
-            else:
-                res['file_type'] = AudioType.SPECTRO # 24 hr spectrogram
-
-        res['file_root'] = file_root
-
-        # Just the path to the file without filename:
-        path = str(fpath.parent)
-        # If filename is just a name w/o a
-        # path: set path to None:
-        if path == '.':
-            path = None
-        res['path'] = path
-
-        if fpath.suffix == '.wav':
-            res['file_type'] = AudioType.WAV
-        elif fpath.suffix == '.txt':
-            res['file_type'] = AudioType.LABEL
-        elif fpath.suffix == '.npy':
-            res['file_type'] = AudioType.Mask
-        elif fpath.suffix == '.png':
-            res['file_type'] = AudioType.IMAGE
-
-        res['wav']     = file_root + '.wav'
-        res['label']   = file_root + '.txt'
-        res['mask']    = file_root + '.npy'
-        res['png']     = file_root + '.png'
-        res['spectro'] = file_root + '_spectrogram.pickle'
-
-            
-        return res
 
     #------------------------------------
     # hrs_mins_secs_from_secs 
@@ -477,6 +379,243 @@ class DSPUtils(object):
         
         #time_labels       = np.array(range(num_timeticks))
         return num_time_ticks
+    
+# ---------------------------- Class FileFamily
+
+class FileFamily(object):
+    '''
+    Several files are derived from a single recording:
+    the 24-hour spectrogram, a label mask, multiple snippets
+    of the 24-hour spectrogram, maybe a png image. And
+    there is the .wav file itself. The filenames have
+    standard formats. The core is the .wav file, such as
+    nn05b_20180617_000000. The associated recording is
+    nn05b_20180617_000000.wav. A spectrogram of that file
+    nn05b_20180617_000000_spectrogram.pickle. Snippets of
+    this spectrogram are nn05b_20180617_000000_<n>_spectrogram.pickle
+    where <n> is the snippet number in time order.
+    
+    An instance of this class enables easy access to 
+    all these associated file names. For the names
+    without their path:
+    
+        o inst.wav
+        o inst.spectro
+        o inst.snippet
+        o inst.label
+        o inst.mask
+        o inst.png
+    
+    For full filepaths, use:
+    
+        inst.fullpath(<AudioType>)
+        
+    where AudioType is one of 
+        AudioType.WAV         # Audio sound wave
+        		  SPECTRO     # 24-hr spectrogram
+        		  SNIPPET     # Snippet of spectrogram 
+        		  LABEL       # Raven label file
+        		  MASK        # Mask Call/No-Call from label file
+        		  IMAGE       # PNG of a spectgrogram
+    '''
+
+    #------------------------------------
+    # Constructor 
+    #-------------------
+    
+    def __init__(self, filename):
+        
+        # So far: have not encountered a
+        # spectrogram snippet:
+        self.snippet_ids = []
+        
+        self.decode_filename(filename)
+
+
+    #------------------------------------
+    # fullpath 
+    #-------------------
+    
+    def fullpath(self, filetype, snippet_id=None):
+        '''
+        Given a filetype: 
+        AudioType.WAV         # Audio sound wave
+        		  SPECTRO     # 24-hr spectrogram
+        		  SNIPPET     # Snippet of spectrogram 
+        		  LABEL       # Raven label file
+        		  MASK        # Mask Call/No-Call from label file
+        		  IMAGE       # PNG of a spectgrogram
+
+        return the full path to the respective
+        file family.
+
+        @param filetype: specifies which file extension is wanted
+        @type filetype: AudioType
+        @param snippet_id: relevant if full path of a
+            snippet file is requested. If None, a list
+            of all full paths of known snippets is returned.
+            Else, if a snippet id is provided, a fill path
+            with the snippet_id is returned
+        @type snippet_id: {int|None}
+        @return: full path to the file
+        @rtype: str
+        '''
+        
+        if filetype == AudioType.WAV:
+            return os.path.join(self.path, self.wav)
+        elif filetype == AudioType.GATED_WAV:
+            return os.path.join(self.path, self.gated_wav)
+        elif filetype == AudioType.SPECTRO:
+            return os.path.join(self.path, self.spectro)
+        elif filetype == AudioType.SNIPPET:
+            # If snippet_id is None, return a list of 
+            # all full snippet files. Else just the one
+            # with the desired snippet_id:
+            if snippet_id is None:
+                all_paths = [os.path.join(self.path, 
+                                          self.get_snippet_filename(snippet_id)) 
+                                          for snippet_id in self.snippet_ids]
+                return all_paths
+            else:
+                return os.path.join(self.path, self.get_snippet_filename(snippet_id))
+        elif filetype == AudioType.LABEL:
+            return os.path.join(self.path, self.label)
+        elif filetype == AudioType.MASK:
+            return os.path.join(self.path, self.mask)
+        elif filetype == AudioType.IMAGE:
+            return os.path.join(self.path, self.png)
+
+    #------------------------------------
+    # get_snippet_filename 
+    #-------------------
+    
+    def get_snippet_filename(self, snippet_id):
+        '''
+        Given a snippet id, return <file_root>_<snippet_id>_spectrogram.pickle
+        
+        @param snippet_id: snippet id to splice into the file name
+        @type snippet_id: int
+        @return filename for the given snippet
+        @rtype str
+        '''
+        
+        name = f"{self.file_root}_{snippet_id}_spectrogram.pickle"
+        return name
+
+    #------------------------------------
+    # add_snippet_id 
+    #-------------------
+    
+    def add_snippet_id(self, snippet_id):
+        '''
+        Optional: if called, add the snippet id 
+        to the list of snippet files assumed to exist.
+        Only relevant for subsequent calls to 
+        fullpath(AudioType.SNIPPET), which will then
+        return a list of snippet files.
+        
+        @param snippet_id: id to add
+        @type snippet_id: int
+        '''
+        
+        self.snippet_ids.append(snippet_id)
+        
+
+
+    #------------------------------------
+    # decode_filename 
+    #-------------------
+
+    def decode_filename(self, filename):
+        '''
+        Given a file name with or without 
+        path that is one of: 
+           o .wav file
+           o .txt file
+           o .png file
+           o _spectrogram.pickle
+           o _spectrogram_<n>.pickle
+        return a dict with the other file 
+        names:
+        
+           {file_type : <AudioType enum>,
+            file_root : <no path, stripped ext and [_<n>]_spectrogram
+            wav : <.wav file>
+            txt : <.txt file>
+            png : <.png file>
+            mask: <.npy file>
+            spectro : <_spectrogram.pickle>
+            snippet_id : <the <n> if in given filename, else None>,
+            path : <path portion of filename if given, else None>
+        
+        If a full path is returned, the path up to the filename
+        is placed int the path key. All other entries are 
+        only the filenames.
+        
+        @param filename: filename to decode. 
+        @type filename: str
+        @return: dict of file names derived from
+            infile.
+        @rtype: {str : str}
+        '''
+
+        fpath = Path(filename)
+        
+        # Regex to find spectrogram snippet files: 
+        # Ex.: nn05b_20180617_000000_5_spectrogram.pickle'
+        # A match group will contain: ('nn05b_20180617_000000', '5'). 
+        # However the following will not match: 
+        #    nn05b_20180617_000000_spectrogram.pickle
+        # This last one is a 24-hr, full spectrogram:
+        
+        snippet_search_pattern = re.compile(r"(.*_[0]+)_([0-9]+)_spectrogram[.]pickle") 
+
+        # Name without path and extension:
+        file_root = fpath.name[:-len(fpath.suffix)]
+        # If it's foo_spectrogram.pickle or foo_<n>_spectrogram.pickle: 
+        if filename.endswith('_spectrogram.pickle'):
+            # Lose the _spectrogram.pickle:
+            file_root = file_root[:-len('_spectrogram.pickle')]
+            # Get spectro_id if file is a spectrogram snippet:        
+            matched_fragments = snippet_search_pattern.search(filename)
+            if matched_fragments is not None:
+                (_path, snippet_id) = matched_fragments.groups()
+                self.snippet_ids.append(snippet_id)
+                # Remove the snippet id from file root:
+                # The 1+ is for the leading underscore
+                # before the number:
+                file_root = file_root[:-(1+len(snippet_id))]
+                self.file_type = AudioType.SNIPPET # snippet of spectrogram
+            else:
+                self.file_type = AudioType.SPECTRO # 24 hr spectrogram
+
+        self.file_root = file_root
+
+        # Just the path to the file without filename:
+        path = str(fpath.parent)
+        # If filename is just a name w/o a
+        # path: set path to None:
+        if path == '.':
+            path = None
+        self.path = path
+
+        if str(fpath).endswith("_gated.wav"):
+            self.file_type = AudioType.GATED_WAV
+        elif fpath.suffix == '.wav':
+            self.file_type = AudioType.WAV
+        elif fpath.suffix == '.txt':
+            self.file_type = AudioType.LABEL
+        elif fpath.suffix == '.npy':
+            self.file_type = AudioType.Mask
+        elif fpath.suffix == '.png':
+            self.file_type = AudioType.IMAGE
+
+        self.wav     = file_root + '.wav'
+        self.gated_wav = f"{file_root}_gated.wav"
+        self.label   = file_root + '.txt'
+        self.mask    = file_root + '.npy'
+        self.png     = file_root + '.png'
+        self.spectro = file_root + '_spectrogram.pickle'
 
 # ---------------------------- Class SignalTreatment ------------
     
