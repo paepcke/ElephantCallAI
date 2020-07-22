@@ -36,7 +36,7 @@ HIERARCHICAL_REPEATS = 1
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
-MODEL_ID = 21
+MODEL_ID = 22
 
 # WE SHOULD PHASE THIS OUT!
 DATASET = 'Call'
@@ -222,6 +222,12 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         },
 21: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
+22: {
         'lr': 1e-3,
         'lr_decay_step': 4, 
         'lr_decay': 0.95,
