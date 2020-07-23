@@ -19,6 +19,7 @@ import sys
 import argparse
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from dsp_utils import AudioType
 from dsp_utils import FileFamily
