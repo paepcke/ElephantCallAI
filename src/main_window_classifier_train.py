@@ -21,7 +21,7 @@ from collections import deque
 from models import get_model
 from loss import get_loss
 from train import train
-from utils import create_save_path
+from utils import create_save_path, create_dataset_path
 from data import get_loader, get_loader_fuzzy
 
 parser = argparse.ArgumentParser()
@@ -40,21 +40,34 @@ def main():
     # Use the 24hr datasets!
 
     if args.local_files:
-        train_data_path = parameters.LOCAL_FULL_TRAIN
-        test_data_path = parameters.LOCAL_FULL_TEST
+        if parameters.LOSS.upper() == "FOCAL":
+            train_data_path = parameters.LOCAL_FULL_TRAIN
+            test_data_path = parameters.LOCAL_FULL_TEST
+        else:
+            train_data_path = parameters.LOCAL_TRAIN_FILES
+            test_data_path = parameters.LOCAL_TEST_FILES
     else:
-        train_data_path = parameters.REMOTE_FULL_TRAIN
-        test_data_path = parameters.REMOTE_FULL_TEST
+        if parameters.LOSS.upper() == "FOCAL":
+            train_data_path = parameters.REMOTE_FULL_TRAIN
+            test_data_path = parameters.REMOTE_FULL_TEST
+        else:
+            train_data_path = parameters.REMOTE_TRAIN_FILES
+            test_data_path = parameters.REMOTE_TEST_FILES
 
-    shift_windows = False
-    if parameters.SHIFT_WINDOWS:
-        shift_windows = True
-        train_data_path += '_OversizeCalls'
+    if parameters.LOSS.upper() != "FOCAL":
+        train_data_path, _ = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
+                                                                    call_repeats=parameters.CALL_REPEATS, 
+                                                                    shift_windows=parameters.SHIFT_WINDOWS)
+        test_data_path, _ = create_dataset_path(test_data_path, neg_samples=parameters.TEST_NEG_SAMPLES, 
+                                                                call_repeats=1)
+    else:
+        if parameters.SHIFT_WINDOWS:
+            train_data_path += '_OversizeCalls'
     
     
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        shift_windows=shift_windows, full_window_predict=True)
+                                        shift_windows=parameters.SHIFT_WINDOWS, full_window_predict=True)
     test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, full_window_predict=True)
 

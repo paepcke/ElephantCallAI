@@ -36,7 +36,7 @@ HIERARCHICAL_REPEATS = 1
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
-MODEL_ID = 22
+MODEL_ID = 18
 
 # WE SHOULD PHASE THIS OUT!
 DATASET = 'Call'
