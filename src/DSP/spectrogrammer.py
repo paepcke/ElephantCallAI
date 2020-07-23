@@ -9,6 +9,7 @@ import csv
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 from scipy.io import wavfile
 from scipy.signal.spectral import stft, istft
@@ -16,21 +17,18 @@ import torch
 from torchaudio import transforms
 import torchaudio
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from dsp_utils import AudioType
+from dsp_utils import DSPUtils
+from dsp_utils import FileFamily
 from amplitude_gating import AmplitudeGater
 from elephant_utils.logging_service import LoggingService
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from plotting.plotter import Plotter
-from wave_maker import WavMaker
-from DSP.dsp_utils import DSPUtils
-from DSP.dsp_utils import FileFamily
-from DSP.dsp_utils import AudioType
-
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
-sys.path.append(os.path.dirname(__file__))
-
 
 class Spectrogrammer(object):
     '''
@@ -64,13 +62,14 @@ class Spectrogrammer(object):
                  outdir=None,
                  start_sec=0,
                  end_sec=None,
-                 normalize=False,
+                 normalize=True,
                  framerate=None,
                  threshold_db=-40, # dB
                  low_freq=10,      # Hz 
                  high_freq=50,     # Hz
                  spectrogram_freq_cap=None,
                  nfft=None,
+                 logfile=None,
                  testing=False
                  ):
         '''
@@ -99,15 +98,23 @@ class Spectrogrammer(object):
         @type high_freq: int
         @param nfft: window width
         @type nfft: int,
+        @param logfile: destination for log. Default: display
+        @type logfile: {None|str}
         @param testing: if True, only create the instance, and return
         @type testing: bool
         '''
 
-        self.log = LoggingService()
+        if logfile is None:
+            self.log = LoggingService()
+        else:
+            self.log = LoggingService(logfile)
         
         if testing:
             # Leave all calling of methods to the unittest:
             return 
+        
+        if type(infiles) != list:
+            infiles = [infiles]
         
         # Depending on what caller wants us to do,
         # different arguments must be passed. Make
@@ -117,14 +124,15 @@ class Spectrogrammer(object):
 
         # Prerequisites:
 
-        self._ensure_prerequisites(infiles,
-                                   actions,
-                                   framerate,
-                                   threshold_db,
-                                   low_freq,
-                                   high_freq,
-                                   nfft,
-                                   outdir)
+        if not self._ensure_prerequisites(infiles,
+                                          actions,
+                                          framerate,
+                                          threshold_db,
+                                          low_freq,
+                                          high_freq,
+                                          nfft,
+                                          outdir):
+            return
 
         # Go through each infile, which could we label
         # masks, spectrogram dataframes, or label csv files.
@@ -185,7 +193,7 @@ class Spectrogrammer(object):
                                               )
                 except Exception as e:
                     print(f"Cannot process .wav file: {repr(e)}")
-                    sys.exit(1)
+                    return
 
                 if 'spectro' in actions:
                     try:
@@ -195,7 +203,7 @@ class Spectrogrammer(object):
                             self.make_spectrogram(process_result_dict['gated_samples'])
                     except Exception as e:
                         print(f"Cannot create spectrogram for {infile}: {repr(e)}")
-                        sys.exit(1)
+                        return
                     # Save the spectrogram:
                     spectro_outfile = os.path.join(outdir,file_family.spectro)
                     DSPUtils.save_spectrogram(spect, spectro_outfile)
@@ -205,8 +213,9 @@ class Spectrogrammer(object):
                 # Make sure caller wants to create a mask file:
                 #if not 'labelmask' in actions:
                 #    continue
+                spectro_file = os.path.join(outdir, file_family.spectro)
                 label_mask = self.create_label_mask_from_raven_table(infile,
-                                                                     file_family.fullpath(AudioType.SPECTRO)
+                                                                     spectro_file
                                                                      )
                 DSPUtils.save_label_mask(label_mask, 
                                          os.path.join(outdir,file_family.mask))
@@ -218,7 +227,7 @@ class Spectrogrammer(object):
                     spect = DSPUtils.load_spectrogram(infile)
                 except Exception as e:
                     print(f"Could not read spectrogram {infile}: {repr(e)}")
-                    sys.exit(1)
+                    return
                 self.log.info(f"Done loading spectrogram file {infile}.")
                 
                 maybe_mask_file = file_family.fullpath(AudioType.MASK)
@@ -306,15 +315,19 @@ class Spectrogrammer(object):
             if framerate is None:
                 self.log.warn(f"Assuming default framerate of {self.DEFAULT_FRAMERATE}!\n"
                               "If this is wrong, label allignment will be wrong")
-                
-            if not any(filename.endswith('.txt') for filename in infiles):
+            
+            # A .txt file must either be given in the list of infiles,
+            # or must be in the directory of one of the infiles:    
+            if not any(Path(filename).parent.joinpath(Path(filename).stem + '.txt') 
+                       for filename in infiles) and \
+                not any(filename.endswith('.txt') for filename in infiles):
                 self.log.err("For creating a label mask, must have a Raven selection file")
-                sys.exit(-1)
+                return False
                 
         if 'spectro' in actions or 'melspectro' in actions:
             if not any(filename.endswith('.wav') for filename in infiles):
                 self.log.err("For creating a spectrogram, a .wav file must be provided")
-                sys.exit(1)
+                return False
             
             if framerate is not None:
                 self.log.warn(f"Framerate was provided, but will be ignore: using framerate from .wav file.")
@@ -326,7 +339,7 @@ class Spectrogrammer(object):
                              "and set threshold_db to something like -100 to achieve"
                              "the same goal"
                              )
-                self.exit(-1)
+                return False
                 
         if 'plot' in actions or 'plotexcerpts' in actions or 'plothits' in actions: 
             # We either need a .pickle file that must be
@@ -337,7 +350,7 @@ class Spectrogrammer(object):
                 self.log.err("To plot something, there must be either a .pickle spectrogram file\n"
                              "or a .wav file"
                              )
-                sys.exit(1)
+                return False
             self.plotter = Plotter()
 
         if framerate is None:
@@ -350,6 +363,7 @@ class Spectrogrammer(object):
         if type(infiles) != list:
             infiles = [infiles]
 
+        return True
 
 
     #------------------------------------
@@ -700,7 +714,7 @@ class Spectrogrammer(object):
                 # Because we pass no spectrogram destination,
                 # none is created in AmplitudeGater; just the
                 # gated .wav file:
-                gated_file_dest = file_family.fullpath(AudioType.GATED_WAV)
+                gated_file_dest = os.path.join(outdir, file_family.gated_wav)
                 gater = AmplitudeGater(excerpt_infile.name,
                                        amplitude_cutoff=threshold_db,
                                        low_freq=low_freq,
@@ -1126,10 +1140,10 @@ if __name__ == '__main__':
                         default=None, 
                         help='Seconds into recording when to stop spectrogram; default: All')
 
-    parser.add_argument('-n', '--normalize', 
+    parser.add_argument('-n', '--no_normalize', 
                         default=False,
                         action='store_true', 
-                        help='Normalize to fill 16-bit -32K to +32K dynamic range'
+                        help='do not normalize to fill 16-bit -32K to +32K dynamic range'
                         )
 
     parser.add_argument('-o', '--outdir', 
@@ -1162,7 +1176,8 @@ if __name__ == '__main__':
                    high_freq=args.max_freq,
                    start_sec=args.start,
                    end_sec=args.end,
-                   normalize=args.normalize,
+                   # If no_normalize is True, don't normalize:
+                   normalize=not args.no_normalize,
                    framerate=args.framerate,
                    spectrogram_freq_cap=args.freq_cap,
                    nfft=args.nfft

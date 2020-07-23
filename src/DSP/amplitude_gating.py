@@ -1185,7 +1185,7 @@ if __name__ == '__main__':
                         type=int,
                         default=5);
                
-    parser.add_argument('-r', '--raw',
+    parser.add_argument('-n', '--no_normalize',
                         action='store_true',
                         default=False,
                         help="Set to prevent amplitudes to be  normalized to range from -32k to 32k; default is to normalize"
@@ -1232,7 +1232,8 @@ if __name__ == '__main__':
                        high_freq=args.highfreq,
                        spectrogram_freq_cap=args.spectrofilter,
                        spectrogram_dest=args.outfilespectrogram,
-                       normalize=not args.raw,
+                       # If no_normalize is True, don't normalize:
+                       normalize=not args.no_normalize,
                        outdir=args.outdir,
                        logfile=args.logfile,
                        )

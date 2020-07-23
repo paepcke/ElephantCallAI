@@ -12,22 +12,18 @@ All .wav files in the subdirs are recursively included.
 
 @author: paepcke
 '''
-import argparse
 import os
 import shutil
 import sys
-import time
 
-from scipy.io import wavfile
-import torch
-import torchaudio
-
-from amplitude_gating import AmplitudeGater
-from elephant_utils.logging_service import LoggingService
-
+import argparse
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 
+from dsp_utils import AudioType
+from dsp_utils import FileFamily
+from elephant_utils.logging_service import LoggingService
+from spectrogrammer import Spectrogrammer
 
 class WavMaker(object):
     '''
@@ -41,12 +37,12 @@ class WavMaker(object):
     def __init__(self, 
                  infiles,
                  outdir='/tmp/',
-                 threshold_db=-46,
+                 normalize=True,
+                 threshold_db=-40,
                  copy_label_files=True,
                  low_freq=10,
                  high_freq=50,
                  spectrogram_freq_cap=150, # Hz
-                 spectrogram_dest=None,
                  limit=None,
                  logfile=None
                  ):
@@ -59,15 +55,16 @@ class WavMaker(object):
             os.makedirs(outdir)
         self.log = LoggingService(logfile=logfile)
 
+
+        # Get a list of FileFamily instances:
+        file_families = self.get_files_todo_info(infiles)
+        num_wav_files = len(file_families)
         
-        files_info_todo = self.get_files_todo_info(infiles)
-        num_wav_files = len(files_info_todo)
-        
-        # Show todo info:
         if copy_label_files:
             # We are to copy txt files where available:
-            num_lab = len([True for info_dict in files_info_todo \
-                                if 'txt' in info_dict.keys()])
+            num_lab = len([True for file_family in file_families \
+                                if os.path.exists(file_family.fullpath(AudioType.LABEL))
+                                ])
             self.log.info(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
             if num_wav_files > num_lab:
                 self.log.warn(f"Missing label files for {num_wav_files - num_lab} files.")
@@ -75,49 +72,43 @@ class WavMaker(object):
             self.log.info(f"Todo: {num_wav_files} .wav files")
 
         files_done = 0
-        #*************
-        transformer = torchaudio.transforms.Spectrogram(n_fft=4096) 
-        #*************
-        for file_info in files_info_todo:
+        for file_family in file_families:
             
-            # Reconstruct the full .wav file path
-            infile = os.path.join(file_info['dir'], file_info['wav'])
+            # Reconstruct the full file path
+            infile = file_family.fullpath(file_family.file_type)
             if not os.path.isfile(infile):
                 # At this point we should only be seeing existing .wav files:
-                self.log.warn(f"File {infile} does not exist or is a directory.")
-                continue
-
-#             #************
-#             start_time = time.time()
-#             sig = (framerate, sig) = wavfile.read(infile)
-#             spect_t = transformer(torch.Tensor(sig))
-#             print(f"{time.time()-start_time} secs")
-#             continue
-#             #************
-            self.log.info(f"Processing {infile}...")
+                raise IOError(f"File {infile} does not exist, but should.")
+            
+            self.log.info(f"Submitting {infile} to spectrogrammer...")
             try:
-                gater = AmplitudeGater(infile,
-                                       amplitude_cutoff=threshold_db,
-                                       low_freq=low_freq,
-                                       high_freq=high_freq,
-                                       spectrogram_freq_cap=spectrogram_freq_cap,
-                                       spectrogram_dest=spectrogram_dest,
-                                       outdir=outdir
-                                       )
+                if file_family.file_type == AudioType.WAV:
+                    actions = ['spectro', 'cleanspectro']
+                elif file_family.file_type == AudioType.LABEL:
+                    actions = ['labelmask']
+                else:
+                    continue
+                Spectrogrammer(infile,
+                               actions,
+                               outdir=outdir,
+                               normalize=normalize,
+                               low_freq=low_freq,
+                               high_freq=high_freq,
+                               threshold_db=threshold_db,
+                               spectrogram_freq_cap=spectrogram_freq_cap
+                               )
             except Exception as e:
                 self.log.err(f"Processing failed for '{infile}: {repr(e)}")
                 continue
-            perc_zeroed = gater.percent_zeroed
-            self.log.info(f"Done processing {os.path.basename(infile)}; removed {round(perc_zeroed)} percent")
+            self.log.info(f"Done with {infile}...")
+
             if copy_label_files:
                 try:
-                    full_label_path = os.path.join(file_info['outdir'],
-                                                   file_info['txt'])
+                    full_label_path = file_family.fullpath(AudioType.LABEL)
                     shutil.copy(full_label_path, outdir)
-                except KeyError:
-                    # Case of .wav without a .txt
-                    # We already warned above:
-                    pass
+                except Exception as e:
+                    self.log.err(f"Could not copy label file {full_label_path} to {outdir}: {repr(e)}")
+                    continue
             files_done += 1
             if limit is not None and (files_done >= limit):
                 self.log.info(f"Completed {files_done}, completing the limit of {limit}")
@@ -126,7 +117,7 @@ class WavMaker(object):
                 if limit is not None:
                     self.log.info(f"\nBatch gated {files_done} of {limit} wav files.")
                 else:
-                    self.log.info(f"\nBatch gated {files_done} of {len(files_info_todo)} wav files.")
+                    self.log.info(f"\nBatch gated {files_done} of {len(file_families)} wav files.")
 
     #------------------------------------
     # get_files_todo_info 
@@ -135,95 +126,88 @@ class WavMaker(object):
     def get_files_todo_info(self, infiles):
         '''
         Input: a possibly mixed list of .wav, .txt, files,
-        and directories. Returns a list of dicts:
+        and directories. Returns a list of FileFamily instances
 
-            o id:  the location and date of a .wav file 
-                    parsed from its filename
-            o dir: the directory of the file
-            o 'wav': the basename of the .wav file
-            o 'txt': the basename of the corresponding .txt label file
-        
-        Where each dict is guaranteed to have both, a .wav and .txt
-        entry.
+        Where each FileFamily instance is guaranteed to have both, 
+        a .wav and .txt entry. While existence of the .wav file
+        is verified, the .txt file may not exist.
         
         @param infiles: list of files/directories
         @type infiles: [str]
-        @return: list of dicts with file info
-        @rtype: [{str : str}]
+        @return: list of file information FileFamily instances
+        @rtype: [FileFamily]
         '''
-        # Collect file info dicts:
-        file_info_todo = list(self.build_data_pairs(infiles).values())
+        # Collect .wav audio, and .txt label files.
+        # Receives instaces of FileFamily. For each
+        # family is is guaranteed the .wav version (foo.wav)
+        # exists. None of the others, such as the label file
+        # variant (foo.txt) need exist:
+        file_todos = self.collect_file_families(infiles)
+        
         # Remove entries that only have a label file:
-        # Strategy: search the list of dicts from end to front,
+        # Strategy: search the list of file families from end to front,
         # so removal does not change positions of yet-to-check
         # entries:
-        indices_backw = range(len(file_info_todo)-1, -1, -1)
+        indices_backw = range(len(file_todos)-1, -1, -1)
         for i in indices_backw:
-            try:
-                file_info_todo[i]['wav']
-            except KeyError:
-                del file_info_todo[i]
+            if not os.path.exists(file_todos[i].fullpath(AudioType.WAV)):
+                del file_todos[i]
         
-        return file_info_todo
+        return file_todos
 
     #------------------------------------
-    # build_data_pairs 
+    # collect_file_families 
     #-------------------
 
-    def build_data_pairs(self, files_or_dirs, data_pairs=None):
+    def collect_file_families(self, files_or_dirs, file_family_list=None):
         '''
+        Recursive.
         Takes a possibly mixed list of files and directories.
-        Returns a dict with keys:
-        
-            o id:  the location and date of a .wav file 
-                    parsed from its filename
-            o dir: the directory of the file
-            o 'wav': the basename of the .wav file
-            o 'txt': the basename of the corresponding .txt label file
+        Returns a list of FileFamily instances. Workhorse
+        for get_files_todo_info.
             
-        Note that either the 'wav' or the 'txt' entry
-        may be missing if they were not in the file tree.
+        ******???Note that either the 'wav' or the 'txt' entry
+        ******???may be missing if they were not in the file tree.
         
         Walks down any directory.
         
         @param files_or_dirs: list of files and subdirectories
         @type files_or_dirs: [str]
-        @param data_pairs: dict of info about each recursively found file
+        @param file_family_list: dict of info about each recursively found file
             only .wav and .txt files are included
-        @type data_pairs: {str : str}
+        @type file_family_list: {str : str}
         '''
-        if data_pairs is None:
-            data_pairs = {}
+        if file_family_list is None:
+            file_family_list = []
             
         for file_or_dir in files_or_dirs:
             if os.path.isdir(file_or_dir):
                 new_paths = [os.path.join(file_or_dir, file_name) for file_name in os.listdir(file_or_dir)]
                 # Ohhh! Recursion!:
-                data_pairs = self.build_data_pairs(new_paths, data_pairs)
-                continue
-            # Strip off the location and time tags
-            tags = os.path.basename(file_or_dir).split('_')
-            
-            # Guard against file names without an underscore:
-            if len(tags) < 2:
-                self.log.err(f"Unrecognized filename convention: {file_or_dir}; skipping")
+                file_family_list = self.collect_file_families(new_paths, file_family_list)
                 continue
             
-            data_id = tags[0] + '_' + tags[1]
-            (_file_stem, file_type) = file_or_dir.split('.')
-    
-            if (file_type not in ['wav', 'txt']):
+            # A file (not a directory)
+            filename = file_or_dir
+            # A file name; is it a .wav file that does not exist?
+            if  filename.endswith('.wav') and not os.path.exists(filename):
+                self.log.warn(f"Audio file '{filename}' does not exist; skipping it.")
+                continue 
+            
+            # Make a family instance:
+            try:
+                file_family = FileFamily(file_or_dir)
+            except ValueError:
+                self.log.warn(f"Unrecognized filename convention: {file_or_dir}; skipping")
                 continue
-    
-            # Insert the file name into the dictionary
-            # with the file type tag for a given id
-            if not data_id in data_pairs:
-                data_pairs[data_id] = {}
-                data_pairs[data_id]['id'] = data_id
-                data_pairs[data_id]['dir'] = os.path.dirname(file_or_dir)
-    
-            data_pairs[data_id][file_type] = os.path.basename(file_or_dir)
-        return(data_pairs)
+
+            # Only keep audio and label files:    
+            if file_family.file_type not in [AudioType.WAV, AudioType.LABEL]:
+                continue
+
+            file_family_list.append(file_family)    
+
+        return(file_family_list)
 
 # ---------------- Main -------------
 if __name__ == '__main__':
@@ -239,10 +223,15 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outdir',
                         help='directory for outfiles; default /tmp',
                         default='/tmp');
-    parser.add_argument('-t', '--threshold',
+    parser.add_argument('-n', '--no_normalize',
+                        action='store_true',
+                        default=False,
+                        help='do not normalize wave form to fill int16 range',
+                        );
+    parser.add_argument('-t', '--threshold_db',
                         type=int,
-                        default=-46,
-                        help='dB off peak voltage below which signal is zeroed; default -46',
+                        default=-40,
+                        help='dB off peak voltage below which signal is zeroed; default -40',
                         );
     parser.add_argument('-m', '--low_freq',
                         type=int,
@@ -254,14 +243,11 @@ if __name__ == '__main__':
                         default=50,
                         help='high end of front end bandpass filter; default 50Hz'
                         );
-    parser.add_argument('-s', '--spectrofreqcap',
+    parser.add_argument('-s', '--freq_cap',
                         type=int,
                         default=150,
                         help='highest frequencies to keep in the spectrograms; default 150Hz'
                         );
-    parser.add_argument('-d', '--spectrodest',
-                        help='fully qualified log file name to dir where spectrograms will be placed. Default: /tmp',
-                        default='/tmp');
     parser.add_argument('-x', '--limit',
                         type=int,
                         default=None,
@@ -269,19 +255,22 @@ if __name__ == '__main__':
                         );
     parser.add_argument('infiles',
                         nargs='+',
-                        help='Repeatable: .wav input files')
+                        help='Repeatable: .wav input files and directories')
 
     args = parser.parse_args();
     
-    if args.threshold > 0:
+    if args.threshold_db > 0:
         print("Threshold dB value should be less than 0.")
         sys.exit(1)
 
     WavMaker(args.infiles,
              outdir=args.outdir,
-             threshold_db=args.threshold,
-             spectrogram_freq_cap=args.spectrofreqcap,
-             spectrogram_dest=args.spectrodest,
+             # If no_normalize is True, don't normalize:
+             normalize=not args.no_normalize,
+             low_freq=args.low_freq,
+             high_freq=args.high_freq,
+             threshold_db=args.threshold_db,
+             spectrogram_freq_cap=args.freq_cap,
              limit=args.limit,
              logfile=args.logfile
              )
