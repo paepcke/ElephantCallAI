@@ -232,6 +232,9 @@ class ElephantDatasetFuzzy(data.Dataset):
             self.features *= 5 # Try for now!
             self.labels *= 5
 
+        print ("Len Pos Features:", len(self.pos_features))
+        print ("Len Neg Features:", len(self.neg_features))
+
 
     def __len__(self):
         return len(self.features)
