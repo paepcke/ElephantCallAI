@@ -1,5 +1,5 @@
 import torch
-from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score
+from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score, get_precission_recall_values
 import time
 import parameters
 from collections import deque
@@ -15,7 +15,15 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     running_samples = 0
     # May ditch these!
     running_non_zero = 0
-    running_fscore = 0.0
+    # True positives
+    running_tp = 0
+    # True positives, false positives
+    running_tp_fp = 0
+    # True positives, false negatives
+    running_tp_fn = 0
+    #running_fscore = 0.0
+    #running_precission = 0.0
+    #running_recall = 0.0
 
     # For focal loss purposes
     running_true_non_zero = 0
@@ -56,22 +64,37 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
             running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
         else: # For the binary window classification
             running_samples += logits.shape[0]
-        running_fscore += get_f_score(logits, labels)
+        #running_fscore += get_f_score(logits, labels)
+        tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+        running_tp += tp
+        running_tp_fp += tp_fp
+        running_tp_fn += tp_fn 
+        
 
     train_epoch_loss = running_loss / (idx + 1)
     train_epoch_acc = float(running_corrects) / running_samples
+    #train_epoch_fscore = running_fscore / (idx + 1)
     train_non_zero = running_non_zero
-    train_epoch_fscore = running_fscore / (idx + 1)
+
+    # If this is zero print a warning
+    train_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
+    train_epoch_recall = running_tp / running_tp_fn
+    if train_epoch_precision + train_epoch_recall > 0:
+        train_epoch_fscore = (2 * train_epoch_precision * train_epoch_recall) / (train_epoch_precision + train_epoch_recall)
+    else:
+        train_epoch_fscore = 0
 
     # Update the schedular
     scheduler.step()
 
     #Logging
     print ('Train Non-Zero: {}'.format(train_non_zero))
-    print('Training loss: {:.6f}, acc: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
-        train_epoch_loss, train_epoch_acc, train_epoch_fscore ,(time.time()-time_start)/60))
+    print('Training loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
+        train_epoch_loss, train_epoch_acc, train_epoch_precision, train_epoch_recall, train_epoch_fscore ,(time.time()-time_start)/60))
     
-    return {'train_epoch_acc': train_epoch_acc, 'train_epoch_fscore': train_epoch_fscore, 'train_epoch_loss': train_epoch_loss} 
+    return {'train_epoch_acc': train_epoch_acc, 'train_epoch_fscore': train_epoch_fscore, 
+            'train_epoch_loss': train_epoch_loss, 'train_epoch_precision':train_epoch_precision, 
+            'train_epoch_recall': train_epoch_recall} 
 
 
 def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
@@ -84,6 +107,12 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     # May ditch these!
     running_non_zero = 0
     running_fscore = 0.0
+    # True positives
+    running_tp = 0
+    # True positives, false positives
+    running_tp_fp = 0
+    # True positives, false negatives
+    running_tp_fn = 0
 
     # For focal loss purposes
     running_true_non_zero = 0
@@ -120,21 +149,35 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
                 running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
             else: # For the binary window classification
                 running_samples += logits.shape[0]
-            running_fscore += get_f_score(logits, labels)
+            #running_fscore += get_f_score(logits, labels)
+            tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+            running_tp += tp
+            running_tp_fp += tp_fp
+            running_tp_fn += tp_fn 
 
     valid_epoch_loss = running_loss / (idx + 1)
     valid_epoch_acc = float(running_corrects) / running_samples
-    valid_epoch_fscore = running_fscore / (idx + 1)
+    #valid_epoch_fscore = running_fscore / (idx + 1)
     valid_non_zero = running_non_zero
+
+    # If this is zero print a warning
+    valid_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
+    valid_epoch_recall = running_tp / running_tp_fn
+    if valid_epoch_precision + valid_epoch_recall > 0:
+        valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
+    else:
+        valid_epoch_fscore = 0
 
     #Logging
     print ('Val Non-Zero: {}'.format(valid_non_zero))
-    print('Validation loss: {:.6f} acc: {:.4f} f-score: {:.4f} time: {:.4f}'.format(
-            valid_epoch_loss, valid_epoch_acc, 
+    print('Validation loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
+            valid_epoch_loss, valid_epoch_acc, valid_epoch_precision, valid_epoch_recall,
             valid_epoch_fscore, (time.time()-time_start)/60))
 
 
-    return {'valid_epoch_acc': valid_epoch_acc, 'valid_epoch_fscore': valid_epoch_fscore, 'valid_epoch_loss': valid_epoch_loss}
+    return {'valid_epoch_acc': valid_epoch_acc, 'valid_epoch_fscore': valid_epoch_fscore, 
+            'valid_epoch_loss': valid_epoch_loss, 'valid_epoch_precision':valid_epoch_precision, 
+            'valid_epoch_recall': valid_epoch_recall}
 
 def train(dataloaders, model, loss_func, optimizer, 
                         scheduler, writer, num_epochs, starting_epoch=0, include_boundaries=False):
@@ -146,6 +189,10 @@ def train(dataloaders, model, loss_func, optimizer,
 
     best_valid_acc = 0.0
     best_valid_fscore = 0.0
+    # Best precision and recall reflect
+    # the best fscore
+    best_valid_precision = 0.0
+    best_valid_recall = 0.0
     best_valid_loss = float("inf")
     best_model_wts = None
 
@@ -185,6 +232,8 @@ def train(dataloaders, model, loss_func, optimizer,
 
                 if val_epoch_results['valid_epoch_fscore'] > best_valid_fscore:
                     best_valid_fscore = val_epoch_results['valid_epoch_fscore']
+                    best_valid_precision = val_epoch_results['valid_epoch_precision']
+                    best_valid_recall = val_epoch_results['valid_epoch_recall']
                     if parameters.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'fscore':
                         best_model_wts = model.state_dict()
 
@@ -211,7 +260,7 @@ def train(dataloaders, model, loss_func, optimizer,
         print("Early stopping due to keyboard intervention")
 
     print('Best val Acc: {:4f}'.format(best_valid_acc))
-    print('Best val F-score: {:4f}'.format(best_valid_fscore))
+    print('Best val F-score: {:4f} with Precision: {:4f} and Recall: {:4f}'.format(best_valid_fscore, best_valid_precision, best_valid_recall))
     print ('Best val Loss: {:6f}'.format(best_valid_loss))
 
     return best_model_wts

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import sklearn
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, precision_recall_fscore_support
 
 
 def create_save_path(save_time, save_local=False, save_prefix=None):
@@ -113,3 +113,48 @@ def get_f_score(logits, labels):
         f_score = f1_score(labels.data.cpu().numpy(), binary_preds.data.cpu().numpy())
 
     return f_score
+
+
+def get_precission_recall_fscore(logits, labels):
+    sig = nn.Sigmoid()
+    with torch.no_grad():
+        pred = sig(logits)
+        binary_preds = torch.where(pred > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+        # Flatten the array for fscore
+        binary_preds = binary_preds.view(-1)
+        labels = labels.view(-1)
+
+        # Cast to proper type!
+        binary_preds = binary_preds.float()
+        p, r, f_score, _ = precision_recall_fscore_suppor(labels.data.cpu().numpy(), binary_preds.data.cpu().numpy(), average='binary')
+
+    return p, r, f_score
+
+def get_precission_recall_values(logits, labels):
+    sig = nn.Sigmoid()
+    with torch.no_grad():
+        pred = sig(logits)
+        binary_preds = torch.where(pred > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+        # Flatten the array for fscore
+        binary_preds = binary_preds.view(-1)
+        binary_preds = binary_preds.float()
+        labels = labels.view(-1)
+
+        # Number predicted
+        tp_fp = torch.sum(binary_preds).item()
+        # Number true positives
+        tp = (binary_preds + labels) == 2
+        tp = torch.sum(tp).item()
+        # Number of actual calls
+        tp_fn = torch.sum(labels).item()
+
+    return tp, tp_fp, tp_fn
+
+
+
+
+
+
+
+
+
