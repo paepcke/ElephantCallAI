@@ -29,7 +29,7 @@ class PrecRecFileTypes(Enum):
     EXPERIMENT   = '_experiment'
     PICKLE       = '_pickle'
     
-class AudioType(enumerate):
+class AudioType(Enum):
     WAV = 0         # Audio sound wave
     SPECTRO = 1     # 24-hr spectrogram
     SNIPPET = 2     # Snippet of spectrogram 
@@ -557,6 +557,8 @@ class FileFamily(object):
         @return: dict of file names derived from
             infile.
         @rtype: {str : str}
+        @raise ValueError if filename does not conform to 
+            elephant file name convention.
         '''
 
         fpath = Path(filename)
@@ -575,7 +577,7 @@ class FileFamily(object):
         # If it's foo_spectrogram.pickle or foo_<n>_spectrogram.pickle: 
         if filename.endswith('_spectrogram.pickle'):
             # Lose the _spectrogram.pickle:
-            file_root = file_root[:-len('_spectrogram.pickle')]
+            file_root = file_root[:-len('_spectrogram')]
             # Get spectro_id if file is a spectrogram snippet:        
             matched_fragments = snippet_search_pattern.search(filename)
             if matched_fragments is not None:
@@ -609,6 +611,11 @@ class FileFamily(object):
             self.file_type = AudioType.Mask
         elif fpath.suffix == '.png':
             self.file_type = AudioType.IMAGE
+        elif str(fpath).endswith('_spectrogram.pickle'):
+            self.file_type = AudioType.SPECTRO
+        else:
+            # Unknown type of file:
+            raise ValueError(f"File '{filename} not in family of elephant file name conventions.")
 
         self.wav     = file_root + '.wav'
         self.gated_wav = f"{file_root}_gated.wav"
