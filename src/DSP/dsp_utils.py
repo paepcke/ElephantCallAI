@@ -417,6 +417,7 @@ class FileFamily(object):
         		  LABEL       # Raven label file
         		  MASK        # Mask Call/No-Call from label file
         		  IMAGE       # PNG of a spectgrogram
+        		  GATED_WAV   # Audio sound file after pre-processing
     '''
 
     #------------------------------------
@@ -431,7 +432,13 @@ class FileFamily(object):
         
         self.decode_filename(filename)
 
+    #------------------------------------
+    # __str__ 
+    #-------------------
 
+    def __str__(self):
+        return f"<FileFamily {self.file_root}>"
+    
     #------------------------------------
     # fullpath 
     #-------------------
@@ -535,28 +542,16 @@ class FileFamily(object):
            o .png file
            o _spectrogram.pickle
            o _spectrogram_<n>.pickle
+           o .npy file
+           
+        initialize all instance variables in 
+        this FileFamily instance to allow
+        retrieving file names of other family members.
         return a dict with the other file 
         names:
-        
-           {file_type : <AudioType enum>,
-            file_root : <no path, stripped ext and [_<n>]_spectrogram
-            wav : <.wav file>
-            txt : <.txt file>
-            png : <.png file>
-            mask: <.npy file>
-            spectro : <_spectrogram.pickle>
-            snippet_id : <the <n> if in given filename, else None>,
-            path : <path portion of filename if given, else None>
-        
-        If a full path is returned, the path up to the filename
-        is placed int the path key. All other entries are 
-        only the filenames.
-        
+                
         @param filename: filename to decode. 
         @type filename: str
-        @return: dict of file names derived from
-            infile.
-        @rtype: {str : str}
         @raise ValueError if filename does not conform to 
             elephant file name convention.
         '''

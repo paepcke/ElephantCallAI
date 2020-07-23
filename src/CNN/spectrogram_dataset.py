@@ -17,13 +17,14 @@ import sys
 import pandas as pd
 from pandas.core.frame import DataFrame
 from torch.utils.data import Dataset
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from DSP.dsp_utils import DSPUtils
+from DSP.dsp_utils import FileFamily
 from DSP.dsp_utils import AudioType
 import numpy as np
 
-sys.path.append(os.path.join(os.path.dirname(__file__),
-                             '..'
-                             ))
 from elephant_utils.logging_service import LoggingService
 
 
@@ -32,6 +33,14 @@ TESTING = False
 
 # To change spectrogram snippet width time,
 # see class variable in SpectrogramDataset.
+
+class ChopError(Exception):
+    '''
+    Error during spectrogram chopping:
+    '''
+    
+    def __init__(self, msg):
+        super().__init__(msg)
 
 # ------------------------------- Class Frozen Dataset ----------
 
@@ -422,16 +431,16 @@ class SpectrogramDataset(FrozenDataset):
         full_spectrograms_queued = {}
 
         for file in files_to_do:
-            file_info = DSPUtils.decode_filename(file)
+            file_family = FileFamily(file)
             # Name without path and extention:
-            file_root = file_info['file_root']
-            if file_info['file_type'] == AudioType.SPECTRO:
+            file_root = file_family.file_root
+            if file_family.file_type == AudioType.SPECTRO:
                 # 24-hour spectrogram: note corresponding label,
                 # file:
-                full_spectrograms_queued[file_root] = os.path.join(file_info['path'],
-                                                       file_info['label'])
+                full_spectrograms_queued[file_root] = os.path.join(file_family['path'],
+                                                       file_family['label'])
                 continue
-            if file_info['file_type'] == AudioType.SNIPPET:
+            if file_family.file_type == AudioType.SNIPPET:
                 # No need to process the corresponding full 
                 # spectrogram, if we encounter it:
                 try:
@@ -469,19 +478,13 @@ class SpectrogramDataset(FrozenDataset):
         @param spectro_dict: 24-hr spectrograms to chop
         @type spectro_dict: {str:str}
         '''
-        for (spectro_file, label_file) in spectro_dict.items():
-            # Get dict with file names that are by convention
-            # derived from the original .wav file:
-            curr_file_family = DSPUtils.decode_filename(spectro_file)
-            spect_df = pd.read_pickle(spectro_file)
-            
-            # Create the name for an Sqlite db file that
-            # will hold information about the snippets of
-            # this 24-hr spectrogram:
-            (spectro_file_root, _pickle_ext) = os.path.splitext(spectro_file)
-            db_file = spectro_file_root + '_snippets.sqlite'
-            self.db = self.get_db(db_file)
-            try:
+        try:
+            for (spectro_file, label_file) in spectro_dict.items():
+                # Get dict with file names that are by convention
+                # derived from the original .wav file:
+                curr_file_family = FileFamily(spectro_file)
+                spect_df = pd.read_pickle(spectro_file)
+                
                 # If no outdir for snippets was specified by caller,
                 # use the directory of this 24-hr spectrogram:
                 if self.snippet_outdir is None:
@@ -494,8 +497,8 @@ class SpectrogramDataset(FrozenDataset):
                                               label_file,
                                               self.snippet_outdir,
                                               curr_file_family)
-            finally:
-                self.db.close()
+        except Exception as e:
+            raise ChopError(f"Error trying to close Sqlite db: {repr(e)}") from e
 
     #------------------------------------
     # chop_one_spectrogram 
@@ -511,7 +514,7 @@ class SpectrogramDataset(FrozenDataset):
         into smaller spectrograms of approximately 
         self.SNIPPET_WIDTH seconds. Each snippet
         is written to snippet_outdir, named 
-        <24-hr-spectrogram-filename>_<snippet-nbr>.pickle
+        <24-hr-spectrogram-filename>_<snippet-nbr>_spectrogram.pickle
         Each snippet is a Pandas DataFrame, and can be
         read via pd.read_pickle(filename).
         
@@ -552,7 +555,7 @@ class SpectrogramDataset(FrozenDataset):
         # If not an even division, we leave on the table
         # less than self.SNIPPET_WIDTH seconds of samples:
         num_snippets =  int(np.floor(time_span / self.SNIPPET_WIDTH))
-        snippet_file_root = curr_file_family['file_root']
+        snippet_file_root = curr_file_family.file_root
         # Like /foo/bar/nouabile0012, to which we'll add
         # '_<snippet_id>_spectrogram.pickle below:
         snippet_dest = str(Path(snippet_outdir).joinpath(snippet_file_root)) 
@@ -581,7 +584,7 @@ class SpectrogramDataset(FrozenDataset):
             label = self.label_for_snippet(snip_xtick_interval, label_file)
             
             # Fill the snippet id into the file family:
-            curr_file_family['snippet_id'] = snippet_id
+            curr_file_family.snippet_id = snippet_id
             
             self.add_snippet_to_db(snippet_file_name, 
                                    label,
@@ -663,8 +666,10 @@ class SpectrogramDataset(FrozenDataset):
                           snippet_time_interval,
                           curr_file_family):
 
+        recording_site = curr_file_family.file_root
         insertion = f'''
                     INSERT INTO Samples (sample_id,
+                                         recording_site,
                                          label,
                                          start_time_tick,
                                          end_time_tick,
@@ -672,7 +677,8 @@ class SpectrogramDataset(FrozenDataset):
                                          end_time,
                                          snippet_filename
                                          )
-                            VALUES ({curr_file_family['snippet_id']},
+                            VALUES ({curr_file_family.snippet_id},
+                                    '{recording_site}',
                                     {label},
                                     {snippet_xtick_interval.left},
                                     {snippet_xtick_interval.right},
@@ -681,7 +687,11 @@ class SpectrogramDataset(FrozenDataset):
                                     '{snippet_file_name}'
                                     );
                     '''
-        self.db.execute(insertion)
+        try:
+            self.db.execute(insertion)
+        except Exception as e:
+            # Raise DatabaseError but with original stacktrace:
+            raise DatabaseError(repr(e)) from e
         self.db.commit()
 
 
@@ -980,7 +990,18 @@ class SpectrogramDataset(FrozenDataset):
                                                  self.label_mapping,
                                                  self.sample_ids
                                                  )
-        
+
+    #------------------------------------
+    # close
+    #-------------------
+    
+    def close(self):
+        try:
+            self.db.close()
+        except Exception as e:
+            raise DatabaseError(f"Could not close sqlite db: {repr(e)}") from e
+
+
     #------------------------------------
     # clean_row_res
     #-------------------
@@ -1127,13 +1148,15 @@ class SpectrogramDataset(FrozenDataset):
         
         self.db.execute('''DROP TABLE IF EXISTS Samples;''')
         self.db.execute('''CREATE TABLE Samples(
-                    sample_id int primary key,
+                    sample_id int,
+                    recording_site varchar(100),
                     label tinyint,
                     start_time_tick int,
                     end_time_tick int,
                     start_time float,
                     end_time float,
-                    snippet_filename varchar(1000)
+                    snippet_filename varchar(1000),
+                    PRIMARY KEY (sample_id, recording_site)
                     )
                     ''')
         self.db.commit()

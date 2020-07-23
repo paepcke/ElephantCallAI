@@ -13,7 +13,9 @@ import pandas as pd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from spectrogram_dataset import SpectrogramDataset, AudioType
+from DSP.dsp_utils import FileFamily
 
 TEST_ALL = True
 #TEST_ALL = False
@@ -87,6 +89,8 @@ class Test(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
+        for file in glob.glob('test_spectro*.sqlite'):
+            os.remove(file)
 
     #------------------------------------
     # testLabelForSnippet 
@@ -151,64 +155,68 @@ class Test(unittest.TestCase):
     # testDecodeFilename 
     #-------------------
 
-    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
-    def testDecodeFilename(self):
-        
-        res_dict = self.spectr_dataset.decode_filename('/foo/bar.txt')
-        expected = {'file_type': AudioType.LABEL,
-                    'file_root': 'bar',
-                    'path': '/foo',
-                    'wav': 'bar.wav',
-                    'label': 'bar.txt',
-                    'spectro': 'bar_spectrogram.pickle'}
-        self.assertDictContainsSubset(expected, res_dict)
-        
-        res_dict = self.spectr_dataset.decode_filename('bar.txt')
-        expected = {'file_type': AudioType.LABEL,
-                    'file_root': 'bar',
-                    'path': None,
-                    'wav': 'bar.wav',
-                    'label': 'bar.txt',
-                    'spectro': 'bar_spectrogram.pickle',
-                    'snippet_id': None
-                    }
-        self.assertDictContainsSubset(expected, res_dict)
+    # Needs update to decode_filename() returning
+    # a FileFamily instance. Also: Move to tests for
+    # DSPUtils.
 
-        res_dict = self.spectr_dataset.decode_filename('bar_spectrogram.pickle')
-        expected = {'file_type': AudioType.SPECTRO,
-                    'file_root': 'bar',
-                    'path': None,
-                    'wav': 'bar.wav',
-                    'label': 'bar.txt',
-                    'spectro': 'bar_spectrogram.pickle',
-                    'snippet_id': None
-                    }
-
-        self.assertDictContainsSubset(expected, res_dict)
-   
-        res_dict = self.spectr_dataset.decode_filename('/foo/fum/bar.wav')
-        expected = {'file_type': AudioType.WAV,
-                    'file_root': 'bar',
-                    'path': '/foo/fum',
-                    'wav': 'bar.wav',
-                    'label': 'bar.txt',
-                    'spectro': 'bar_spectrogram.pickle',
-                    'snippet_id': None
-                    }
-
-        self.assertDictContainsSubset(expected, res_dict)
-        
-        res_dict = self.spectr_dataset.decode_filename('bar_2_spectrogram.pickle')
-        expected = {'file_type': AudioType.SNIPPET,
-                    'file_root': 'bar',
-                    'path': None,
-                    'wav': 'bar.wav',
-                    'label': 'bar.txt',
-                    'spectro': 'bar_spectrogram.pickle',
-                    'snippet_id': 2
-                    }
-        
-        self.assertDictContainsSubset(expected, res_dict)
+#     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+#     def testDecodeFilename(self):
+#         
+#         res_dict = self.spectr_dataset.decode_filename('/foo/bar.txt')
+#         expected = {'file_type': AudioType.LABEL,
+#                     'file_root': 'bar',
+#                     'path': '/foo',
+#                     'wav': 'bar.wav',
+#                     'label': 'bar.txt',
+#                     'spectro': 'bar_spectrogram.pickle'}
+#         self.assertDictContainsSubset(expected, res_dict)
+#         
+#         res_dict = self.spectr_dataset.decode_filename('bar.txt')
+#         expected = {'file_type': AudioType.LABEL,
+#                     'file_root': 'bar',
+#                     'path': None,
+#                     'wav': 'bar.wav',
+#                     'label': 'bar.txt',
+#                     'spectro': 'bar_spectrogram.pickle',
+#                     'snippet_id': None
+#                     }
+#         self.assertDictContainsSubset(expected, res_dict)
+# 
+#         res_dict = self.spectr_dataset.decode_filename('bar_spectrogram.pickle')
+#         expected = {'file_type': AudioType.SPECTRO,
+#                     'file_root': 'bar',
+#                     'path': None,
+#                     'wav': 'bar.wav',
+#                     'label': 'bar.txt',
+#                     'spectro': 'bar_spectrogram.pickle',
+#                     'snippet_id': None
+#                     }
+# 
+#         self.assertDictContainsSubset(expected, res_dict)
+#    
+#         res_dict = self.spectr_dataset.decode_filename('/foo/fum/bar.wav')
+#         expected = {'file_type': AudioType.WAV,
+#                     'file_root': 'bar',
+#                     'path': '/foo/fum',
+#                     'wav': 'bar.wav',
+#                     'label': 'bar.txt',
+#                     'spectro': 'bar_spectrogram.pickle',
+#                     'snippet_id': None
+#                     }
+# 
+#         self.assertDictContainsSubset(expected, res_dict)
+#         
+#         res_dict = self.spectr_dataset.decode_filename('bar_2_spectrogram.pickle')
+#         expected = {'file_type': AudioType.SNIPPET,
+#                     'file_root': 'bar',
+#                     'path': None,
+#                     'wav': 'bar.wav',
+#                     'label': 'bar.txt',
+#                     'spectro': 'bar_spectrogram.pickle',
+#                     'snippet_id': 2
+#                     }
+#         
+#         self.assertDictContainsSubset(expected, res_dict)
         
     #------------------------------------
     # testChopOneSpectrogram 
@@ -224,7 +232,7 @@ class Test(unittest.TestCase):
                                     columns=[0,2,4,6,8,10,12],
                                     index=[1,2,3]
                                     )
-        curr_file_family = self.spectr_dataset.decode_filename(self.label_file)
+        curr_file_family = FileFamily(self.label_file)
         self.spectr_dataset.chop_one_spectrogram(spectrogram,
                                                  self.label_file,
                                                  self.snippet_outdir,
@@ -266,21 +274,22 @@ class Test(unittest.TestCase):
     # testChopMultipleSpectrograms
     #-------------------
      
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testChopMultipleSpectrograms(self):
         spectro1 = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
                                  [ 10, 20, 30, 40, 50, 60, 70],
                                  [100,200,300,400,500,600,700],
                                  ], dtype=float,
-                                 columns=[60,70,80,90,100,110,120],
-                                 index=[0,1,2]
+                                 columns=[0,2,4,6,8,10,12],
+                                 index=[1,2,3]
                                  )
                                   
         spectro2 = pd.DataFrame([[1000,2000,3000,4000,5000,6000,7000],
                                  [2000,3000,4000,5000,6000,7000,8000],
                                  [3000,4000,5000,6000,7000,8000,9000],
                                  ], dtype=float,
-                                 columns=[79,80,81,82,83,84,85],
-                                 index=[0,1,2]
+                                 columns=[0,2,4,6,8,10,12],
+                                 index=[1,2,3]
                                  )
     
         curr_dir = os.path.dirname(__file__)
@@ -291,10 +300,10 @@ class Test(unittest.TestCase):
         spectro1.to_pickle(spectroA_file)
         spectro2.to_pickle(spectroB_file)
 
-        # Use the same label file for both spectrograms:
         spectroA_label_file = os.path.join(curr_dir, 'test_spectroA.txt')
         spectroB_label_file = os.path.join(curr_dir, 'test_spectroB.txt')
-                
+        
+        # Use the same label file for both spectrograms:
         shutil.copyfile(self.label_file, spectroA_label_file)
         shutil.copyfile(self.label_file, spectroB_label_file)
 
@@ -303,8 +312,52 @@ class Test(unittest.TestCase):
                                }
     
         self.spectr_dataset.chop_spectograms(spectro_labels_dict)
-        print('foo')
+        # DB should have:
+        #      0|test_spectroA|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroA_0_spectrogram.pickle
+        #      1|test_spectroA|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroA_1_spectrogram.pickle
+        #      0|test_spectroB|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroB_0_spectrogram.pickle
+        #      1|test_spectroB|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroB_1_spectrogram.pickle
+        # With row dict keys:
+        #      ['sample_id', 'recording_site',
+        #       'label', 'start_time_tick',
+        #       'end_time_tick', 'start_time',
+        #       'end_time', 'snippet_filename']
+        
+        snippet_rows = self.db.execute('SELECT * FROM Samples').fetchall()
+        self.assertEqual(len(snippet_rows), 4)
+        
+        for row in snippet_rows:
+            if row['sample_id'] == 0 and row['recording_site'] == 'test_spectroA':
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 0)
+                self.assertEqual(row['end_time_tick'], 2)
+                self.assertEqual(row['start_time'], 0.0)
+                self.assertEqual(row['end_time'], 4.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroA_0_spectrogram.pickle'))
 
+            elif row['sample_id'] == 1 and row['recording_site'] == 'test_spectroA':
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 2)
+                self.assertEqual(row['end_time_tick'],4 )
+                self.assertEqual(row['start_time'], 4.0)
+                self.assertEqual(row['end_time'], 8.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroA_1_spectrogram.pickle'))
+
+            if row['sample_id'] == 0 and row['recording_site'] == 'test_spectroB':
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 0)
+                self.assertEqual(row['end_time_tick'], 2)
+                self.assertEqual(row['start_time'], 0.0)
+                self.assertEqual(row['end_time'], 4.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_0_spectrogram.pickle'))
+
+            elif row['sample_id'] == 1 and row['recording_site'] == 'test_spectroB':
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 2)
+                self.assertEqual(row['end_time_tick'],4 )
+                self.assertEqual(row['start_time'], 4.0)
+                self.assertEqual(row['end_time'], 8.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_1_spectrogram.pickle'))
 
 # ----------------- Main --------------
 
