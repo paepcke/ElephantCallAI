@@ -13,6 +13,8 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import glob
 import parameters
 
+from utils import set_seed
+
 Noise_Stats_Directory = "../elephant_dataset/eleph_dataset/Noise_Stats/"
 
 def get_loader(data_dir,
@@ -49,6 +51,9 @@ def get_loader(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
+    # Set the dataloader seed
+    set_seed(parameters.DATA_LOADER_SEED)
+
     dataset = ElephantDataset(data_dir, preprocess=norm, scale=scale)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
@@ -109,6 +114,10 @@ def get_loader_fuzzy(data_dir,
     """
     # Note here we could do some data preprocessing!
     # define transform
+    # Set the dataloader seed
+    print ("DataLoader Seed:", parameters.DATA_LOADER_SEED)
+    set_seed(parameters.DATA_LOADER_SEED)
+
     dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, 
                         shift_windows=shift_windows, is_full_dataset=is_full_dataset, full_window_predict=full_window_predict)
     
