@@ -977,7 +977,7 @@ class Model21(nn.Module):
             max_pool = nn.MaxPool2d(kernel_size=[1, cnn_pool_size[layer]])
             feature_dim = feature_dim // cnn_pool_size[layer]
 
-            self.conv_layers += [conv2d, layer_norm, nn.ReLU(inplace=True), max_pool]#, nn.Dropout(self.dropout_val)]
+            self.conv_layers += [conv2d, layer_norm, nn.ReLU(inplace=True), max_pool, nn.Dropout(self.dropout_val)]
 
         self.conv_layers = nn.Sequential(*self.conv_layers)
 
