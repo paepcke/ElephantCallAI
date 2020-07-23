@@ -25,6 +25,9 @@ import pdb
 #import matplotlib.pyplot as plt
 #from collections import deque
 
+from utils import set_seed
+
+'''
 def set_seed():
     """
         Set the seed across all different necessary platforms
@@ -33,19 +36,21 @@ def set_seed():
         initialize and train each of the models with the same
         seed.
     """
-    torch.manual_seed(parameters.RANDOM_SEED)
-    torch.cuda.manual_seed_all(parameters.RANDOM_SEED)
+    torch.manual_seed(parameters.MODEL_SEED)
+    torch.cuda.manual_seed_all(parameters.MODEL_SEED)
     # Not totally sure what these two do!
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    np.random.seed(parameters.RANDOM_SEED)
-    os.environ['PYTHONHASHSEED'] = str(parameters.RANDOM_SEED)
+    np.random.seed(parameters.MODEL_SEED)
+    os.environ['PYTHONHASHSEED'] = str(parameters.MODEL_SEED)
+'''
 
 
 def get_model(model_id):
     # Make sure to set the numpy and cuda seeds
     # for the model
-    set_seed()
+    print ("Model Seed:", parameters.MODEL_SEED)
+    set_seed(parameters.MODEL_SEED)
 
     if model_id == 0:
         return Model0(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)

@@ -68,8 +68,10 @@ BOUNDARY_LOSS = 'EQUAL'
 # How to weight the boundary slices in [0, 1]
 BOUNDARY_WEIGHT = 0.5
 
-RANDOM_SEED = 8
-DATA_LOADER_SEED = 33
+MODEL_SEED = 8
+# Make these two bellow the same!
+DATASET_SEED = 8
+DATA_LOADER_SEED = 8
 
 BATCH_SIZE = 32 # Was 32
 

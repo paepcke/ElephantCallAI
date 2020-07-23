@@ -4,6 +4,23 @@ import torch
 import torch.nn as nn
 import sklearn
 from sklearn.metrics import f1_score, precision_recall_fscore_support
+import os
+
+def set_seed(seed):
+    """
+        Set the seed across all different necessary platforms
+        to allow for comparrsison of different model seeding. 
+        Additionally, in the adversarial discovery, we want to
+        initialize and train each of the models with the same
+        seed.
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # Not totally sure what these two do!
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 def create_save_path(save_time, save_local=False, save_prefix=None):
@@ -20,6 +37,12 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
 
     # TIME TO GET RID OF THE CALL_DATASET STUFF!
     save_path += 'Model-' + str(parameters.MODEL_ID) + '_'
+    # Add the model random seed only if the Dataset Random Seed
+    # and the Model Random seed differ. Hacky for now!
+    if parameters.MODEL_SEED != parameters.DATASET_SEED:
+        save_path += 'DataSeed-' + str(parameters.DATASET_SEED) + '_'
+        save_path += 'ModelSeed-' + str(parameters.MODEL_SEED) + '_'
+
     save_path += "Norm-" + parameters.NORM + "_"
     save_path += "NegFactor-x" + str(parameters.NEG_SAMPLES) + "_"
     save_path += "CallRepeats-" + str(parameters.CALL_REPEATS) + "_"
@@ -48,7 +71,7 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     return save_path
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):
-    init_path += 'Neg_Samples_x' + str(neg_samples) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+    init_path += 'Neg_Samples_x' + str(neg_samples) + "_Seed_" + str(parameters.DATASET_SEED) + \
                         "_CallRepeats_" + str(call_repeats)
     # Include boundary uncertainty in training
     include_boundaries = False

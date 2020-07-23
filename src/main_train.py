@@ -50,10 +50,10 @@ def main():
         train_data_path = parameters.REMOTE_TRAIN_FILES
         test_data_path = parameters.REMOTE_TEST_FILES
 
-    train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+    train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.DATASET_SEED) + \
                         "_CallRepeats_" + str(parameters.CALL_REPEATS)
     # Probably make call repeats and neg samples default to 1 for test data!!!!
-    test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.RANDOM_SEED) + \
+    test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.DATASET_SEED) + \
                     "_CallRepeats_" + str(1)
     
     # Include boundary uncertainty in training
