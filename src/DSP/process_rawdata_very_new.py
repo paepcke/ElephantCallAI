@@ -338,13 +338,13 @@ def extract_data_chunks(audio_file, label_file, spectrogram_info):
 
     return feature_set, label_set
 
-def build_data_pairs(files_or_dirs, data_pairs=None):
-    if data_pairs is None:
-        data_pairs = {}
+def collect_file_families(files_or_dirs, file_family_list=None):
+    if file_family_list is None:
+        file_family_list = {}
     for file_or_dir in files_or_dirs:
         if os.path.isdir(file_or_dir):
             new_paths = [os.path.join(file_or_dir, file_name) for file_name in os.listdir(file_or_dir)]
-            data_pairs = build_data_pairs(new_paths, data_pairs)
+            file_family_list = collect_file_families(new_paths, file_family_list)
             continue
         # Strip off the location and time tags
         tags = os.path.basename(file_or_dir).split('_')
@@ -356,13 +356,13 @@ def build_data_pairs(files_or_dirs, data_pairs=None):
 
         # Insert the file name into the dictionary
         # with the file type tag for a given id
-        if not data_id in data_pairs:
-            data_pairs[data_id] = {}
-            data_pairs[data_id]['id'] = data_id
-            data_pairs[data_id]['dir'] = os.path.dirname(file_or_dir)
+        if not data_id in file_family_list:
+            file_family_list[data_id] = {}
+            file_family_list[data_id]['id'] = data_id
+            file_family_list[data_id]['dir'] = os.path.dirname(file_or_dir)
 
-        data_pairs[data_id][file_type] = os.path.basename(file_or_dir)
-    return(data_pairs)
+        file_family_list[data_id][file_type] = os.path.basename(file_or_dir)
+    return(file_family_list)
     
 
 if __name__ == '__main__':
@@ -383,7 +383,7 @@ if __name__ == '__main__':
 
     # Collect the wav/txt file pairs 
     # Iterate through all files with in data directories
-    data_pairs = build_data_pairs(data_dirs)
+    data_pairs = collect_file_families(data_dirs)
 
     # data_pairs now contains all of the wav/txt data file pairs.
     # Let us create a list of these pairs to randomly split into
