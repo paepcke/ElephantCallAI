@@ -82,6 +82,15 @@ class Test(unittest.TestCase):
         self.db.execute("DELETE FROM Samples;")
         self.db.commit()
         
+        # The frequency bands in which energy means
+        # are computed are usually betwen 0 and 60,
+        # But our test dfs only have three lines with
+        # index 1,2,3. So artificially change the 
+        # dataset instance's freq ranges:
+        self.spectr_dataset.LOW_FREQ_BAND = pd.Interval(left=0, right=1)
+        self.spectr_dataset.MED_FREQ_BAND = pd.Interval(left=1, right=2)
+        self.spectr_dataset.HIGH_FREQ_BAND = pd.Interval(left=2, right=3)
+        
     #------------------------------------
     # tearDown 
     #-------------------
@@ -230,12 +239,17 @@ class Test(unittest.TestCase):
                                     [100,200,300,400,500,600,700],
                                     ], dtype=int,
                                     columns=[0,2,4,6,8,10,12],
-                                    index=[1,2,3]
+                                    index=[0,1,2]
                                     )
         curr_file_family = FileFamily(self.label_file)
+        parent_freq_energies = {}
+        parent_freq_energies['parent_low_freqs_energy'] = spectrogram.iloc[0,].mean()
+        parent_freq_energies['parent_med_freqs_energy'] = spectrogram.iloc[1,].mean()
+        parent_freq_energies['parent_high_freqs_energy'] = spectrogram.iloc[2,].mean()
         self.spectr_dataset.chop_one_spectrogram(spectrogram,
                                                  self.label_file,
                                                  self.snippet_outdir,
+                                                 parent_freq_energies,
                                                  curr_file_family
                                                  )
         # Times 0,4 sec
@@ -253,6 +267,13 @@ class Test(unittest.TestCase):
         self.assertEqual(row['end_time_tick'], 2)
         self.assertEqual(row['start_time'], 0)
         self.assertEqual(row['end_time'], 4)
+        self.assertEqual(row['parent_low_freqs_energy'], 4.0)
+        self.assertEqual(row['parent_med_freqs_energy'], 40.0)
+        self.assertEqual(row['parent_high_freqs_energy'], 400.0)
+        self.assertEqual(row['snippet_low_freqs_energy'], 1.5)
+        self.assertEqual(row['snippet_med_freqs_energy'], 15.0)
+        self.assertEqual(row['snippet_high_freqs_energy'], 150.0)
+        
         self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_1_spectrogram.pickle'))
 
         # Second snippet:
@@ -263,6 +284,13 @@ class Test(unittest.TestCase):
         self.assertEqual(row['end_time_tick'], 4)
         self.assertEqual(row['start_time'], 4)
         self.assertEqual(row['end_time'], 8)
+        self.assertEqual(row['parent_low_freqs_energy'], 4.0)
+        self.assertEqual(row['parent_med_freqs_energy'], 40.0)
+        self.assertEqual(row['parent_high_freqs_energy'], 400.0)
+        self.assertEqual(row['snippet_low_freqs_energy'], 3.5)
+        self.assertEqual(row['snippet_med_freqs_energy'], 35.0)
+        self.assertEqual(row['snippet_high_freqs_energy'], 350.0)
+        
         self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_2_spectrogram.pickle'))
         
         # Times 4,8
@@ -281,7 +309,7 @@ class Test(unittest.TestCase):
                                  [100,200,300,400,500,600,700],
                                  ], dtype=float,
                                  columns=[0,2,4,6,8,10,12],
-                                 index=[1,2,3]
+                                 index=[0,1,2]
                                  )
                                   
         spectro2 = pd.DataFrame([[1000,2000,3000,4000,5000,6000,7000],
@@ -289,7 +317,7 @@ class Test(unittest.TestCase):
                                  [3000,4000,5000,6000,7000,8000,9000],
                                  ], dtype=float,
                                  columns=[0,2,4,6,8,10,12],
-                                 index=[1,2,3]
+                                 index=[0,1,2]
                                  )
     
         curr_dir = os.path.dirname(__file__)
@@ -333,6 +361,14 @@ class Test(unittest.TestCase):
                 self.assertEqual(row['end_time_tick'], 2)
                 self.assertEqual(row['start_time'], 0.0)
                 self.assertEqual(row['end_time'], 4.0)
+                
+                self.assertEqual(row['parent_low_freqs_energy'], 4.0)
+                self.assertEqual(row['parent_med_freqs_energy'], 40.0)
+                self.assertEqual(row['parent_high_freqs_energy'], 400.0)
+                self.assertEqual(row['snippet_low_freqs_energy'], 1.5)
+                self.assertEqual(row['snippet_med_freqs_energy'], 15.0)
+                self.assertEqual(row['snippet_high_freqs_energy'], 150.0)
+                
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroA_1_spectrogram.pickle'))
 
             elif row['sample_id'] == 2:
@@ -341,6 +377,15 @@ class Test(unittest.TestCase):
                 self.assertEqual(row['end_time_tick'],4 )
                 self.assertEqual(row['start_time'], 4.0)
                 self.assertEqual(row['end_time'], 8.0)
+                
+                self.assertEqual(row['parent_low_freqs_energy'], 4.0)
+                self.assertEqual(row['parent_med_freqs_energy'], 40.0)
+                self.assertEqual(row['parent_high_freqs_energy'], 400.0)
+                
+                self.assertEqual(row['snippet_low_freqs_energy'], 3.5)
+                self.assertEqual(row['snippet_med_freqs_energy'], 35.0)
+                self.assertEqual(row['snippet_high_freqs_energy'], 350.0)
+                
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroA_2_spectrogram.pickle'))
 
             if row['sample_id'] == 3:
@@ -349,6 +394,14 @@ class Test(unittest.TestCase):
                 self.assertEqual(row['end_time_tick'], 2)
                 self.assertEqual(row['start_time'], 0.0)
                 self.assertEqual(row['end_time'], 4.0)
+
+                self.assertEqual(row['parent_low_freqs_energy'], 4000.0)
+                self.assertEqual(row['parent_med_freqs_energy'], 5000.0)
+                self.assertEqual(row['parent_high_freqs_energy'],6000.0)
+                self.assertEqual(row['snippet_low_freqs_energy'], 1500.0)
+                self.assertEqual(row['snippet_med_freqs_energy'], 2500.0)
+                self.assertEqual(row['snippet_high_freqs_energy'],3500.0)
+                
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroB_3_spectrogram.pickle'))
 
             elif row['sample_id'] == 4:
@@ -357,6 +410,15 @@ class Test(unittest.TestCase):
                 self.assertEqual(row['end_time_tick'],4 )
                 self.assertEqual(row['start_time'], 4.0)
                 self.assertEqual(row['end_time'], 8.0)
+                
+                self.assertEqual(row['parent_low_freqs_energy'], 4000.0)
+                self.assertEqual(row['parent_med_freqs_energy'], 5000.0)
+                self.assertEqual(row['parent_high_freqs_energy'],6000.0)
+                self.assertEqual(row['snippet_low_freqs_energy'], 3500.0)
+                self.assertEqual(row['snippet_med_freqs_energy'], 4500.0)
+                self.assertEqual(row['snippet_high_freqs_energy'],5500.0)
+                
+
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroB_4_spectrogram.pickle'))
 
 # ----------------- Main --------------

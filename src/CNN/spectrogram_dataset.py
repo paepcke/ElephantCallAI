@@ -258,7 +258,10 @@ class SpectrogramDataset(FrozenDataset):
     to their beginnings using the reset() method.
     '''
 
-    SNIPPET_WIDTH = 5 # approximate width of spectrogram snippets.
+    SNIPPET_WIDTH  = 5 # approximate width of spectrogram snippets.
+    LOW_FREQ_BAND  = pd.Interval(left=0, right=21)
+    MED_FREQ_BAND  = pd.Interval(left=21, right=41)
+    HIGH_FREQ_BAND = pd.Interval(left=41, right=51)
 
     #------------------------------------
     # Constructor 
@@ -499,20 +502,68 @@ class SpectrogramDataset(FrozenDataset):
                 curr_file_family = FileFamily(spectro_file)
                 spect_df = pd.read_pickle(spectro_file)
                 
+                # Compute mean energy in three frequency
+                # bands across the whole 24 hr spectrogram:
+                freq_energies = self.mean_magnitudes(spect_df)
+                # Copy to a new dict to change the key names:
+                parent_freq_energies = {'parent_low_freqs_energy' : freq_energies['low_freq_mean'],
+                                        'parent_med_freqs_energy' : freq_energies['med_freq_mean'],
+                                        'parent_high_freqs_energy': freq_energies['high_freq_mean']
+                                        }
+                
                 # If no outdir for snippets was specified by caller,
                 # use the directory of this 24-hr spectrogram:
                 if self.snippet_outdir is None:
                     self.chop_one_spectrogram(spect_df, 
                                               label_file,
-                                              os.path.dirname(spectro_file), 
+                                              os.path.dirname(spectro_file),
+                                              parent_freq_energies, 
                                               curr_file_family)
                 else:
                     self.chop_one_spectrogram(spect_df, 
                                               label_file,
                                               self.snippet_outdir,
+                                              parent_freq_energies,
                                               curr_file_family)
         except Exception as e:
             raise ChopError(f"Error trying to close Sqlite db: {repr(e)}") from e
+
+    #------------------------------------
+    # mean_magnitudes 
+    #-------------------
+    
+    def mean_magnitudes(self, spectro):
+        '''
+        Given a spectrogram, compute the mean energy
+        across the entire spectro along three frequency bands.
+        Return the three means in a dict:
+        
+            {'low_freq_mags' : <float>,
+             'med_freq_mags' : <float>,
+             'high_freq_mags': <float>
+             }
+             
+        @param spectro: spectrogram of any width
+        @type spectro: pd.DataFrame
+        '''
+        
+        low_freq_slice = spectro[(spectro.index.values >= self.LOW_FREQ_BAND.left) & 
+                                 (spectro.index.values < self.LOW_FREQ_BAND.right)]
+        low_freq_mean  = low_freq_slice.mean().mean()
+        
+        med_freq_slice = spectro[(spectro.index.values >= self.MED_FREQ_BAND.left) & 
+                                 (spectro.index.values < self.MED_FREQ_BAND.right)]
+        med_freq_mean  = med_freq_slice.mean().mean()
+        
+        high_freq_slice = spectro[(spectro.index.values >= self.HIGH_FREQ_BAND.left) & 
+                                 (spectro.index.values < self.HIGH_FREQ_BAND.right)]
+        high_freq_mean  = high_freq_slice.mean().mean()
+        
+        return {'low_freq_mean'  : low_freq_mean,
+                'med_freq_mean'  : med_freq_mean,
+                'high_freq_mean' : high_freq_mean
+                }
+        
 
     #------------------------------------
     # chop_one_spectrogram 
@@ -522,6 +573,7 @@ class SpectrogramDataset(FrozenDataset):
                              spect_df, 
                              label_file,
                              snippet_outdir,
+                             parent_freq_energies,
                              curr_file_family):
         '''
         Takes one 24-hr spectrogram, and chops it
@@ -550,6 +602,9 @@ class SpectrogramDataset(FrozenDataset):
         @type label_file: str
         @param snippet_outdir: directory where snippets will be placed
         @type snippet_outdir: str
+        @param parent_freq_energies: mean energies of parent 24-hr
+            spectrogram in three frequency bands
+        @type parent_freq_energies: {str : float}
         @param curr_file_family: dict with information about the
             various file names associated with the spectrogram.
             See DSPUtils.decode_filename()
@@ -599,6 +654,17 @@ class SpectrogramDataset(FrozenDataset):
             # once an entry was made to the db:
             snippet_file_name_template = f"{snippet_dest}_???_spectrogram.pickle"
             
+            # Get this snippet's mean energy in three frequency
+            # bands:
+            snippet_freq_energies = self.mean_magnitudes(snippet)
+            # Combine parent and snippet energies:
+            # Just for clarity:
+            freq_energies = parent_freq_energies
+            freq_energies.update({'snippet_low_freqs_energy' : snippet_freq_energies['low_freq_mean'],
+                                  'snippet_med_freqs_energy' : snippet_freq_energies['med_freq_mean'],
+                                  'snippet_high_freqs_energy' : snippet_freq_energies['high_freq_mean']
+                                  })
+            
             # Get the authoritative snipped id, and the 
             # finalized destination file name:
             (db_snippet_id, snippet_file_name) = self.add_snippet_to_db(
@@ -606,6 +672,7 @@ class SpectrogramDataset(FrozenDataset):
                                                    label,
                                                    snip_xtick_interval,
                                                    snip_time_interval,
+                                                   freq_energies,
                                                    curr_file_family)
             # Fill the snippet id into the file family:
             curr_file_family.snippet_id = db_snippet_id
@@ -686,6 +753,7 @@ class SpectrogramDataset(FrozenDataset):
                           label,
                           snippet_xtick_interval,
                           snippet_time_interval,
+                          freq_band_energies,
                           curr_file_family):
         '''
         
@@ -721,6 +789,10 @@ class SpectrogramDataset(FrozenDataset):
         @param snippet_time_interval: interval of
             true times since start of parent spectrogram
         @type snippet_time_interval: Pandas Interval
+        @param freq_band_energies: mean energy in three 
+            frequency bands of parent 24hr-spectrogram,
+            and of this snippet
+        @type freq_band_energies: {str : float}
         @param curr_file_family: info about the snippet's
             file family (see dsp_utils.file_family).
         @type curr_file_family: FileFamily
@@ -734,14 +806,26 @@ class SpectrogramDataset(FrozenDataset):
                                          start_time_tick,
                                          end_time_tick,
                                          start_time,
-                                         end_time
+                                         end_time,
+                                         parent_low_freqs_energy,
+                                         parent_med_freqs_energy,
+                                         parent_high_freqs_energy,
+                                         snippet_low_freqs_energy,
+                                         snippet_med_freqs_energy,
+                                         snippet_high_freqs_energy
                                          )
                             VALUES ('{recording_site}',
                                     {label},
                                     {snippet_xtick_interval.left},
                                     {snippet_xtick_interval.right},
                                     {snippet_time_interval.left},
-                                    {snippet_time_interval.right}
+                                    {snippet_time_interval.right},
+                                    {freq_band_energies['parent_low_freqs_energy']},
+                                    {freq_band_energies['parent_med_freqs_energy']},
+                                    {freq_band_energies['parent_high_freqs_energy']},
+                                    {freq_band_energies['snippet_low_freqs_energy']},
+                                    {freq_band_energies['snippet_med_freqs_energy']},
+                                    {freq_band_energies['snippet_high_freqs_energy']}
                                     );
                     '''
         try:
@@ -1137,6 +1221,12 @@ class SpectrogramDataset(FrozenDataset):
                     end_time_tick int,
                     start_time float,
                     end_time float,
+                    parent_low_freqs_energy float,
+                    parent_med_freqs_energy float,
+                    parent_high_freqs_energy float,
+                    snippet_low_freqs_energy float,
+                    snippet_med_freqs_energy float,
+                    snippet_high_freqs_energy float,
                     snippet_filename varchar(1000)
                     )
                     ''')
