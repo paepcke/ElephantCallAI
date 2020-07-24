@@ -15,6 +15,7 @@ All .wav files in the subdirs are recursively included.
 import os
 import shutil
 import sys
+import math
 
 import argparse
 
@@ -45,6 +46,8 @@ class WavMaker(object):
                  high_freq=50,
                  spectrogram_freq_cap=150, # Hz
                  limit=None,
+                 num_workers=0,
+                 this_worker=0,
                  logfile=None
                  ):
         '''
@@ -57,13 +60,23 @@ class WavMaker(object):
         self.log = LoggingService(logfile=logfile)
 
 
-        # Get a list of FileFamily instances:
+        # Get a list of FileFamily instances. The
+        # list includes all recursively found files:
         file_families = self.get_files_todo_info(infiles)
         num_wav_files = len(file_families)
         
+        # If this instance is one of several gnu parallel
+        # workers, find which of the files this worker
+        # is supposed to do:
+        
+        if num_workers > 0:
+            my_file_families = self.select_my_infiles(file_families, num_workers, this_worker)
+        else:
+            my_file_families = file_families
+        
         if copy_label_files:
             # We are to copy txt files where available:
-            num_lab = len([True for file_family in file_families \
+            num_lab = len([True for file_family in my_file_families \
                                 if os.path.exists(file_family.fullpath(AudioType.LABEL))
                                 ])
             self.log.info(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
@@ -73,7 +86,7 @@ class WavMaker(object):
             self.log.info(f"Todo: {num_wav_files} .wav files")
 
         files_done = 0
-        for file_family in file_families:
+        for file_family in my_file_families:
             
             # Reconstruct the full file path
             infile = file_family.fullpath(file_family.file_type)
@@ -118,7 +131,45 @@ class WavMaker(object):
                 if limit is not None:
                     self.log.info(f"\nBatch gated {files_done} of {limit} wav files.")
                 else:
-                    self.log.info(f"\nBatch gated {files_done} of {len(file_families)} wav files.")
+                    self.log.info(f"\nBatch gated {files_done} of {len(my_file_families)} wav files.")
+
+
+    #------------------------------------
+    # select_my_infiles
+    #-------------------
+
+    def select_my_infiles(self, file_families, num_workers, this_worker):
+        '''
+        Used when gnu parallel starts multiple copies of this
+        file. Each resulting worker must select a batch of
+        infiles. This selection is accomplished via the 
+        num_workers and this_worker quantities. The passed-in
+        file_families comprise all infiles. Each worker 
+        partitions theses into num_worker batches. Worker with
+        this_worker == 0 works on the first batch. Worker 1
+        on the second, and so on. If the number of infiles is
+        not divisible by num_workers, the last worker process
+        the left-overs in addition to their regular share.
+        
+        @param file_families: file info about each infile
+        @type file_families: [FileFamily]
+        @param num_workers: total number of workers deployed
+        @type num_workers: int
+        @param this_worker: rank of this worker in the list of workers
+        @type this_worker: int
+        '''
+        
+        batch_size = math.floor(len(file_families) / num_workers)
+        my_share_start = this_worker * batch_size
+        my_share_end   = my_share_start + batch_size
+        
+        # Do I need to take leftovers?
+        if this_worker == num_workers - 1:
+            # Yes:
+            left_overs = len(file_families) % num_workers
+            my_share_end += left_overs
+            
+        return file_families[my_share_start:my_share_end]
 
     #------------------------------------
     # get_files_todo_info 
@@ -254,6 +305,16 @@ if __name__ == '__main__':
                         default=None,
                         help='maximum number of wav files to process; default: all'
                         );
+    parser.add_argument('--num_workers',
+                        type=int,
+                        default=0,
+                        help='total number of workers started via gnu parallel'
+                        );
+    parser.add_argument('--this_worker',
+                        type=int,
+                        default=0,
+                        help="this worker's rank within num_workers started via gnu parallel"
+                        );
     parser.add_argument('infiles',
                         nargs='+',
                         help='Repeatable: .wav input files and directories')
@@ -263,7 +324,7 @@ if __name__ == '__main__':
     if args.threshold_db > 0:
         print("Threshold dB value should be less than 0.")
         sys.exit(1)
-
+        
     WavMaker(args.infiles,
              outdir=args.outdir,
              # If no_normalize is True, don't normalize:
@@ -273,5 +334,7 @@ if __name__ == '__main__':
              threshold_db=args.threshold_db,
              spectrogram_freq_cap=args.freq_cap,
              limit=args.limit,
+             num_workers=args.num_workers,
+             this_worker=args.this_worker,
              logfile=args.logfile
              )
