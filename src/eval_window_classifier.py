@@ -11,7 +11,10 @@ from utils import sigmoid, calc_accuracy, num_correct, num_non_zero, get_f_score
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--model', type=str,
-    help = 'Path to the model to test on') 
+    help = 'Path to the model to test on')
+parser.add_argument('--local_files', dest='local_files', action='store_true',
+    help='Flag specifying to read data from the local elephant_dataset directory.'
+    'The default is to read from the quatro data directory.')
 
 # Should put into utils!
 def loadModel(model_path):
