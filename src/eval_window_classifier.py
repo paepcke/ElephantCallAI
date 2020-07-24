@@ -16,6 +16,7 @@ parser.add_argument('--local_files', dest='local_files', action='store_true',
     help='Flag specifying to read data from the local elephant_dataset directory.'
     'The default is to read from the quatro data directory.')
 
+
 # Should put into utils!
 def loadModel(model_path):
     model = torch.load(model_path, map_location=parameters.device)
@@ -25,7 +26,17 @@ def loadModel(model_path):
     model_id = tokens[-2]
     return model, model_id
 
-def eval_model(dataloader, model):
+def save_false_positives(files, path):
+    final_slash = path.rindex('/')
+    model_path = path[:final_slash]
+    save_path = os.path.join(model_path, "false_positives.txt")
+
+    with open(save_path, 'w') as f:
+        for file in files:
+            f.write('{}\n'.format(file))
+
+
+def eval_model(dataloader, model, model_path):
     model.eval()
 
     running_corrects = 0
@@ -36,6 +47,8 @@ def eval_model(dataloader, model):
     running_tp_fp = 0
     # True positives, false negatives
     running_tp_fn = 0
+
+    false_positives = []
 
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
@@ -49,9 +62,24 @@ def eval_model(dataloader, model):
             labels = batch[1].clone().float()
             inputs = inputs.to(parameters.device)
             labels = labels.to(parameters.device)
+            # Get the data_file locations for each chunk
+            data_files = np.array(batch[2])
 
             # Forward pass
             logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+
+            # Determine and save false negative examples
+            predictions = torch.sigmoid(logits)
+            binary_preds = torch.where(predictions > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+            binary_preds = binary_preds.cpu().detach().numpy()
+            detach_labels = labels.cpu().detach().numpy()
+            # We want to look for chunks where the prediction is
+            # a false negative for the entire window
+            gt_empty = (detach_labels == 0.)
+            predicted_chunks = (binary_preds == 1.)
+
+            batch_false_positives = list(data_files[gt_empty & predicted_chunks])
+            false_positives += batch_false_positives
 
             running_corrects += num_correct(logits, labels)
             running_samples += logits.shape[0]
@@ -77,6 +105,8 @@ def eval_model(dataloader, model):
     print ('Full Recall: {:.4f}'.format(full_recall))
     print ('Full F-Score: {:.4f}'.format(full_fscore))
 
+    save_false_positives(false_positives, model_path)
+
 
 def main(args):
     """
@@ -98,7 +128,7 @@ def main(args):
     eval_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, full_window_predict=True)
        
-    eval_model(eval_loader, model)
+    eval_model(eval_loader, model, args.model)
 
 
 if __name__ == '__main__':
