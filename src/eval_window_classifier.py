@@ -40,7 +40,7 @@ def eval_model(dataloader, model):
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
         for idx, batch in enumerate(dataloader):
-            if (idx % 250 == 0) and parameters.VERBOSE:
+            if (idx % 1000 == 0):
                 print ("Batch number {} of {}".format(idx, len(dataloader)))
 
             # Cast the variables to the correct type and 
@@ -54,7 +54,6 @@ def eval_model(dataloader, model):
             logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
 
             running_corrects += num_correct(logits, labels)
-            running_non_zero += num_non_zero(logits, labels)
             running_samples += logits.shape[0]
 
             tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
