@@ -26,13 +26,19 @@ def loadModel(model_path):
     model_id = tokens[-2]
     return model, model_id
 
-def save_false_positives(files, path):
+def save_predictions(false_positives, true_positives, path):
     final_slash = path.rindex('/')
     model_path = path[:final_slash]
-    save_path = os.path.join(model_path, "false_positives.txt")
 
-    with open(save_path, 'w') as f:
-        for file in files:
+    false_pos_save_path = os.path.join(model_path, "false_positives.txt")
+    true_pos_save_path = os.path.join(model_path, "true_positives.txt")
+
+    with open(false_pos_save_path, 'w') as f:
+        for file in false_positives:
+            f.write('{}\n'.format(file))
+
+    with open(true_pos_save_path, 'w') as f:
+        for file in true_positives:
             f.write('{}\n'.format(file))
 
 
@@ -49,6 +55,7 @@ def eval_model(dataloader, model, model_path):
     running_tp_fn = 0
 
     false_positives = []
+    true_positives = []
 
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
@@ -76,10 +83,13 @@ def eval_model(dataloader, model, model_path):
             # We want to look for chunks where the prediction is
             # a false negative for the entire window
             gt_empty = (detach_labels == 0.)
+            gt_calls = (detach_labels == 1.)
             predicted_chunks = (binary_preds == 1.)
 
             batch_false_positives = list(data_files[gt_empty & predicted_chunks])
             false_positives += batch_false_positives
+            batch_true_positives = list(data_files[gt_calls & predicted_chunks])
+            true_positives += batch_true_positives
 
             running_corrects += num_correct(logits, labels)
             running_samples += logits.shape[0]
@@ -105,7 +115,7 @@ def eval_model(dataloader, model, model_path):
     print ('Full Recall: {:.4f}'.format(full_recall))
     print ('Full F-Score: {:.4f}'.format(full_fscore))
 
-    save_false_positives(false_positives, model_path)
+    save_predictions(false_positives, true_positives, model_path)
 
 
 def main(args):
