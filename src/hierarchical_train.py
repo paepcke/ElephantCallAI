@@ -32,6 +32,8 @@ parser.add_argument('--model_1', dest='model1', action='store_true',
     help='Flag specifying to just train Model_1.')
 parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
+parser.add_argument('--model_0', type=str,
+    help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')
 
 """
     General approach ideas. Train the first model, we will call this model
@@ -331,8 +333,17 @@ def main():
     # Case 1) Do the entire pipeline! Can break now the pipeline into 3 helper functions!
     if args.full_pipeline:
         # Train and save model_0
-        #model_0 = train_model_0(dloaders, save_path)
-        model_0 = train_model_0(model_0_train_loader, model_0_test_loader , save_path)
+        if args.model_0 == None:
+            model_0 = train_model_0(model_0_train_loader, model_0_test_loader , save_path)
+        else: # Load and save model_0
+            model_0 = torch.load(args.model_0, map_location=parameters.device)
+            first_model_save_path = os.path.join(save_path, "Model_0")
+            if not os.path.exists(first_model_save_path):
+                os.makedirs(first_model_save_path)
+
+            model_save_path = os.path.join(first_model_save_path, "model.pt")
+            torch.save(model_0, model_save_path)
+
         # Do the adversarial discovery
         adversarial_train_files, adversarial_test_files = adversarial_discovery(full_train_path, full_test_path, model_0, save_path)
         # Train and save model 1
