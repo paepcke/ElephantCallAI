@@ -45,7 +45,7 @@ class Spectrogrammer(object):
     HOP_LENGTH = int(WIN_LENGTH * OVERLAP)
     # Maximum frequency retained in spectrograms if 
     # they are cleaned:
-    FREQ_MAX = 150
+    FREQ_MAX = 30
     DEFAULT_FRAMERATE=8000
 
     # Energy below which spectrogram is set to zero:
@@ -64,9 +64,9 @@ class Spectrogrammer(object):
                  end_sec=None,
                  normalize=True,
                  framerate=None,
-                 threshold_db=-40, # dB
-                 low_freq=10,      # Hz 
-                 high_freq=50,     # Hz
+                 threshold_db=-30, # dB
+                 low_freq=20,      # Hz 
+                 high_freq=40,     # Hz
                  spectrogram_freq_cap=None,
                  nfft=None,
                  logfile=None,
@@ -1117,17 +1117,17 @@ if __name__ == '__main__':
 
     parser.add_argument('--max_freq', 
                     type=int, 
-                    default=100,
+                    default=40,
                     help='Min frequency of leading bandpass filter')
 
     parser.add_argument('--min_freq', 
                     type=int, 
-                    default=10,
+                    default=20,
                     help='Min frequency of leading bandpass filter')
 
     parser.add_argument('--threshold_db', 
                     type=int, 
-                    default=-40,
+                    default=-30,
                     help='Decibels relative to max signal below which signal is set to zero')
 
     parser.add_argument('-s', '--start', 
