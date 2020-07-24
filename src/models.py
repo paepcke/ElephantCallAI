@@ -27,24 +27,6 @@ import pdb
 
 from utils import set_seed
 
-'''
-def set_seed():
-    """
-        Set the seed across all different necessary platforms
-        to allow for comparrsison of different model seeding. 
-        Additionally, in the adversarial discovery, we want to
-        initialize and train each of the models with the same
-        seed.
-    """
-    torch.manual_seed(parameters.MODEL_SEED)
-    torch.cuda.manual_seed_all(parameters.MODEL_SEED)
-    # Not totally sure what these two do!
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(parameters.MODEL_SEED)
-    os.environ['PYTHONHASHSEED'] = str(parameters.MODEL_SEED)
-'''
-
 
 def get_model(model_id):
     # Make sure to set the numpy and cuda seeds
