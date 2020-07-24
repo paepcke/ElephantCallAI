@@ -418,6 +418,20 @@ class SpectrogramDataset(FrozenDataset):
     #-------------------
 
     def process_spectrograms(self, dirs_or_files_to_do, recurse=False):
+        '''
+        Given a list of files and directories, find
+        24-hr spectrograms. Find the corresponding label
+        files. Chop each spectrogram into self.SNIPPET_WIDTH
+        seconds. Place into the Sqlite db the location of each
+        spectrogram, its start/end times, the 'parent' 
+        24-hr spectrogram, and the filename of the snippet.
+        The ****Snippe_id alone is not key!!!!!****
+        
+        @param dirs_or_files_to_do:
+        @type dirs_or_files_to_do:
+        @param recurse:
+        @type recurse:
+        '''
 
         # Get flat list of files, recursively
         # descending dirs if requested
@@ -577,20 +591,28 @@ class SpectrogramDataset(FrozenDataset):
             # Get the excerpt:
             snippet = spect_df.iloc[:,snip_xtick_interval.left:snip_xtick_interval.right]
             
-            # Save the snippet to file:
-            snippet_file_name = f"{snippet_dest}_{snippet_id}_spectrogram.pickle"
-            snippet.to_pickle(snippet_file_name)
-            
+          
             label = self.label_for_snippet(snip_xtick_interval, label_file)
             
-            # Fill the snippet id into the file family:
-            curr_file_family.snippet_id = snippet_id
+            # Create a file name for the snippet, but leave
+            # out the snippet number, which we will only know
+            # once an entry was made to the db:
+            snippet_file_name_template = f"{snippet_dest}_???_spectrogram.pickle"
             
-            self.add_snippet_to_db(snippet_file_name, 
-                                   label,
-                                   snip_xtick_interval,
-                                   snip_time_interval,
-                                   curr_file_family)
+            # Get the authoritative snipped id, and the 
+            # finalized destination file name:
+            (db_snippet_id, snippet_file_name) = self.add_snippet_to_db(
+                                                   snippet_file_name_template, 
+                                                   label,
+                                                   snip_xtick_interval,
+                                                   snip_time_interval,
+                                                   curr_file_family)
+            # Fill the snippet id into the file family:
+            curr_file_family.snippet_id = db_snippet_id
+            
+            # Save the snippet to file:
+            snippet.to_pickle(snippet_file_name)
+            
 
     #------------------------------------
     # label_for_snippet 
@@ -660,40 +682,105 @@ class SpectrogramDataset(FrozenDataset):
     #-------------------
     
     def add_snippet_to_db(self, 
-                          snippet_file_name,
+                          snippet_file_name_template,
                           label,
                           snippet_xtick_interval,
                           snippet_time_interval,
                           curr_file_family):
+        '''
+        
+        Adds a record for a spectrogram snippet into the
+        Sqlite db. The record in includes the snippet_id,
+        the file where the snippet resides, the recording
+        site as derived from the filename in curr_file_family,
+        as well as X-axis time slice start/stop index and
+        start/stop times of the snippet relative to the start
+        of the parent spectrogram.
+        
+        Trick is that we use Sqlite's automatic ROWID generation
+        for snippet ids. And we only know those after inserting
+        the record. That id is part of the snippet's future
+        file name, which itself has the snippet id in it.
+        Since that file name needs to be part of the snippet's
+        record, though, we have to do an INSERT, followed
+        by an UPDATE. Obtaining the ROWID (i.e. the snippet id)
+        after the insert is free. The update of the ultimate
+        file name is not. 
+        
+        @param snippet_file_name_template: partially constructed
+            file name where the snippet dataframe will be
+            stored on disk: "foo_???_spectrogram.pickle"
+            The question marks are replaced in this method
+            with the ROWID of the newly created record
+        @type snippet_file_name_template: str
+        @param label: the snippet's label: 1/0
+        @type label: int
+        @param snippet_xtick_interval: interval of 
+            x slots in spectrogram
+        @type snippet_xtick_interval: Pandas Interval
+        @param snippet_time_interval: interval of
+            true times since start of parent spectrogram
+        @type snippet_time_interval: Pandas Interval
+        @param curr_file_family: info about the snippet's
+            file family (see dsp_utils.file_family).
+        @type curr_file_family: FileFamily
+        '''
 
         recording_site = curr_file_family.file_root
+
         insertion = f'''
-                    INSERT INTO Samples (sample_id,
-                                         recording_site,
+                    INSERT INTO Samples (recording_site,
                                          label,
                                          start_time_tick,
                                          end_time_tick,
                                          start_time,
-                                         end_time,
-                                         snippet_filename
+                                         end_time
                                          )
-                            VALUES ({curr_file_family.snippet_id},
-                                    '{recording_site}',
+                            VALUES ('{recording_site}',
                                     {label},
                                     {snippet_xtick_interval.left},
                                     {snippet_xtick_interval.right},
                                     {snippet_time_interval.left},
-                                    {snippet_time_interval.right},
-                                    '{snippet_file_name}'
+                                    {snippet_time_interval.right}
                                     );
                     '''
         try:
-            self.db.execute(insertion)
+            # The Python API to the Sqlite3 db
+            # automatically begins a transaction:
+            
+            cur = self.db.execute(insertion)
+            
         except Exception as e:
+            self.db.rollback()
             # Raise DatabaseError but with original stacktrace:
             raise DatabaseError(repr(e)) from e
+        
+        # Get the ROWID that was assigned to the row 
+        # we just wrote above:
+        db_snippet_id = cur.lastrowid
+        
+        # Safe to commit the partially filled in
+        # snippet record now that we have its
+        # ROWID:
+        
         self.db.commit()
+        
+        # Use this ultimate sample id to finalize
+        # the file name where the caller will write
+        # the spectrogram snippet:
+        
+        snippet_file_name = snippet_file_name_template.replace('???', str(db_snippet_id))
 
+        # Finally: update the snippet_filename column
+        # of the just-written entry:
+        
+        self.db.execute(f'''UPDATE Samples SET snippet_filename = '{snippet_file_name}'
+                           WHERE sample_id = {db_snippet_id}
+                           '''
+                           )
+        
+        self.db.commit()
+        return (db_snippet_id, snippet_file_name)
 
 
     #------------------------------------
@@ -737,12 +824,13 @@ class SpectrogramDataset(FrozenDataset):
             raise StopIteration
         
         res = self.db.execute(f'''
-                               SELECT sample_id, tok_ids,attention_mask,label
+                               SELECT sample_id, label, snippet_filename
                                 FROM Samples 
                                WHERE sample_id = {next_sample_id}
                              ''')
         row = next(res)
-        return self.clean_row_res(dict(row))
+        snippet_df = DSPUtils.load_spectrogram(row['snippet_filename'])
+        return {'snippet_df' : snippet_df, 'label' : row['label']}
     
     #------------------------------------
     # __getitem__ 
@@ -761,14 +849,14 @@ class SpectrogramDataset(FrozenDataset):
 
         ith_sample_id = self.saved_queues[self.curr_split_id()][indx]
         res = self.db.execute(f'''
-                               SELECT sample_id, tok_ids,attention_mask,label
+                               SELECT sample_id, label, snippet_filename
                                 FROM Samples 
                                WHERE sample_id = {ith_sample_id}
                              ''')
-        # Return the (only result) row:
         row = next(res)
-        return self.clean_row_res(dict(row))
-    
+        snippet_df = DSPUtils.load_spectrogram(row['snippet_filename'])
+        return {'snippet_df' : snippet_df, 'label' : row['label']}
+
     #------------------------------------
     # __iter__ 
     #-------------------
@@ -789,91 +877,6 @@ class SpectrogramDataset(FrozenDataset):
         not just what remains after calls to next()
         '''
         return len(self.saved_queues[self.curr_split_id()])
-
-    #------------------------------------
-    # next_csv_row
-    #-------------------
- 
-    def next_csv_row(self):
-        '''
-        Returns a dict 'ids', 'label', 'attention_mask'
-        '''
-
-        # Still have a row left from a previouse
-        # chopping?
-        if len(self.queued_samples) > 0:
-            return(self.queued_samples.popleft())
-        
-        # No pending samples from previously
-        # found texts longer than sequence_len:
-        row = next(self.reader)
-        try:
-            txt = row[self.text_col_name]
-        except KeyError:
-            msg = (f"\nCSV file does not have a column named '{self.text_col_name}'\n"
-                    "You can invoke bert_train_parallel.py with --text\n"
-                    "to specify col name for text, and --label to speciy\n"
-                    "name of label column."
-                    )
-            self.log.err(msg)
-            raise ValueError(msg)
-
-        # Tokenize the text of the row (the ad):
-        # If the ad is longer than self.SEQUENCE_LEN,
-        # then multiple rows are returned.
-        # Each returned 'row' is a dict containing
-        # just the key self.IDS_COL. Its value is
-        # an array of ints: each being an index into
-        # the BERT vocab.
-        #
-        # The ids will already be padded. Get
-        #   [{'ids' : [1,2,...]},
-        #    {'ids' : [30,64,...]}
-        #        ...
-        #   ]
-        
-        # Get list of dicts: {'tokens' : ['[CLS]','foo',...'[SEP]'],
-        #                     'ids'    : [2545, 352, ]
-        #                    }
-        # dicts. Only one if text is <= sequence_len, else 
-        # more than one:
-        id_dicts = self.text_augmenter.fit_one_row_to_seq_len(txt) 
-
-        # Add label. Same label even if given text was
-        # chopped into multiple rows b/c the text exceeded
-        # sequence_len:
-
-        try:        
-            label = row[self.label_col_name]
-        except KeyError:
-            msg = f"CSV file does not have col {self.label_col_name}" + '\n' +\
-                    "You can invoke bert_train_parallel.py with --label"
-            self.log.err(msg)
-            raise ValueError(msg)
-
-        try:
-            label_encoding = self.label_mapping[label]
-        except KeyError:
-            # A label in the CSV file that was not
-            # anticipated in the caller's label_mapping dict
-            self.log.err(f"Unknown label encoding: {label}")
-            return
-        
-        for id_dict in id_dicts:
-            id_dict['label'] = label_encoding 
-
-        # Create a mask of 1s for each token followed by 0s for padding
-        for ids_dict in id_dicts:
-            ids_seq = id_dict[self.IDS_COL_NAME]
-            #seq_mask = [float(i>0) for i in seq]
-            seq_mask = [int(i>0) for i in ids_seq]
-            ids_dict['attention_mask'] = seq_mask
-
-        # We now have a list of dicts, each with three
-        # keys: 'ids','label','attention_mask'
-        if len(id_dicts) > 1:
-            self.queued_samples.extend(id_dicts[1:])
-        return id_dicts[0]
 
     #------------------------------------
     # split_dataset 
@@ -1001,27 +1004,6 @@ class SpectrogramDataset(FrozenDataset):
         except Exception as e:
             raise DatabaseError(f"Could not close sqlite db: {repr(e)}") from e
 
-
-    #------------------------------------
-    # clean_row_res
-    #-------------------
-    
-    def clean_row_res(self, row):
-        '''
-        Given a row object returned from sqlite, 
-        turn tok_ids and attention_mask into real
-        np arrays, rather than their original str
-        
-        @param row:
-        @type row:
-        '''
-        
-        # tok_ids are stored as strings:
-        row['tok_ids'] = self.to_np_array(row['tok_ids'])
-        row['attention_mask'] = self.to_np_array(row['attention_mask'])
-        return row
-        return (self.train_queue, self.val_queue, self.test_queue)
-
     #------------------------------------
     # save_queues 
     #-------------------
@@ -1148,15 +1130,14 @@ class SpectrogramDataset(FrozenDataset):
         
         self.db.execute('''DROP TABLE IF EXISTS Samples;''')
         self.db.execute('''CREATE TABLE Samples(
-                    sample_id int,
+                    sample_id INTEGER PRIMARY KEY,
                     recording_site varchar(100),
                     label tinyint,
                     start_time_tick int,
                     end_time_tick int,
                     start_time float,
                     end_time float,
-                    snippet_filename varchar(1000),
-                    PRIMARY KEY (sample_id, recording_site)
+                    snippet_filename varchar(1000)
                     )
                     ''')
         self.db.commit()

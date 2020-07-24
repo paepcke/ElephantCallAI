@@ -247,23 +247,23 @@ class Test(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         # First snippet:
         row = rows[0]
-        self.assertEqual(row['sample_id'], 0)
+        self.assertEqual(row['sample_id'], 1)
         self.assertEqual(row['label'], 1)
         self.assertEqual(row['start_time_tick'], 0)
         self.assertEqual(row['end_time_tick'], 2)
         self.assertEqual(row['start_time'], 0)
         self.assertEqual(row['end_time'], 4)
-        self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_0_spectrogram.pickle'))
+        self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_1_spectrogram.pickle'))
 
         # Second snippet:
         row = rows[1]
-        self.assertEqual(row['sample_id'], 1)
+        self.assertEqual(row['sample_id'], 2)
         self.assertEqual(row['label'], 1)
         self.assertEqual(row['start_time_tick'], 2)
         self.assertEqual(row['end_time_tick'], 4)
         self.assertEqual(row['start_time'], 4)
         self.assertEqual(row['end_time'], 8)
-        self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_1_spectrogram.pickle'))
+        self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_2_spectrogram.pickle'))
         
         # Times 4,8
         #   Matches label 1.293    6.464999999991385
@@ -313,10 +313,10 @@ class Test(unittest.TestCase):
     
         self.spectr_dataset.chop_spectograms(spectro_labels_dict)
         # DB should have:
-        #      0|test_spectroA|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroA_0_spectrogram.pickle
-        #      1|test_spectroA|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroA_1_spectrogram.pickle
-        #      0|test_spectroB|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroB_0_spectrogram.pickle
-        #      1|test_spectroB|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroB_1_spectrogram.pickle
+        #      1|test_spectroA|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroA_1_spectrogram.pickle
+        #      2|test_spectroA|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroA_2_spectrogram.pickle
+        #      3|test_spectroB|1|0|2|0.0|4.0|.../src/CNN/Tests/test_spectroB_3_spectrogram.pickle
+        #      4|test_spectroB|1|2|4|4.0|8.0|.../src/CNN/Tests/test_spectroB_4_spectrogram.pickle
         # With row dict keys:
         #      ['sample_id', 'recording_site',
         #       'label', 'start_time_tick',
@@ -327,37 +327,37 @@ class Test(unittest.TestCase):
         self.assertEqual(len(snippet_rows), 4)
         
         for row in snippet_rows:
-            if row['sample_id'] == 0 and row['recording_site'] == 'test_spectroA':
+            if row['sample_id'] == 1:
                 self.assertEqual(row['label'], 1)
                 self.assertEqual(row['start_time_tick'], 0)
                 self.assertEqual(row['end_time_tick'], 2)
                 self.assertEqual(row['start_time'], 0.0)
                 self.assertEqual(row['end_time'], 4.0)
-                self.assertTrue(row['snippet_filename'].endswith('test_spectroA_0_spectrogram.pickle'))
-
-            elif row['sample_id'] == 1 and row['recording_site'] == 'test_spectroA':
-                self.assertEqual(row['label'], 1)
-                self.assertEqual(row['start_time_tick'], 2)
-                self.assertEqual(row['end_time_tick'],4 )
-                self.assertEqual(row['start_time'], 4.0)
-                self.assertEqual(row['end_time'], 8.0)
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroA_1_spectrogram.pickle'))
 
-            if row['sample_id'] == 0 and row['recording_site'] == 'test_spectroB':
-                self.assertEqual(row['label'], 1)
-                self.assertEqual(row['start_time_tick'], 0)
-                self.assertEqual(row['end_time_tick'], 2)
-                self.assertEqual(row['start_time'], 0.0)
-                self.assertEqual(row['end_time'], 4.0)
-                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_0_spectrogram.pickle'))
-
-            elif row['sample_id'] == 1 and row['recording_site'] == 'test_spectroB':
+            elif row['sample_id'] == 2:
                 self.assertEqual(row['label'], 1)
                 self.assertEqual(row['start_time_tick'], 2)
                 self.assertEqual(row['end_time_tick'],4 )
                 self.assertEqual(row['start_time'], 4.0)
                 self.assertEqual(row['end_time'], 8.0)
-                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_1_spectrogram.pickle'))
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroA_2_spectrogram.pickle'))
+
+            if row['sample_id'] == 3:
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 0)
+                self.assertEqual(row['end_time_tick'], 2)
+                self.assertEqual(row['start_time'], 0.0)
+                self.assertEqual(row['end_time'], 4.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_3_spectrogram.pickle'))
+
+            elif row['sample_id'] == 4:
+                self.assertEqual(row['label'], 1)
+                self.assertEqual(row['start_time_tick'], 2)
+                self.assertEqual(row['end_time_tick'],4 )
+                self.assertEqual(row['start_time'], 4.0)
+                self.assertEqual(row['end_time'], 8.0)
+                self.assertTrue(row['snippet_filename'].endswith('test_spectroB_4_spectrogram.pickle'))
 
 # ----------------- Main --------------
 

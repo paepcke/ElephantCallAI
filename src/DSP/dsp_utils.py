@@ -181,7 +181,12 @@ class DSPUtils(object):
                           columns=time_labels,
                           index=freq_labels
                           )
-        df.to_pickle(spectrogram_dest)
+        # Python 3.8's dataframe.to_pickle() writes
+        # pickle version 5, which cannot be read by
+        # python 3.7's df.read_pickle(). So write using
+        # the common protocol:
+        
+        df.to_pickle(spectrogram_dest, protocol=4)
 
     #------------------------------------
     # load_spectrogram
