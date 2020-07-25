@@ -220,7 +220,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     shift_windows = parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1
     full_train_loader = get_loader_fuzzy(full_train_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        include_boundaries=False, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS,
+                                        include_boundaries=False, shift_windows=shift_windows,
                                         is_full_dataset=True)
     full_test_loader = get_loader_fuzzy(full_test_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
