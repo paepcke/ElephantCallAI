@@ -97,14 +97,22 @@ class WavMaker(object):
                 # At this point we should only be seeing existing .wav files:
                 raise IOError(f"File {infile} does not exist, but should.")
             
-            self.log.info(f"Submitting {infile} to spectrogrammer...")
             try:
                 if file_family.file_type == AudioType.WAV:
                     actions = ['spectro', 'cleanspectro']
                 elif file_family.file_type == AudioType.LABEL:
                     actions = ['labelmask']
+                    if copy_label_files:
+                        try:
+                            full_label_path = file_family.fullpath(AudioType.LABEL)
+                            shutil.copy(full_label_path, outdir)
+                        except Exception as e:
+                            self.log.err(f"Could not copy label file {full_label_path} to {outdir}: {repr(e)}")
+                            continue
                 else:
                     continue
+                
+                self.log.info(f"Submitting {actions} request on '{infile}' to spectrogrammer...")
                 Spectrogrammer(infile,
                                actions,
                                outdir=outdir,
@@ -119,13 +127,6 @@ class WavMaker(object):
                 continue
             self.log.info(f"Done with {infile}...")
 
-            if copy_label_files:
-                try:
-                    full_label_path = file_family.fullpath(AudioType.LABEL)
-                    shutil.copy(full_label_path, outdir)
-                except Exception as e:
-                    self.log.err(f"Could not copy label file {full_label_path} to {outdir}: {repr(e)}")
-                    continue
             files_done += 1
             if limit is not None and (files_done >= limit):
                 self.log.info(f"Completed {files_done}, completing the limit of {limit}")
