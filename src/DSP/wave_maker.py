@@ -2,7 +2,9 @@
 '''
 Created on May 4, 2020
 
-Batch-creates noise gated elephant files.
+Batch-creates noise gated elephant files, associated
+spectrograms and mask files (if requested).
+
 Results are placed into a command line specified
 destination dir. On request, associated text files
 are copied to that destination as well. 
@@ -57,7 +59,8 @@ class WavMaker(object):
         # outdir exists:
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        self.log = LoggingService(logfile=logfile)
+        self.log = LoggingService(logfile=logfile,
+                                  msg_identifier=f"wave_maker#{this_worker}")
 
 
         # Get a list of FileFamily instances. The
