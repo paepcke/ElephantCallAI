@@ -32,7 +32,7 @@ HIERARCHICAL_MODEL = 17
 # Specify the number of repeats for ONLY the 
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
-HIERARCHICAL_REPEATS = 1
+HIERARCHICAL_REPEATS = 5
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification

@@ -106,6 +106,10 @@ def get_loader_fuzzy(data_dir,
     -is_full_dataset: Is important for when we are shifting the windows, because
     when using the full 24 hr dataset for adversarial discover we always want to 
     use the middle of the oversized window!
+    
+    -fixed_repeat: Used for training the second model in a heirarchical setting.
+    Repeat sliding windows but save fixed random slices for each window
+
     Returns
     -------
     - train_loader: training set iterator.
@@ -119,7 +123,8 @@ def get_loader_fuzzy(data_dir,
     set_seed(parameters.DATA_LOADER_SEED)
 
     dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, 
-                        shift_windows=shift_windows, is_full_dataset=is_full_dataset, full_window_predict=full_window_predict)
+                        shift_windows=shift_windows, is_full_dataset=is_full_dataset, 
+                        full_window_predict=full_window_predict)
     
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -150,6 +155,9 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
         self.full_window_predict = full_window_predict
+        # This is only used if we want to generate fixed repeated
+        # windows during hierarchical training
+        self.fixed_indeces = None
 
         #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
         #self.initialize_labels()
@@ -190,6 +198,23 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.pos_features = pos_features
         self.neg_features = neg_features
         self.intialize_data(init_pos=True, init_neg=True)
+
+    def create_fixed_repeat_windows(self, repeats):
+        self.fixed_indeces = []
+        # Increase the size of the dataset by factor x-repeats
+        self.features *= repeats
+        self.labels *= repeats
+
+        # Generate the fixed indeces
+        for i in range(len(self.features)):
+            feature = np.load(self.features[i])
+            label = np.load(self.labels[i])
+
+            # Sample a random start index to save
+            call_length = -(label.shape[0] - 2 * parameters.CHUNK_SIZE)
+            # Use torch.randint because of weird numpy seeding issues
+            start_slice = torch.randint(0, parameters.CHUNK_SIZE - call_length, (1,))[0].item()
+            self.fixed_indeces.append(start_slice)
 
     def intialize_data(self, init_pos=True, init_neg=True):
         """
@@ -249,6 +274,12 @@ class ElephantDatasetFuzzy(data.Dataset):
         feature = self.apply_transforms(feature)
         if self.shift_windows:
             feature, label = self.sample_chunk(feature, label)
+
+        # Select fixed random crop
+        if self.fixed_indeces is not None:
+            start_index = self.fixed_indeces[index]
+            feature = feature[start_index: start_index + parameters.CHUNK_SIZE, :]
+            label = label[start_index: start_index + parameters.CHUNK_SIZE]
 
         if self.user_transforms:
             feature = self.user_transforms(feature)

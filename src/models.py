@@ -941,6 +941,7 @@ class Model21(nn.Module):
         self.cnn_nb_filt = cnn_nb_filt
         self.cnn_pool_size = cnn_pool_size
         self.kernal_size = [3, 3, 3]
+        #self.padding = []
         self.lin_size = 32
         self.hidden_size = 32 # made it small maybe to avoid overfitting
         self.num_layers = 2 # lstm

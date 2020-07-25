@@ -11,7 +11,7 @@ import argparse
 import parameters
 from data import get_loader, get_loader_fuzzy
 from utils import create_save_path, create_dataset_path
-from models import get_model
+from models import * # Note for some reason we need to import the models as well
 from loss import get_loss
 from train import train
 
@@ -172,6 +172,10 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     # Update the negative examples of the training and validation datasets
     train_loader.dataset.set_neg_features(adversarial_train_files)
     test_loader.dataset.set_neg_features(adversarial_test_files)
+    # Create repeated dataset with fixed indeces
+    if parameters.HIERARCHICAL_REPEATS > 1:
+        train_loader.dataset.create_fixed_repeat_windows(parameters.HIERARCHICAL_REPEATS)
+
     dloaders = {'train':train_loader, 'valid':test_loader}
 
     model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
@@ -290,7 +294,8 @@ def main():
         full_train_path = parameters.REMOTE_FULL_TRAIN
         full_test_path = parameters.REMOTE_FULL_TEST
 
-    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+    # Get oversized calls if shifting windows or repeating for model 2
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
             full_train_path += '_OversizeCalls'
 
     model_0_train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
@@ -305,9 +310,11 @@ def main():
     model_1_test_data_path = model_0_test_data_path
     if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
         # SHould prob just have neg samples x1 since doesnt matter!!
+        # For now set call repeats to 1, but get shifting windows so we later can do call repeats!
+        shift_windows = parameters.HIERARCHICAL_REPEATS > 1
         model_1_train_data_path, _ = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
-                                                        call_repeats=parameters.HIERARCHICAL_REPEATS,
-                                                        shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS)
+                                                        call_repeats=1,
+                                                        shift_windows=shift_windows)
     
     
     # Model 0 Loaders
