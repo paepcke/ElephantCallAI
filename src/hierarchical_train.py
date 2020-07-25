@@ -369,8 +369,9 @@ def main():
     elif args.model1:
         # Read in the adversarial files
         train_adversarial_file = "model_0-False_Pos_Train.txt"
-        if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
             train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
+            
         adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
         adversarial_train_files = []
         with open(adversarial_train_save_path, 'r') as f:
