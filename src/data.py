@@ -253,9 +253,10 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         # Let us try having multiple duplicate copies of data when 
         # using the shift windows setting
-        if self.shift_windows:
-            self.features *= 5 # Try for now!
-            self.labels *= 5
+        # Figure this out later!!
+        #if self.shift_windows:
+        #    self.features *= 5 # Try for now!
+        #    self.labels *= 5
 
         print ("Len Pos Features:", len(self.pos_features))
         print ("Len Neg Features:", len(self.neg_features))
