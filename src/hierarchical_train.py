@@ -217,6 +217,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     # calculate the loss! Use the HIERARCH_SHIFT flag along to decide if the Heirarchical model will use
     # randomly shifted windows. Note, we flag that this is the full dataset to make sure that during 
     # adversarial discovery we alwas sample the midlle of oversized windows
+    shift_windows = parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1
     full_train_loader = get_loader_fuzzy(full_train_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
                                         include_boundaries=False, shift_windows=parameters.HIERARCHICAL_SHIFT_WINDOWS,
@@ -226,7 +227,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
 
     # For now let us try including all of the false negatives!
     train_adversarial_file = "model_0-False_Pos_Train.txt"
-    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+    if shift_windows:
         train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
     adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0, min_length=parameters.FALSE_NEGATIVE_THRESHOLD)
     adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
@@ -311,9 +312,10 @@ def main():
     if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
         # SHould prob just have neg samples x1 since doesnt matter!!
         # For now set call repeats to 1, but get shifting windows so we later can do call repeats!
-        shift_windows = parameters.HIERARCHICAL_REPEATS > 1
+        shift_windows = parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_SHIFT_WINDOWS
+        call_repeats = 1 if parameters.HIERARCHICAL_REPEATS > 1 else parameters.HIERARCHICAL_REPEATS
         model_1_train_data_path, _ = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
-                                                        call_repeats=1,
+                                                        call_repeats=call_repeats,
                                                         shift_windows=shift_windows)
     
     
