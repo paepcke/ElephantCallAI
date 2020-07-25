@@ -82,9 +82,9 @@ class WavMaker(object):
             num_lab = len([True for file_family in my_file_families \
                                 if os.path.exists(file_family.fullpath(AudioType.LABEL))
                                 ])
-            self.log.info(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
+            self.log.debug(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
             if num_wav_files > num_lab:
-                self.log.warn(f"Missing label file(s) for {num_wav_files - num_lab} file(s).")
+                self.log.debug(f"Missing label file(s) for {num_wav_files - num_lab} file(s).")
         else:
             self.log.info(f"Todo: {num_wav_files} .wav files")
 
@@ -173,8 +173,13 @@ class WavMaker(object):
             # Yes:
             left_overs = len(file_families) % num_workers
             my_share_end += left_overs
-            
-        return file_families[my_share_start:my_share_end]
+        
+        my_families = file_families[my_share_start:my_share_end]
+        # Get the .wav files to the front of the 
+        # to-do list so that spectrograms are created
+        # before 
+         
+        return my_families
 
     #------------------------------------
     # get_files_todo_info 

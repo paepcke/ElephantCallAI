@@ -107,7 +107,8 @@ class Spectrogrammer(object):
         if logfile is None:
             self.log = LoggingService()
         else:
-            self.log = LoggingService(logfile)
+            self.log = LoggingService(logfile,
+                                      msg_identifier="spectrogrammer")
         
         if testing:
             # Leave all calling of methods to the unittest:
@@ -210,13 +211,12 @@ class Spectrogrammer(object):
                     DSPUtils.save_spectrogram(spect, spectro_outfile)
 
             elif infile.endswith('.txt'):
-                # Infile is a label text file created with Raven
-                # Make sure caller wants to create a mask file:
-                #if not 'labelmask' in actions:
-                #    continue
-                spectro_file = os.path.join(outdir, file_family.spectro)
-                label_mask = self.create_label_mask_from_raven_table(infile,
-                                                                     spectro_file
+                # Get label mask with 1s at time periods with an
+                # elephant call.
+                wav_file = file_family.fullpath(AudioType.WAV),
+                label_mask = self.create_label_mask_from_raven_table(wav_file,
+                                                                     infile,
+                                                                     self.hope_length
                                                                      )
                 DSPUtils.save_label_mask(label_mask, 
                                          os.path.join(outdir,file_family.mask))
@@ -745,14 +745,17 @@ class Spectrogrammer(object):
     # create_label_mask_from_raven_table
     #-------------------
     
-    def create_label_mask_from_raven_table(self, 
+    def create_label_mask_from_raven_table(self,
+                                           wav_file_or_sig,
                                            label_txt_file,
-                                           spectrogram_or_spect_file):
+                                           framerate,
+                                           hop_length):
         '''
-        Given a manually created selection table as produced
-        by the Raven program, plus a spectrogram, create a
-        mask file with 1s where the spectrogram time bins
-        match labels, and 0s elsewhere.
+        Given a .wav recording, plus a manually created 
+        selection table as produced by the Raven program, 
+        plus two parameters used to create spectrograms, 
+        create a mask file with 1s where the spectrogram 
+        time bins would match labels, and 0s elsewhere.
         
         Label files are of the form:
         
@@ -760,18 +763,24 @@ class Spectrogrammer(object):
              foo             6.326            4.653              bar
                     ...
 
+        @param wav_file_or_sig: either the name of a .wav
+            recording file, or an array of .wav signals
+        @type wav_file_or_sig: {str|[float]}
         @param label_txt_file: either a path to a label file,
             or an open fd to such a file:
         @type label_txt_file: {str|file-like}
-        @param spectrogram_or_spect_file: either an in-memory spectrogram DataFrame
-            or a path to a pickled DataFrame
-        @type spectrogram_or_spect_file: {str|pandas.DataFrame}
+        @param label_file: label file as produced with Raven
+        @type label_file: str
         '''
-        spect = self._read_spectrogram_if_needed(spectrogram_or_spect_file)
+        # The x-axis time labels that a spectrogram
+        # would have:
+        time_tick_secs_labels = DSPUtils.time_ticks_from_wav(wav_file_or_sig,
+                                                             framerate, 
+                                                             hop_length
+                                                             )
+                                     
         # Start with an all-zero label mask:
-        label_mask = np.zeros(len(spect.columns), dtype=int)
-        # The x-axis time labels:
-        label_times    = spect.columns.astype(float)
+        label_mask = np.zeros(len(time_tick_secs_labels), dtype=int)
         
         try:
             if type(label_txt_file) == str:
@@ -780,7 +789,7 @@ class Spectrogrammer(object):
                 fd = label_txt_file 
             reader = csv.DictReader(fd, delimiter='\t')
             for (start_bin_idx, end_bin_idx) in self._get_label_indices(reader, 
-                                                                        label_times,
+                                                                        time_tick_secs_labels,
                                                                         label_txt_file):
             
                 # Fill the mask with 1s in the just-computed range:
