@@ -869,7 +869,7 @@ class Spectrogrammer(object):
             try:
                 spect = DSPUtils.load_spectrogram(spectrogram_or_spect_file)
             except Exception as e:
-                self.log.err(f"While reading spectrogram file: {repr(e)}")
+                self.log.err(f"While reading spectrogram file {spectrogram_or_spect_file}: {repr(e)}")
                 raise IOError from e
         else:
             if type(spectrogram_or_spect_file) != pd.DataFrame:

@@ -122,10 +122,11 @@ class WavMaker(object):
                                threshold_db=threshold_db,
                                spectrogram_freq_cap=spectrogram_freq_cap
                                )
+                self.log.info(f"Spectrogrammer finished; done with {infile}...")
+
             except Exception as e:
                 self.log.err(f"Processing failed for '{infile}: {repr(e)}")
                 continue
-            self.log.info(f"Spectrogrammer finished; done with {infile}...")
 
             files_done += 1
             if limit is not None and (files_done >= limit):
