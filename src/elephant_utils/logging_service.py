@@ -73,6 +73,7 @@ class LoggingService(metaclass=MetaLoggingSingleton):
     def __init__(self, 
                  logging_level=logging.INFO, 
                  logfile=None,
+                 msg_identifier=None,
                  rotating_logs=True,
                  log_size=1000000,
                  max_num_logs=500):
@@ -88,7 +89,12 @@ class LoggingService(metaclass=MetaLoggingSingleton):
             standard logging module
         @type logging_level: int
         @param logfile: if provided, file path for the log file(s)
-        @type logfile: str
+        @type logfile: str,
+        @param msg_identifier: if provided this string will
+            be shown at the start of each log message. If None,
+            the Python module in argv[0] will be shown without
+            the .py extension.
+        @type msg_identifier: {None|str}
         @param rotating_logs: whether or not to rotate logs. 
         @type rotating_logs: bool
         @param log_size: max size of each log file, if rotating 
@@ -102,9 +108,10 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         self._log_file = logfile
         self.setup_logging(self._logging_level, 
                            self._log_file,
-                           rotating_logs,
-                           log_size,
-                           max_num_logs)
+                           msg_identifier=msg_identifier,
+                           rotating_logs=rotating_logs,
+                           log_size=log_size,
+                           max_num_logs=max_num_logs)
         
         
     #-------------------------
@@ -149,12 +156,17 @@ class LoggingService(metaclass=MetaLoggingSingleton):
     def setup_logging(cls, 
                       loggingLevel=logging.INFO, 
                       logFile=None,
+                      msg_identifier=None,
                       rotating_logs=True,
                       log_size=1000000,
-                      max_num_logs=500                      
+                      max_num_logs=500
                       ):
         '''
         Set up the standard Python logger.
+        If msg_identifier is provided, it is shown
+        at the very start of each logging message.
+        If None, the file name of the calling module
+        is used without the .py extension.
 
         @param loggingLevel: initial logging level
         @type loggingLevel: {logging.INFO|WARN|ERROR|DEBUG}
@@ -187,9 +199,10 @@ class LoggingService(metaclass=MetaLoggingSingleton):
 
         # Create formatter
         #formatter = logging.Formatter("%(name)s: %(asctime)s;%(levelname)s: %(message)s")
-        prog_name = os.path.basename(sys.argv[0])
+        if msg_identifier is None:
+            msg_identifier = os.path.basename(sys.argv[0])
 
-        formatter = logging.Formatter(f"{prog_name}({os.getpid()}): %(asctime)s;%(levelname)s: %(message)s")
+        formatter = logging.Formatter(f"{msg_identifier}({os.getpid()}): %(asctime)s;%(levelname)s: %(message)s")
 
         handler.setFormatter(formatter)
         
