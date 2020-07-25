@@ -84,7 +84,7 @@ class WavMaker(object):
                                 ])
             self.log.info(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
             if num_wav_files > num_lab:
-                self.log.warn(f"Missing label files for {num_wav_files - num_lab} files.")
+                self.log.warn(f"Missing label file(s) for {num_wav_files - num_lab} file(s).")
         else:
             self.log.info(f"Todo: {num_wav_files} .wav files")
 
@@ -125,7 +125,7 @@ class WavMaker(object):
             except Exception as e:
                 self.log.err(f"Processing failed for '{infile}: {repr(e)}")
                 continue
-            self.log.info(f"Done with {infile}...")
+            self.log.info(f"Spectrogrammer finished; done with {infile}...")
 
             files_done += 1
             if limit is not None and (files_done >= limit):

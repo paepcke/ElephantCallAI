@@ -191,6 +191,7 @@ class Spectrogrammer(object):
                                               high_freq=high_freq,
                                               outdir=outdir
                                               )
+                    self.log.info(f"Done processing wav file {infile}.")
                 except Exception as e:
                     print(f"Cannot process .wav file: {repr(e)}")
                     return
