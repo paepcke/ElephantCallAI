@@ -16,7 +16,8 @@ import sys
 
 from pandas.core.frame import DataFrame
 from sklearn.model_selection import KFold
-from sklearn.model_selection._split import RepeatedKFold
+from sklearn.model_selection._split import RepeatedKFold, StratifiedKFold, \
+    RepeatedStratifiedKFold
 from torch.utils.data import Dataset
 
 from DSP.dsp_utils import AudioType
@@ -331,7 +332,7 @@ class SpectrogramDataset(FrozenDataset):
 
         # The following only needed in case the 
         # class is used without either the split_dataset()
-        # or the kfolds() facility:
+        # or the kfold*() facilities:
         
         # Make a preliminary train queue with all the
         # sample ids. If split_dataset() is called later,
@@ -997,17 +998,17 @@ class SpectrogramDataset(FrozenDataset):
         return len(self.saved_queues[self.curr_split_id()])
 
     #------------------------------------
-    # kfolds 
+    # kfold 
     #-------------------
 
-    def kfolds(self, 
+    def kfold(self, 
                n_splits=5,
                n_repeats=0,
                shuffle=False,
                random_state=None
                ):
         '''
-        Uses sklearn's KFold facility. 
+        Uses sklearn's KFold and StratifiedKFold facility. 
         https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
         See also method kfolds_stratified() for balanced
         folds.
@@ -1043,14 +1044,13 @@ class SpectrogramDataset(FrozenDataset):
         @type random_state: int
         '''
         if n_repeats == 0:
-            cross_validator = KFold(n_splits=n_splits,
-                                    shuffle=shuffle,
-                                    random_state=random_state)
+            self.cross_validator = KFold(n_splits=n_splits,
+                                         shuffle=shuffle,
+                                         random_state=random_state)
         else:
-            cross_validator = RepeatedKFold(n_splits=n_splits,
-                                            n_repeats=n_repeats,
-                                            shuffle=shuffle,
-                                            random_state=random_state)
+            self.cross_validator = RepeatedKFold(n_splits=n_splits,
+                                                 n_repeats=n_repeats,
+                                                 random_state=random_state)
             
         # The following retrieves *indices* into 
         # our list of sample_ids. However, since
@@ -1065,7 +1065,7 @@ class SpectrogramDataset(FrozenDataset):
         
         # We grab the first pair:
         
-        self.folds_iter = cross_validator.split(self.sample_ids) 
+        self.folds_iter = self.cross_validator.split(self.sample_ids) 
         (self.train_sample_ids, self.validate_sample_ids) = \
             next(self.folds_iter)
             
@@ -1074,7 +1074,98 @@ class SpectrogramDataset(FrozenDataset):
         self.train_labels = self.labels_from_db(self.train_sample_ids)
         self.validate_labels = self.labels_from_db(self.validate_sample_ids)
         self.switch_to_split('train')
+
+    #------------------------------------
+    # kfold_stratified 
+    #-------------------
+
+    def kfold_stratified(self, 
+               n_splits=5,
+               n_repeats=0,
+               shuffle=False,
+               random_state=None
+               ):
+        '''
+        Uses sklearn's StratifiedKFold and RepeatedStratifiedKFold facility.
+        https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html
+        See also method kfold() for balanced for random folds.
         
+        The 'X' in this context are sample ids that are eventually 
+        used by the dataloader to retrieve spectrograms. Recall
+        that each sample id stands for one spectrogram snippet. The
+        'y' vector in the KFold page is the 'label' column in the
+        Sqlite db, which is 1 or 0 for each column (i.e. time bin)
+        of the spectrogram.
+        
+        All methods on the sklearn [Repeated]StratifiedKFold facility
+        are available in this class by the same name.
+        
+        After calling this method, calls to next() will
+        return train samples. I.e. the current queue is set
+        to self.train_queue
+        
+        
+        @param n_splits: number of folds to create 
+        @type n_splits: int
+        @param n_repeats: number times fold splitting should
+            be repeated (n-times k-fold cross validation.
+            Set to zero, the method uses sklearn KFold class,
+            else it uses the sklearn.RepeatedKFold
+        @type n_repeats: int
+        @param shuffle: whether or not to shuffle the 
+            data before splitting. Once split, the 
+            data in the folds are not shuffled 
+        @type shuffle: bool
+        @param random_state: if shuffle is set to True,
+            this argument allows for repeatability over
+            multiple runs
+        @type random_state: int
+        '''
+        if n_repeats == 0:
+            self.cross_validator = StratifiedKFold(n_splits=n_splits,
+                                                   shuffle=shuffle,
+                                                   random_state=random_state)
+        else:
+            self.cross_validator = RepeatedStratifiedKFold(n_splits=n_splits,
+                                                           n_repeats=n_repeats,
+                                                           random_state=random_state)
+            
+        # The following retrieves *indices* into 
+        # our list of sample_ids. However, since
+        # our sample_ids are just numbers from 0 to n,
+        # the indices are equivalent to the sample ids
+        # themselves
+        
+        # The split method will return a generator
+        # object. Each item in this generator is
+        # a 2-tuple: a test set array and a validation
+        # set array. There will be n_splits such tuples.
+        
+        # We grab the first pair:
+        
+        all_labels = self.labels_from_db(self.sample_ids)
+        self.folds_iter = self.cross_validator.split(self.sample_ids, all_labels) 
+        (self.train_sample_ids, self.validate_sample_ids) = \
+            next(self.folds_iter)
+            
+        self.train_queue = deque(self.train_sample_ids)
+        self.val_queue   = deque(self.validate_sample_ids)
+        self.train_labels = self.labels_from_db(self.train_sample_ids)
+        self.validate_labels = self.labels_from_db(self.validate_sample_ids)
+        self.switch_to_split('train')
+
+
+    #------------------------------------
+    # get_n_splits 
+    #-------------------
+    
+    def get_n_splits(self):
+        '''
+        Straight pass_through to the sklearn method
+        Returns the number of splitting iterations in the cross-validator
+        '''
+        return self.cross_validator.get_n_splits()
+
     #------------------------------------
     # split_dataset 
     #-------------------
@@ -1212,7 +1303,8 @@ class SpectrogramDataset(FrozenDataset):
         sample_id_list =  ','.join([str(el) for el in list(sample_ids)])
         cmd = f'''SELECT label
                     FROM Samples
-                   WHERE sample_id in ({sample_id_list});
+                   WHERE sample_id in ({sample_id_list})
+                  ORDER BY sample_id;
               '''
         try:
             rows = self.db.execute(cmd)
