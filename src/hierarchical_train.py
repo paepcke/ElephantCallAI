@@ -176,7 +176,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     if parameters.HIERARCHICAL_REPEATS > 1:
         # Include Twice as many repeats for the positive examples!
         train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS * 2, parameters.HIERARCHICAL_REPEATS)
-        train_loader.dataset.create_fixed_repeat_windows()
+        train_loader.dataset.create_fixed_windows()
 
     dloaders = {'train':train_loader, 'valid':test_loader}
 
