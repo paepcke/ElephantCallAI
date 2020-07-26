@@ -1088,7 +1088,7 @@ class SpectrogramDataset(FrozenDataset):
         '''
         Uses sklearn's StratifiedKFold and RepeatedStratifiedKFold facility.
         https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html
-        See also method kfold() for balanced for random folds.
+        See also method kfold() for folding without balancing.
         
         The 'X' in this context are sample ids that are eventually 
         used by the dataloader to retrieve spectrograms. Recall
