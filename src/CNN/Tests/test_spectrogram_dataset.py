@@ -5,9 +5,9 @@ Created on Jul 14, 2020
 '''
 import os, sys
 import shutil
-import sqlite3
 import unittest
 import glob
+from pathlib import Path
 
 import pandas as pd
 
@@ -17,8 +17,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from spectrogram_dataset import SpectrogramDataset, AudioType
 from DSP.dsp_utils import FileFamily
 
-TEST_ALL = True
-#TEST_ALL = False
+#*******TEST_ALL = True
+TEST_ALL = False
 
 
 class Test(unittest.TestCase):
@@ -62,10 +62,18 @@ class Test(unittest.TestCase):
         for file in glob.glob('labels_for_testing_*.pickle'):
             os.remove(file)
         
-        os.remove('test_spectroA.txt')
-        os.remove('test_spectroB.txt')
-        os.remove('SamplesTests.sqlite')
-
+        try:
+            os.remove('test_spectroA.txt')
+        except Exception:
+            pass
+        try:
+            os.remove('test_spectroB.txt')
+        except Exception:
+            pass
+        try:
+            os.remove('SamplesTests.sqlite')
+        except Exception:
+            pass
 
     #------------------------------------
     # setUp 
@@ -420,6 +428,120 @@ class Test(unittest.TestCase):
                 
 
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroB_4_spectrogram.pickle'))
+
+    #------------------------------------
+    # testKfolds 
+    #-------------------
+    
+    
+    #*****@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testKfolds(self):
+        
+        # Create 20 fake spectrogram snippet files:
+        curr_dir = os.path.dirname(__file__)
+        files_to_delete = []
+        for i in range(0,21):
+            spectro_filename = Path(curr_dir).joinpath(f'fake_spectro{i}_spectrogram.pickle')
+            df = pd.DataFrame({'foo' : i, 'bar' : -i}, index=[0,1])
+            df.to_pickle(spectro_filename)
+            files_to_delete.append(spectro_filename)
+        try:
+            cmd = f'''INSERT INTO Samples (
+                 sample_id,
+                 recording_site,
+                 label,
+                 start_time_tick,
+                 end_time_tick,
+                 start_time,
+                 end_time,
+                 parent_low_freqs_energy,
+                 parent_med_freqs_energy,
+                 parent_high_freqs_energy,
+                 snippet_low_freqs_energy,
+                 snippet_med_freqs_energy,
+                 snippet_high_freqs_energy,
+                 snippet_filename
+                 )
+                 VALUES (0, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[0]}"),
+                        (1, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[1]}"),
+                        (2, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[2]}"),
+                        (3, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[3]}"),
+                        (4, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[4]}"),
+                        (5, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[5]}"),
+                        (6, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[6]}"),
+                        (7, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[7]}"),
+                        (8, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[8]}"),
+                        (9, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[9]}"),
+                        (10, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[10]}"),
+                        (11, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[11]}"),
+                        (12, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[12]}"),
+                        (13, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[13]}"),
+                        (14, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[14]}"),
+                        (15, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[15]}"),
+                        (16, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[16]}"),
+                        (17, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[17]}"),
+                        (18, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[18]}"),
+                        (19, "nouab", 0, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[19]}"),
+                        (20, "nouab", 1, 20, 30, 40, 50, 100, 200, 300, 400, 500, 600, "{files_to_delete[20]}");
+            '''
+            self.db.execute(cmd)
+            
+            # Since we set 'testing' to True when creating
+            # the spectrogrammer, we need to set its' sample_ids
+            # explicitly here:
+            self.spectr_dataset.sample_ids = range(0,21)
+            
+            # Simple kfolds with k=5, no repeat:
+
+            self.spectr_dataset.kfolds(
+                   n_splits=5,
+                   n_repeats=0,
+                   shuffle=False,
+                   random_state=None
+                   )
+            self.assertEqual(list(self.spectr_dataset.train_queue), 
+                             [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+            self.assertEqual(list(self.spectr_dataset.val_queue), 
+                             [0,1,2,3,4])
+            
+            # Test next() on test set, which will be 
+            # sample_id 5:
+            snippet_label_dict = next(self.spectr_dataset)
+            self.assertEqual(snippet_label_dict['label'], 0)
+            
+            # Check validation set:
+            self.spectr_dataset.switch_to_split('validate')
+            
+            # First val sample_id will be 0:
+            snippet_label_dict = next(self.spectr_dataset)
+            self.assertEqual(snippet_label_dict['label'], 1)
+            # First of the dfs: sum of rows and columns 
+            # should be 0:
+            self.assertEqual(snippet_label_dict['snippet_df'].sum().sum(), 0)
+
+            # Next: do 5 folds again, and pull sample-dfs/labels
+            # until all folds have been exhausted:
+
+            self.spectr_dataset.kfolds(
+                   n_splits=5,
+                   n_repeats=0,
+                   shuffle=False,
+                   random_state=None
+                   )
+            # Have 16 samples in each of the five folds.
+            # Should be able to draw 5*16=80 samples.
+            # Make the loop larger than that to see whether
+            # the StopIteration comes as expected:
+            for i in range(100):
+                try:
+                    df_label_dict = next(self.spectr_dataset)
+                except StopIteration:
+                    self.assertEqual(i, 19)
+
+        finally:
+            for file in files_to_delete:
+                os.remove(file)
+
 
 # ----------------- Main --------------
 

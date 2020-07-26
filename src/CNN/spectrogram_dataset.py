@@ -6,26 +6,30 @@ Created on Jul 7, 2020
 
 import ast
 from collections import deque
-import os
 import glob
+import os
 from pathlib import Path
 import re
 from sqlite3 import OperationalError as DatabaseError
 import sqlite3
 import sys
 
-import pandas as pd
 from pandas.core.frame import DataFrame
+from sklearn.model_selection import KFold
+from sklearn.model_selection._split import RepeatedKFold
 from torch.utils.data import Dataset
+
+from DSP.dsp_utils import AudioType
+from DSP.dsp_utils import DSPUtils
+from DSP.dsp_utils import FileFamily
+from elephant_utils.logging_service import LoggingService
+import numpy as np
+import pandas as pd
+
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from DSP.dsp_utils import DSPUtils
-from DSP.dsp_utils import FileFamily
-from DSP.dsp_utils import AudioType
-import numpy as np
 
-from elephant_utils.logging_service import LoggingService
 
 
 TESTING = False
@@ -318,10 +322,17 @@ class SpectrogramDataset(FrozenDataset):
             self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
 
         num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
-        num_samples = num_samples_row['num_samples']
-        # Our sample ids go from 0 to n
-        self.sample_ids = list(range(num_samples))
+        
+        # Total number of samples in the db:
+        self.num_samples = num_samples_row['num_samples']
 
+        # Our sample ids go from 0 to n. List of all sample ids:
+        self.sample_ids = list(range(self.num_samples))
+
+        # The following only needed in case the 
+        # class is used without either the split_dataset()
+        # or the kfolds() facility:
+        
         # Make a preliminary train queue with all the
         # sample ids. If split_dataset() is called later,
         # this queue will be replaced:
@@ -905,7 +916,30 @@ class SpectrogramDataset(FrozenDataset):
         try:
             next_sample_id = self.curr_queue.popleft()
         except IndexError:
-            raise StopIteration
+            # We are out of either test samples
+            # or validation samples. Get the next
+            # fold if there is one, and add the
+            # test/validation samples to the test
+            # and val queues. The following will
+            # throw StopIteration if no folds are
+            # left:
+
+            (train_sample_ids, validate_sample_ids) = \
+               next(self.folds_iter)
+               
+            self.train_queue.extend(train_sample_ids)
+            self.val_queue.extend(validate_sample_ids)
+            
+            self.train_labels.extend(self.labels_from_db(self.train_sample_ids))
+            self.validate_labels.extend(self.labels_from_db(self.validate_sample_ids))
+
+            # Retry getting a sample:
+            try:
+                next_sample_id = self.curr_queue.popleft()
+            except IndexError:
+                # Truly out of folds, though that should
+                # have caused an earlier StopIteration.
+                raise StopIteration
         
         res = self.db.execute(f'''
                                SELECT sample_id, label, snippet_filename
@@ -962,6 +996,85 @@ class SpectrogramDataset(FrozenDataset):
         '''
         return len(self.saved_queues[self.curr_split_id()])
 
+    #------------------------------------
+    # kfolds 
+    #-------------------
+
+    def kfolds(self, 
+               n_splits=5,
+               n_repeats=0,
+               shuffle=False,
+               random_state=None
+               ):
+        '''
+        Uses sklearn's KFold facility. 
+        https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
+        See also method kfolds_stratified() for balanced
+        folds.
+        
+        The 'X' in this context are sample ids that are eventually 
+        used by the dataloader to retrieve spectrograms. Recall
+        that each sample id stands for one spectrogram snippet. The
+        'y' vector in the KFold page is the 'label' column in the
+        Sqlite db, which is 1 or 0 for each column (i.e. time bin)
+        of the spectrogram.
+        
+        All methods on the sklearn KFold facility
+        are available in this class by the same name.
+        
+        After calling this method, calls to next() will
+        return train samples.
+        
+        
+        @param n_splits: number of folds to create 
+        @type n_splits: int
+        @param n_repeats: number times fold splitting should
+            be repeated (n-times k-fold cross validation.
+            Set to zero, the method uses sklearn KFold class,
+            else it uses the sklearn.RepeatedKFold
+        @type n_repeats: int
+        @param shuffle: whether or not to shuffle the 
+            data before splitting. Once split, the 
+            data in the folds are not shuffled 
+        @type shuffle: bool
+        @param random_state: if shuffle is set to True,
+            this argument allows for repeatability over
+            multiple runs
+        @type random_state: int
+        '''
+        if n_repeats == 0:
+            cross_validator = KFold(n_splits=n_splits,
+                                    shuffle=shuffle,
+                                    random_state=random_state)
+        else:
+            cross_validator = RepeatedKFold(n_splits=n_splits,
+                                            n_repeats=n_repeats,
+                                            shuffle=shuffle,
+                                            random_state=random_state)
+            
+        # The following retrieves *indices* into 
+        # our list of sample_ids. However, since
+        # our sample_ids are just numbers from 0 to n,
+        # the indices are equivalent to the sample ids
+        # themselves
+        
+        # The split method will return a generator
+        # object. Each item in this generator is
+        # a 2-tuple: a test set array and a validation
+        # set array. There will be n_splits such tuples.
+        
+        # We grab the first pair:
+        
+        self.folds_iter = cross_validator.split(self.sample_ids) 
+        (self.train_sample_ids, self.validate_sample_ids) = \
+            next(self.folds_iter)
+            
+        self.train_queue = deque(self.train_sample_ids)
+        self.val_queue   = deque(self.validate_sample_ids)
+        self.train_labels = self.labels_from_db(self.train_sample_ids)
+        self.validate_labels = self.labels_from_db(self.validate_sample_ids)
+        self.switch_to_split('train')
+        
     #------------------------------------
     # split_dataset 
     #-------------------
@@ -1077,6 +1190,37 @@ class SpectrogramDataset(FrozenDataset):
                                                  self.label_mapping,
                                                  self.sample_ids
                                                  )
+    #------------------------------------
+    # labels_from_db 
+    #-------------------
+    
+    def labels_from_db(self, sample_ids):
+        '''
+        Given a list of sample ids, return a 
+        list of ele yes/no labels:
+        
+        @param sample_ids: np.array of sample ids whose
+            labels are to be retrieved.
+        @type sample_ids: np.array
+        '''
+        
+        # Need to turn the sample_ids from
+        # ints to strings so that they are
+        # usable as a comma-separated list 
+        # in the query:
+        
+        sample_id_list =  ','.join([str(el) for el in list(sample_ids)])
+        cmd = f'''SELECT label
+                    FROM Samples
+                   WHERE sample_id in ({sample_id_list});
+              '''
+        try:
+            rows = self.db.execute(cmd)
+        except Exception as e:
+            raise DatabaseError(f"Could not retrieve labels: {repr(e)}") from e
+        labels = [row['label'] for row in rows]
+        return labels
+
 
     #------------------------------------
     # close
@@ -1093,6 +1237,18 @@ class SpectrogramDataset(FrozenDataset):
     #-------------------
     
     def save_queues(self, train_queue, val_queue, test_queue):
+        '''
+        Saving the train, validation, and test queues
+        allows post-mortem of a run: the db will contain
+        the sequence in which samples were processed.
+        
+        @param train_queue:
+        @type train_queue:
+        @param val_queue:
+        @type val_queue:
+        @param test_queue:
+        @type test_queue:
+        '''
         
         self.db.execute('DROP TABLE IF EXISTS TrainQueue')
         self.db.execute('CREATE TABLE TrainQueue (sample_id int)')
@@ -1105,13 +1261,16 @@ class SpectrogramDataset(FrozenDataset):
         
         # Turn [2,4,6,...] into tuples: [(2,),(4,),(6,),...]
         train_tuples = [(int(sample_id),) for sample_id in train_queue]
-        self.db.executemany("INSERT INTO TrainQueue VALUES(?);", train_tuples)
+        if len(train_tuples) > 0:
+            self.db.executemany("INSERT INTO TrainQueue VALUES(?);", train_tuples)
 
         val_tuples = [(int(sample_id),) for sample_id in val_queue]
-        self.db.executemany("INSERT INTO ValidateQueue VALUES(?);", val_tuples)
+        if len(val_tuples) > 0:
+            self.db.executemany("INSERT INTO ValidateQueue VALUES(?);", val_tuples)
 
         test_tuples = [(int(sample_id),) for sample_id in test_queue]
-        self.db.executemany("INSERT INTO TestQueue VALUES(?);", test_tuples)
+        if len(test_tuples) > 0:
+            self.db.executemany("INSERT INTO TestQueue VALUES(?);", test_tuples)
         
         self.db.commit()
 
