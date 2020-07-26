@@ -174,7 +174,9 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     test_loader.dataset.set_neg_features(adversarial_test_files)
     # Create repeated dataset with fixed indeces
     if parameters.HIERARCHICAL_REPEATS > 1:
-        train_loader.dataset.create_fixed_repeat_windows(parameters.HIERARCHICAL_REPEATS)
+        # Include Twice as many repeats for the positive examples!
+        train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS * 2, parameters.HIERARCHICAL_REPEATS)
+        train_loader.dataset.create_fixed_repeat_windows()
 
     dloaders = {'train':train_loader, 'valid':test_loader}
 
@@ -371,7 +373,7 @@ def main():
         train_adversarial_file = "model_0-False_Pos_Train.txt"
         if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
             train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
-            
+
         adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
         adversarial_train_files = []
         with open(adversarial_train_save_path, 'r') as f:

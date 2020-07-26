@@ -199,11 +199,18 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.neg_features = neg_features
         self.intialize_data(init_pos=True, init_neg=True)
 
-    def create_fixed_repeat_windows(self, repeats):
+    def scale_features(self, pos_factor, neg_factor):
+        self.pos_features *= pos_factor
+        self.pos_labels *= pos_factor
+        self.neg_features *= neg_factor
+        self.neg_labels *= neg_factor
+        # Re-form the feature and data set
+        self.features = self.pos_features + self.neg_features
+        self.labels = self.pos_labels + self.neg_labels
+
+
+    def create_fixed_windows(self):
         self.fixed_indeces = []
-        # Increase the size of the dataset by factor x-repeats
-        self.features *= repeats
-        self.labels *= repeats
 
         # Generate the fixed indeces
         for i in range(len(self.features)):
@@ -253,7 +260,7 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         # Let us try having multiple duplicate copies of data when 
         # using the shift windows setting
-        # Figure this out later!!
+        # Figure this out later!
         #if self.shift_windows:
         #    self.features *= 5 # Try for now!
         #    self.labels *= 5
