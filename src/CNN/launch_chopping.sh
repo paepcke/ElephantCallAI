@@ -15,16 +15,21 @@ fi
 read -r -d '' USAGE <<EOF
 Usage: $(basename $0) [-j --jobs][-d --destination] <spectrogram/label files and/or dirs>
     -h: This message
-    -j: Number of spectrogram chopping jobs to run simultaneouly; default: number of cores
-    -d: Destination directory for chopped spectrograms; default: with corresponding 24-hr spectrogram
+    -j: Number of spectrogram chopping jobs to run simultaneouly;
+        default: number of cores
+    -d: Destination directory for chopped spectrograms; 
+        default: with corresponding 24-hr spectrogram
+\n
 EOF
 
 OPTS=$(${getopt} --options hj:d: --long help,jobs:,destination: -- "$@")
 
 if [ $? != 0 ]
-then 
-   echo "Failed parsing options;\n${USAGE}"
-   exit 1
+then
+    # Use printf instead of echo to get the
+    # newlines right:
+    printf "Failed parsing options;\n${USAGE}"
+    exit 1
 fi
 
 eval set -- $OPTS
@@ -38,9 +43,9 @@ DEST_DIR=''
 
 while true; do
   case "$1" in
-      -h | --help ) SAVED_IFS=$IFS; IFS=; echo $USAGE; IFS=${SAVED_IFS} ; exit ;;
+      -h | --help ) SAVED_IFS=$IFS; IFS=; printf $USAGE; IFS=${SAVED_IFS} ; exit ;;
       -j | --jobs ) NUM_WORKERS=$2; shift; shift ;;
-      -d | --destination ) DEST_DIR=2; shift; shift ;;
+      -d | --destination ) DEST_DIR=$2; shift; shift ;;
       -- ) shift ;  break ;;
        * ) echo "Could not assign options." ; exit 1 ;;
   esac
@@ -53,25 +58,36 @@ infiles=$@
 if [[ -z $infiles ]]
 then
     echo "Must provide at least one infile or in-directory."
-    echo $USAGE
+    printf $USAGE
     exit 1
 fi
+
+#********
+# echo "Number of jobs: $NUM_WORKERS"
+# echo "Destination:    $DEST_DIR"
+# echo "Infiles         $infiles"
+# echo "Exiting intentionally"
+# exit
+#********
 
 # Our worker ranks are 0...(NUM_WORKERS - 1):
 let MAX_WORKER_RANK="$NUM_WORKERS - 1"
 
 # Generate a sequence of worker rank integers.
-# This results in :0\n1\n2\n...:
-WORKER_RANKS=$(seq 0 $MAX_WORKER_RANK)
-# Replace the \n by spaces:
-WORKER_RANKS="${WORKER_RANKS//\\n/ }"
+# This results in :0 1 2 ... The -s changes
+# separator from \n to space:
+WORKER_RANKS=$(seq -s ' ' 0 $MAX_WORKER_RANK)
                
 echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 
 # For testing, use the following as the first
 # line of the command, commented the line below it:
-#cmd="time parallel echo --outdir $DEST_DIR "
-cmd="time parallel ./chop_spectrograms.py --outdir $DEST_DIR "
+cmd="time parallel echo  "
+#cmd="time parallel ./chop_spectrograms.py "
+if [[ ! -z $DEST_DIR ]]
+then
+    cmd="$cmd --outdir $DEST_DIR"
+fi
 cmd="$cmd --threshold_db=-30 --low_freq=20 --high_freq=40 --freq_cap=30 "
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 
