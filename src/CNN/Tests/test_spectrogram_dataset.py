@@ -81,20 +81,28 @@ class Test(unittest.TestCase):
 
     def setUp(self):
 
-        # Instance of a SpectrogramDataset that
-        # does nothing in its init method
-        self.spectr_dataset = SpectrogramDataset(testing=True)
-        
-        self.db = self.spectr_dataset.get_db(self.test_db_path)
+
+        self.db = SpectrogramDataset.get_db(self.test_db_path)
         # Empty the test db Samples table:
         self.db.execute("DELETE FROM Samples;")
         self.db.commit()
+
+        self.files_to_delete = self.prepare_kfolds_test()
+
+        rows = self.db.execute("SELECT sample_id FROM Samples;")
+        self.sample_ids = [row['sample_id'] for row in rows]
+        
+        # Instance of a SpectrogramDataset that
+        # does nothing in its init method
+        self.spectr_dataset = SpectrogramDataset(testing=True,
+                                                 test_db=self.db)
         
         # The frequency bands in which energy means
         # are computed are usually betwen 0 and 60,
         # But our test dfs only have three lines with
         # index 1,2,3. So artificially change the 
         # dataset instance's freq ranges:
+        
         self.spectr_dataset.LOW_FREQ_BAND = pd.Interval(left=0, right=1)
         self.spectr_dataset.MED_FREQ_BAND = pd.Interval(left=1, right=2)
         self.spectr_dataset.HIGH_FREQ_BAND = pd.Interval(left=2, right=3)
@@ -242,6 +250,7 @@ class Test(unittest.TestCase):
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testChopOneSpectrogram(self):
         
+        self.db.execute("DELETE FROM Samples;")
         spectrogram = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
                                     [ 10, 20, 30, 40, 50, 60, 70],
                                     [100,200,300,400,500,600,700],
@@ -301,17 +310,15 @@ class Test(unittest.TestCase):
         
         self.assertTrue(row['snippet_filename'].endswith('labels_for_testing_2_spectrogram.pickle'))
         
-        # Times 4,8
-        #   Matches label 1.293    6.464999999991385
-        # ==> Label: 1
-        #***** Test for error when calling again
-        
     #------------------------------------
     # testChopMultipleSpectrograms
     #-------------------
      
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testChopMultipleSpectrograms(self):
+        
+        self.db.execute("DELETE FROM Samples;")
+        
         spectro1 = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
                                  [ 10, 20, 30, 40, 50, 60, 70],
                                  [100,200,300,400,500,600,700],
@@ -430,18 +437,18 @@ class Test(unittest.TestCase):
                 self.assertTrue(row['snippet_filename'].endswith('test_spectroB_4_spectrogram.pickle'))
 
     #------------------------------------
-    # testKfold 
+    # testSimpleKfold 
     #-------------------
     
     
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testSimpleKfold(self):
+        '''
+        Examine just the first result of a
+        first of five folds
+        '''
 
         try:
-            # Prepare the db with samples,
-            # and create fake pickled spectrograms:
-            files_to_delete = self.prepare_kfolds_test()
-
             # Simple kfold with k=5, no repeat:
 
             self.spectr_dataset.kfold(
@@ -450,27 +457,65 @@ class Test(unittest.TestCase):
                    shuffle=False,
                    random_state=None
                    )
-            self.assertEqual(list(self.spectr_dataset.train_queue),
-                             [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
-            self.assertEqual(list(self.spectr_dataset.val_queue), 
-                             [0,1,2,3])
+            # Cannot check the precise content of train and
+            # validate queues, b/c they may vary. Also: sklearn
+            # plays with fold lengths to make them come out even.
             
-            # Test next() on test set, which will be 
-            # sample_id 5:
-            snippet_label_dict = next(self.spectr_dataset)
-            self.assertEqual(snippet_label_dict['label'], 1)
+            # Just ensure that train and validate sets are
+            # disjoint, and that only numbers for which we have
+            # sample_ids are present:
+            
+            train_set = set(self.spectr_dataset.train_queue)
+            val_set   = set(self.spectr_dataset.val_queue)
+            all_set   = train_set.union(val_set)
+            self.assertEqual(len(train_set.intersection(val_set)), 0)
+
+            # Overlap of train + val sets should be
+            # equal to the set of all sample_ids:
+            fold_samples_intersect = all_set.intersection(set(self.sample_ids))
+            self.assertEqual(fold_samples_intersect, set(self.sample_ids))
+
+            # Test next() method on test set. Get
+            # dict {'spectrogram' : ..., 'label : ...}:
+            spectro_label_dict = next(self.spectr_dataset)
+            spectro_df = spectro_label_dict['spectrogram']
+            # The fake spectrograms all add to zero when
+            # all elements are summed:
+            sum_total = sum(sum(spectro_df.iloc[:,:].to_numpy()))
+            self.assertEqual(sum_total, 0)
+            
+            # Due to clever setup by the author, each 
+            # fake spectrogram dataframe's [0,0] element
+            # corresponds to the snippet_id of the record
+            # whence the row came:
+            snippet_id = spectro_df.iloc[0,0]
+            true_label = self.spectr_dataset.labels_from_db([snippet_id])
+            self.assertEqual(spectro_label_dict['label'], true_label[0])
+            
             
             # Check validation set:
             self.spectr_dataset.switch_to_split('validate')
             
-            # First val sample_id will be 0:
-            snippet_label_dict = next(self.spectr_dataset)
-            self.assertEqual(snippet_label_dict['label'], 1)
-            # First of the dfs: sum of rows and columns 
-            # should be 0:
-            self.assertEqual(snippet_label_dict['snippet_df'].sum().sum(), 0)
+            spectro_label_dict = next(self.spectr_dataset)
+            sum_total = sum(sum(spectro_df.iloc[:,:].to_numpy()))
+            self.assertEqual(sum_total, 0)
+        finally:
+            for file in self.files_to_delete:
+                os.remove(file)
 
-            # Next: do 5 folds again, and pull sample-dfs/labels
+    #------------------------------------
+    # testExhaustFolds 
+    #-------------------
+    
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testExhaustFolds(self):
+        '''
+        Pulling all samples from all of five
+        folds; check validity and termination.
+        '''
+        try:
+
+            # Do 5 folds again, and pull sample-dfs/labels
             # until all folds have been exhausted:
 
             self.spectr_dataset.kfold(
@@ -482,24 +527,29 @@ class Test(unittest.TestCase):
             # Have 16 samples in each of the five folds.
             # Should be able to draw 5*16=80 samples.
             # Make the loop larger than that to see whether
-            # the StopIteration comes as expected:
-            for i in range(100):
+            # the StopIteration comes as expected. One
+            # the way, collect all snippet_id so we can
+            # check coverage later. We do that by knowing
+            # that each fake spectrogram's element [0,0]
+            # holds the snippet_id in this test setup:
+            
+            all_snippet_ids = set()
+            for _i in range(1000):
                 try:
-                    _df_label_dict = next(self.spectr_dataset)
+                    df_label_dict = next(self.spectr_dataset)
+                    spectrogram = df_label_dict['spectrogram']
+                    # Add snippet_id to accumulation set:
+                    all_snippet_ids.add(spectrogram.iloc[0,0])
                 except StopIteration:
-                    # Should have gone through 
-                    #   16 samples-per-fold * 5 folds = 80 samples
-                    # So i should have gone beyond that by 1:
-                    self.assertEqual(i, 80)
+                    coverage = all_snippet_ids.intersection(set(self.sample_ids))
+                    self.assertEqual(coverage, all_snippet_ids)
+                    
                     # The train queue should now be empty:
                     self.assertEqual(len(self.spectr_dataset.train_queue), 0)
-                    # We pulled nothing from the validation queue.
-                    # So should have 4 samples-per-fold * 5 folds = 20 samples
-                    self.assertEqual(len(self.spectr_dataset.val_queue), 20)
                     break
 
         finally:
-            for file in files_to_delete:
+            for file in self.files_to_delete:
                 os.remove(file)
 
     #------------------------------------
@@ -513,8 +563,7 @@ class Test(unittest.TestCase):
         '''
         
         try:
-            
-            files_to_delete = self.prepare_kfolds_test()
+
             # Next: do 5 folds again, and pull sample-dfs/labels
             # until all folds have been exhausted:
 
@@ -524,26 +573,24 @@ class Test(unittest.TestCase):
                    shuffle=False,
                    random_state=None
                    )
-            # Have 16 samples in each of the five folds.
-            # Should be able to draw 5*16=80 samples.
-            # Make the loop larger than that to see whether
-            # the StopIteration comes as expected:
-            for i in range(100):
+            # Collect snippet ids on the way (see comment
+            # in analogous spot of testExhaustFolds():
+            all_snippet_ids = set()
+            for _i in range(1000):
                 try:
-                    _df_label_dict = next(self.spectr_dataset)
+                    df_label_dict = next(self.spectr_dataset)
+                    spectrogram = df_label_dict['spectrogram']
+                    # Add snippet_id to accumulation set:
+                    all_snippet_ids.add(spectrogram.iloc[0,0])
                 except StopIteration:
-                    # Should have gone through 
-                    #   16 samples-per-fold * 5 folds = 80 samples
-                    # So i should have gone beyond that by 1:
-                    self.assertEqual(i, 80)
+                    coverage = all_snippet_ids.intersection(set(self.sample_ids))
+                    self.assertEqual(coverage, all_snippet_ids)
+                    
                     # The train queue should now be empty:
                     self.assertEqual(len(self.spectr_dataset.train_queue), 0)
-                    # We pulled nothing from the validation queue.
-                    # So should have 4 samples-per-fold * 5 folds = 20 samples
-                    self.assertEqual(len(self.spectr_dataset.val_queue), 20)
                     break
         finally:
-            for file in files_to_delete:
+            for file in self.files_to_delete:
                 os.remove(file)
 
     #------------------------------------
@@ -555,12 +602,7 @@ class Test(unittest.TestCase):
         '''
         Ask for 5 folds, repeated twice; exhaust them all
         '''
-        
         try:
-            
-            files_to_delete = self.prepare_kfolds_test()
-            # Next: do 5 folds, repeated and pull sample-dfs/labels
-            # until all folds have been exhausted:
 
             self.spectr_dataset.kfold(
                    n_splits=5,
@@ -568,30 +610,38 @@ class Test(unittest.TestCase):
                    shuffle=False,
                    random_state=None
                    )
-            # Have 16 samples in each of the five folds.
-            # Should be able to draw 5*16=80 samples.
-            # Make the loop larger than that to see whether
-            # the StopIteration comes as expected:
-            for i in range(1000):
+            
+            # To avoid clutter:
+            dataset     = self.spectr_dataset
+            train_queue = dataset.train_queue
+            
+            # Track number of folds (one was
+            # consumed as part of the call to
+            # kfold:
+            num_folds_consumed = 1
+            
+            # We 'intuit' that a new fold has been
+            # loaded in SpectrogramDataset's next()
+            # method by observing the train_queue
+            # suddenly more full than before.
+            
+            observed_train_queue_len = len(train_queue) 
+            for _i in range(1000):
                 try:
-                    _df_label_dict = next(self.spectr_dataset)
+                    # Grab a spectrogram/label pair:
+                    next(dataset)['label']
+                    curr_train_queue_len = len(train_queue) 
+                    if curr_train_queue_len >= observed_train_queue_len:
+                        num_folds_consumed += 1
+                        observed_train_queue_len = curr_train_queue_len
                 except StopIteration:
-                    # Should have gone through 
-                    #   2 repetions * 16 samples-per-fold * 5 folds = 160 samples
-                    # So i should have gone beyond that by 1:
-                    self.assertEqual(i, 160)
-                    # The train queue should now be empty:
-                    self.assertEqual(len(self.spectr_dataset.train_queue), 0)
-                    # We pulled nothing from the validation queue.
-                    # So should have 
-                    #   2 repetitions * 4 samples-per-fold * 5 folds = 40 samples
-                    self.assertEqual(len(self.spectr_dataset.val_queue), 40)
                     break
-                except Exception as _e:
-                    raise
+            # We should have consumed 2 repetitions * 5 folds-per-rep = 10
+            # Folds 0 to 9:
+            self.assertEqual(num_folds_consumed, 9) 
         finally:
-            for file in files_to_delete:
-                os.remove(file)
+            for file in self.files_to_delete:
+                os.remove(file)        
 
     #------------------------------------
     # testRepeatedStratified 
@@ -600,66 +650,69 @@ class Test(unittest.TestCase):
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testRepeatedStratified(self):
         '''
-        Ask for 5 folds, repeated twice; exhaust them all.
+        Ask for 5 folds, exhaust them all.
         Each time, the number of yes and no labels must
         be the same (for even number of samples)
         '''
         
         try:
-            
-            files_to_delete = self.prepare_kfolds_test()
-            # Next: do 5 folds, repeated and pull sample-dfs/labels
+
+            # Do 5 folds, repeated and pull sample-dfs/labels
             # until all folds have been exhausted:
 
             self.spectr_dataset.kfold_stratified(
                    n_splits=5,
-                   n_repeats=2,
+                   n_repeats=0,
                    shuffle=False,
                    random_state=None
                    )
             
-            # A full fold has how many samples?
-            #train_samples_per_fold     = len(self.spectr_dataset.train_queue)
-            validate_samples_per_fold  = len(self.spectr_dataset.val_queue)
-            
             # To avoid clutter:
-            val_queue   = self.spectr_dataset.val_queue
             dataset     = self.spectr_dataset
+            train_queue = dataset.train_queue
+            saved_train_queue = dataset.train_queue.copy()
             
-            num_folds_consumed = 0
-            
-            # Have 16 samples in each of the five folds.
-            # Should be able to draw 5*16=80 samples.
-            # Make the loop larger than that to see whether
-            # the StopIteration comes as expected:
-            
-            dataset.switch_to_split('validate')
             for _i in range(1000):
                 try:
-                    # Save preview of next sample id:
-                    label = next(dataset)['label']
-                    # If we just caused a refill of the validation queue
-                    # with a new fold, test whether same number
-                    # of positive and negative samples in train set:
-                    # The next() call above re-filled the val queue,
-                    # but then gave us the first of that queue; 
-                    # therefore the -1 below:
-                    if len(val_queue) == validate_samples_per_fold - 1:
-                        # Get labels of the samples still in val queue:
-                        all_val_labels = [label]+ dataset.labels_from_db(list(val_queue))
-                        # Number of 1s should be half the val set's length:
-                        self.assertEqual(sum(all_val_labels),
-                                         len(all_val_labels) / 2
-                                         )
-                        num_folds_consumed += 1
+                    # Grab a spectrogram/label pair:
+                    spectro_label_dict = next(dataset)
+                    # Did we receive a new fold?
+                    if self.spectr_dataset.new_train_fold_len is not None:
+                        
+                        # Is it truly new? Compare to the one we
+                        # saved. Which sample_id did we just get?
+                        spectrogram = spectro_label_dict['spectrogram']
+                        
+                        # Sample id is encoded in element 0,0, b/c
+                        # we set the fake spectrograms up that way:
+                        sample_id = spectrogram.iloc[0,0]
+                        
+                        # Put that sample id back into a copy of 
+                        # the current train queue to get the complete
+                        # fold (the next() call above already popped one:
+                        
+                        new_fold_train_queue = [sample_id] + list(train_queue.copy())
+                        self.assertNotEqual(new_fold_train_queue, 
+                                            saved_train_queue)
+                        saved_train_queue = new_fold_train_queue
+                        
+                        # New fold; is it balanced?
+                        labels = self.spectr_dataset.labels_from_db(train_queue)
+                        self.assertEqual(sum(labels), len(labels) / 2)
+                        
                 except StopIteration:
                     break
-            # We should have consumed 2 repetitions * 5 folds-per-rep = 10
-            self.assertEqual(num_folds_consumed, 10) 
         finally:
-            for file in files_to_delete:
+            for file in self.files_to_delete:
                 os.remove(file)        
 
+    #------------------------------------
+    # testLen 
+    #-------------------
+
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testLen(self):
+        self.assertEqual(len(self.spectr_dataset), len(self.sample_ids))
 
     #------------------------------------
     # testGetNSplit 
@@ -668,7 +721,6 @@ class Test(unittest.TestCase):
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testGetNSplit(self):
         try:
-            files_to_delete = self.prepare_kfolds_test()
             # Next: do 5 folds, repeated and pull sample-dfs/labels
             # until all folds have been exhausted:
 
@@ -683,7 +735,7 @@ class Test(unittest.TestCase):
             self.assertEqual(num_folds, 10)
             
         finally:
-            for file in files_to_delete:
+            for file in self.files_to_delete:
                 os.remove(file)        
 
 
@@ -707,11 +759,6 @@ class Test(unittest.TestCase):
             files_to_delete.append(spectro_filename)
             
         self.create_samples_in_db(files_to_delete)
-        
-        # Since we set 'testing' to True when creating
-        # the spectrogrammer, we need to set its' sample_ids
-        # explicitly here:
-        self.spectr_dataset.sample_ids = list(range(0,20))
         
         return files_to_delete
 
