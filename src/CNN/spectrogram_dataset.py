@@ -48,8 +48,52 @@ class ChopError(Exception):
 
 class SpectrogramDataset(Dataset):
     '''
-    Torch dataset for iterating over spectrograms.
-    Assumption:
+    Torch dataset for iterating over spectrogram snippets,
+    each of which is associated with an integer label.
+
+    The dataset behaves like both an iterator and a sequence.
+    That is both methods for interacting with the 
+    dataset work, and return dicts with spectrogram-label
+    items:
+    
+        for sample_dict in my_dataset:
+            print(sample_dict['spectrogram']
+            print(sample_dict['label']
+            
+    and:
+        sample_dict_14 = my_dataset[14]
+    
+    In addition, the class offers several flavors of
+    kfold cross validation:
+    
+        kfold                : k folds
+        repeatedKfold        : k folds repeated n times
+        stratifiedKfold      : each fold is guaranteed to
+                               be balanced across all label
+                               classes
+        repated stratified   : stratified kfold repeated n times.
+        
+    See scikit-learn's kfold facility for documentation. It is
+    used under the hood. All information other then the spectrograms
+    themselves are kept in the Samples table of an Sqlite3 database.
+    The following documentation refers to this db as the "Samples db"
+    
+    The instantiation of this class accomplishes several tasks,
+    as needed. The tasks are derived from the arguments to _init__():
+    
+    1. If only the location of an already existing Samples db is provided
+       its content are used, and no additional work is required.
+    2. If no already existing Samples db is specified, but a mixed list
+       of directories and files is provided, then the list is assumed
+       to contain paths to 24-hr spectrogram files and Raven label files.
+       All spectrograms are chopped into SNIPPET_WIDTH second snippets.
+       Those snippets are the dataset samples. Using the label file
+       that corresponds to each 24-hr spectrogram, an Sqlite db is created.
+    3. Both, a Samples db and additional 24-hr spectrograms and their
+       label files are specified. In that case the additional spectrograms
+       are chopped and added to the Samples db.
+    
+    Assumptions:
         o Given one directory that contains label files
           as those created by Raven.
         o Given any number of directories that only contain 
@@ -64,35 +108,41 @@ class SpectrogramDataset(Dataset):
                extension .txt
              - Spectrogram file names begin with a 
                file root, and end with _spectrogram.pickle if
-               the are 24 hr spectrograms. Else the end with
-               _spectrogram_<n>.pickle 
+               the are 24 hr spectrograms. Else, if they
+               are spectrogram snippets choped from a 24-hr
+               spectrogram, they end with _spectrogram_<n>.pickle 
         o The spectrograms are created by Spectrogrammer 
           (see spectrogrammer.py), and are Pandas dataframes.
           The indexes (row labels) are frequencies. The 
-          columns names are absolute times in seconds into
+          column names are absolute times in seconds into
           the 24hr recording of which the spectrogram is
           a part.
           
     We create an Sqlite database with metadata about each 
     spectrogram. One spectrogram is one sample. Schema:
+    
         o Table Samples:
-                  * sample_id int,
-                  * label tinyint,   # Has call or not
-                  * num_calls int,   # May have multiple calls in one spectrogram
-                  * start_time int,  # Seconds into the original 24hr recording
-                  * end_time int,
-                  * spectroFilename varchar(255),
-                  * recordingFilename varchar(255) # Name of 24hr wav file. 
-
-???Needed?        o Table Files
-                  * processed_dir varchar(255)
-                  
-
-    This class behaves like an interator and a dict.
-    The keys to the dict are sample_id values.
+        
+			CREATE TABLE Samples(
+			    sample_id INTEGER PRIMARY KEY,
+			    recording_site varchar(100),
+			    label tinyint,
+			    start_time_tick int,
+			    end_time_tick int,
+			    start_time float,
+			    end_time float,
+			    parent_low_freqs_energy float,
+			    parent_med_freqs_energy float,
+			    parent_high_freqs_energy float,
+			    snippet_low_freqs_energy float,
+			    snippet_med_freqs_energy float,
+			    snippet_high_freqs_energy float,
+			    snippet_filename varchar(1000)
+			    )
+			
         
     An additional feature is the option for integrated
-    train/validation/test splits. Calling split_dataset()
+    train/validation splits. Calling split_dataset()
     internally produces input queues that feed three 
     iterators. Callers switch between these iterators via
     the switch_to_split() method.
@@ -146,7 +196,7 @@ class SpectrogramDataset(Dataset):
 
             self.db = SpectrogramDataset.get_db(sqlite_db_path)
             
-            # Get already processed dirs. The 'list()' pull all hits from
+            # Get already processed dirs. The 'list()' pulls all hits from
             # the db at once (like any other iterator)
             processed_dirs = list(self.db.execute('''
                                         SELECT processed_dirs FROM Directories;
@@ -223,7 +273,6 @@ class SpectrogramDataset(Dataset):
         seconds. Place into the Sqlite db the location of each
         spectrogram, its start/end times, the 'parent' 
         24-hr spectrogram, and the filename of the snippet.
-        The ****Snippe_id alone is not key!!!!!****
         
         @param dirs_or_files_to_do:
         @type dirs_or_files_to_do:
@@ -1041,48 +1090,6 @@ class SpectrogramDataset(Dataset):
             raise DatabaseError(f"Could not close sqlite db: {repr(e)}") from e
 
     #------------------------------------
-    # save_queues 
-    #-------------------
-    
-    def save_queues(self, train_queue, val_queue, test_queue):
-        '''
-        Saving the train, validation, and test queues
-        allows post-mortem of a run: the db will contain
-        the sequence in which samples were processed.
-        
-        @param train_queue:
-        @type train_queue:
-        @param val_queue:
-        @type val_queue:
-        @param test_queue:
-        @type test_queue:
-        '''
-        
-        self.db.execute('DROP TABLE IF EXISTS TrainQueue')
-        self.db.execute('CREATE TABLE TrainQueue (sample_id int)')
-
-        self.db.execute('DROP TABLE IF EXISTS ValidateQueue')
-        self.db.execute('CREATE TABLE ValidateQueue (sample_id int)')
-
-        self.db.execute('DROP TABLE IF EXISTS TestQueue')
-        self.db.execute('CREATE TABLE TestQueue (sample_id int)')
-        
-        # Turn [2,4,6,...] into tuples: [(2,),(4,),(6,),...]
-        train_tuples = [(int(sample_id),) for sample_id in train_queue]
-        if len(train_tuples) > 0:
-            self.db.executemany("INSERT INTO TrainQueue VALUES(?);", train_tuples)
-
-        val_tuples = [(int(sample_id),) for sample_id in val_queue]
-        if len(val_tuples) > 0:
-            self.db.executemany("INSERT INTO ValidateQueue VALUES(?);", val_tuples)
-
-        test_tuples = [(int(sample_id),) for sample_id in test_queue]
-        if len(test_tuples) > 0:
-            self.db.executemany("INSERT INTO TestQueue VALUES(?);", test_tuples)
-        
-        self.db.commit()
-
-    #------------------------------------
     # get_db 
     #-------------------
 
@@ -1134,5 +1141,3 @@ class SpectrogramDataset(Dataset):
                     ''')
         db.commit()
         return db
-
-

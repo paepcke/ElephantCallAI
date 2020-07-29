@@ -2,8 +2,9 @@
 '''
 Created on May 4, 2020
 
-Batch-creates noise gated elephant files, associated
-spectrograms and mask files (if requested).
+Given a list of elephant recording .wav files, 
+batch-creates noise gated elephant files, associated
+24-hr spectrograms, and mask files (if requested).
 
 Results are placed into a command line specified
 destination dir. On request, associated text files

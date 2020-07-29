@@ -14,33 +14,37 @@ class SpectrogramDataLoader(DataLoader):
     A dataloader that works with instances of 
     SpectrogramDataset (see spectrogram_dataset.py).
     
-    Usable as either a dictionary with sample_id 
-    being the key, or as an iterator. Each item
-    returned by next() is a dict with a spectrogram
-    snippet and the associated binary class (e.g. 
-    contains elephant call or not).
+    Samples are delivered as dicts, and may be
+    obtained by either of two methods:
+    
+        for sample_dict in my_dataloader:
+            print(sample_dict['spectrogram']
+            print(sample_dict['label']
+            
+    and:
+        sample_dict_14 = my_dataloader[14]
+    
     
     Best used with this module's cross validation
     facility. See kfold() and kfold_stratified().
-    That latter ensures class balance in each
+    The latter method ensures class balance in each
     fold. See corresponding sklearn methods, which
     are used under the cover.
     
     For distributed training, use the MultiprocessingDataloader
     subclass.
     
-    This class simply wraps such spectrogram_dataset. See
-    header comment in that file for lots more
-    information, such as dataset splitting, 
-    kfold crossvalidation, switching between 
-    splits, interacting either as a stream or a dict. 
+    This class simply wraps spectrogram_dataset instance.
+    See header comment in spectrogram_dataset.py for lots more
+    information, such as switching between 
+    test and validation folds.
     
-    Instances can be used like any other Pytorch
+    Instances of this class can be used like any other Pytorch
     dataloader.
     
     This class adds a dataset split context manager.
     It allows callers to interact temporarily with 
-    a particular split: test/validate/train, and
+    a particular split: test/validate, and
     then return to the current split. Example:
     
       with set_split_id('validate'):
@@ -53,7 +57,6 @@ class SpectrogramDataLoader(DataLoader):
     
     def __init__(self, dataset, *args, **kwargs):
         super().__init__(dataset, *args, **kwargs)
-        self.my_split = dataset.curr_split_id()
 
     #------------------------------------
     # kfold 
