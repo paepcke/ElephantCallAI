@@ -694,7 +694,7 @@ class FileFamily(object):
         elif fpath.suffix == '.txt':
             self.file_type = AudioType.LABEL
         elif fpath.suffix == '.npy':
-            self.file_type = AudioType.Mask
+            self.file_type = AudioType.MASK
         elif fpath.suffix == '.png':
             self.file_type = AudioType.IMAGE
         elif str(fpath).endswith('_spectrogram.pickle'):
