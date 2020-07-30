@@ -267,11 +267,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outdir',
                         help='directory for outfiles; default /tmp',
                         default='/tmp');
-    parser.add_argument('-x', '--limit',
-                        type=int,
-                        default=None,
-                        help='maximum number of wav files to process; default: all'
-                        );
     parser.add_argument('--num_workers',
                         type=int,
                         default=0,
@@ -290,7 +285,6 @@ if __name__ == '__main__':
     
     SpectrogramChopper(args.infiles,
         snippet_outdir=args.outdir,
-        limit=args.limit,
         num_workers=args.num_workers,
         this_worker=args.this_worker,
         logfile=args.logfile)
