@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from spectrogram_dataset import SpectrogramDataset
-from DSP/dsp_utils import AudioType, FileFamily
+from DSP.dsp_utils import AudioType, FileFamily
 from elephant_utils.logging_service import LoggingService
 
 class SpectrogramChopper(object):
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     args = parser.parse_args();
     
     SpectrogramChopper(args.infiles,
-        outdir=args.outdir,
+        snippet_outdir=args.outdir,
         limit=args.limit,
         num_workers=args.num_workers,
         this_worker=args.this_worker,
