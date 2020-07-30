@@ -22,7 +22,7 @@ Usage: $(basename $0) [-j --jobs][-d --destination] <spectrogram/label files and
 \n
 EOF
 
-OPTS=$(${getopt} --options hj:d: --long help,jobs:,destination: -- "$@")
+OPTS=$(${getopt} --options hj:o: --long help,jobs:,outdir: -- "$@")
 
 if [ $? != 0 ]
 then
@@ -39,13 +39,13 @@ eval set -- $OPTS
 
 NUM_WORKERS=$(getconf _NPROCESSORS_ONLN)
 
-DEST_DIR=''
+OUTDIR=''
 
 while true; do
   case "$1" in
       -h | --help ) SAVED_IFS=$IFS; IFS=; printf $USAGE; IFS=${SAVED_IFS} ; exit ;;
       -j | --jobs ) NUM_WORKERS=$2; shift; shift ;;
-      -d | --destination ) DEST_DIR=$2; shift; shift ;;
+      -o | --outdir ) OUTDIR=$2; shift; shift ;;
       -- ) shift ;  break ;;
        * ) echo "Could not assign options." ; exit 1 ;;
   esac
@@ -64,7 +64,7 @@ fi
 
 #********
 # echo "Number of jobs: $NUM_WORKERS"
-# echo "Destination:    $DEST_DIR"
+# echo "Destination:    $OUTDIR"
 # echo "Infiles         $infiles"
 # echo "Exiting intentionally"
 # exit
@@ -84,11 +84,10 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 # line of the command, commented the line below it:
 cmd="time parallel echo  "
 #cmd="time parallel ./chop_spectrograms.py "
-if [[ ! -z $DEST_DIR ]]
+if [[ ! -z $OUTDIR ]]
 then
-    cmd="$cmd --outdir $DEST_DIR"
+    cmd="$cmd --outdir $OUTDIR"
 fi
-cmd="$cmd --threshold_db=-30 --low_freq=20 --high_freq=40 --freq_cap=30 "
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 
 $cmd

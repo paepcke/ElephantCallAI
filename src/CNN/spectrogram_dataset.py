@@ -198,9 +198,13 @@ class SpectrogramDataset(Dataset):
             
             # Get already processed dirs. The 'list()' pulls all hits from
             # the db at once (like any other iterator)
-            processed_dirs = list(self.db.execute('''
-                                        SELECT processed_dirs FROM Directories;
-                                                  '''))
+            try:
+                processed_dirs = list(self.db.execute('''
+                                            SELECT dir_or_file_name FROM DirsAndFiles;
+                                                      '''))
+            except DatabaseError as e:
+                raise DatabaseError(f"Could not check for already processed work: {repr(e)}") from e
+                
             if dirs_of_spect_files is not None:
                 # Process those of the given dirs_of_spect_files that 
                 # are not already in the db:
@@ -208,7 +212,7 @@ class SpectrogramDataset(Dataset):
             else:
                 dirs_or_files_to_do = set()
     
-            if len(dirs_or_files_to_do) == 0:
+            if len(dirs_or_files_to_do) > 0:
                 self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
     
         num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
@@ -296,14 +300,15 @@ class SpectrogramDataset(Dataset):
             # Name without path and extention:
             file_root = file_family.file_root
             if file_family.file_type == AudioType.SPECTRO:
-                # 24-hour spectrogram: note corresponding label,
-                # file:
-                full_spectrograms_queued[file_root] = os.path.join(file_family['path'],
-                                                       file_family['label'])
+                # Looking at a 24hr spectrogram. Map that
+                # to its corresponding label file:
+                full_spectrograms_queued[file] = file_family.fullpath(AudioType.LABEL)
                 continue
             if file_family.file_type == AudioType.SNIPPET:
                 # No need to process the corresponding full 
-                # spectrogram, if we encounter it:
+                # spectrogram, if we encounter ever encounter
+                # it; we assume that full spectro is taken
+                # care of:
                 try:
                     del full_spectrograms_queued[file_root]
                 except Exception:
@@ -337,6 +342,8 @@ class SpectrogramDataset(Dataset):
                        in seconds.
         
         @param spectro_dict: 24-hr spectrograms to chop
+            mapping full paths to spectrogram to their corresponding
+            label files.
         @type spectro_dict: {str:str}
         '''
         try:
@@ -391,17 +398,31 @@ class SpectrogramDataset(Dataset):
         @type spectro: pd.DataFrame
         '''
         
+        # It is possible for some frequency ranges
+        # to not be represented in the spectrogram.
+        # For those cases we set the corresponding
+        # mean to zero:
+        
         low_freq_slice = spectro[(spectro.index.values >= self.LOW_FREQ_BAND.left) & 
                                  (spectro.index.values < self.LOW_FREQ_BAND.right)]
-        low_freq_mean  = low_freq_slice.mean().mean()
+        if low_freq_slice.empty:
+            low_freq_mean = 0
+        else:
+            low_freq_mean  = low_freq_slice.mean().mean()
         
         med_freq_slice = spectro[(spectro.index.values >= self.MED_FREQ_BAND.left) & 
                                  (spectro.index.values < self.MED_FREQ_BAND.right)]
-        med_freq_mean  = med_freq_slice.mean().mean()
+        if med_freq_slice.empty:
+            med_freq_mean = 0
+        else:
+            med_freq_mean  = med_freq_slice.mean().mean()
         
         high_freq_slice = spectro[(spectro.index.values >= self.HIGH_FREQ_BAND.left) & 
                                  (spectro.index.values < self.HIGH_FREQ_BAND.right)]
-        high_freq_mean  = high_freq_slice.mean().mean()
+        if high_freq_slice.empty:
+            high_freq_mean = 0
+        else:
+            high_freq_mean  = high_freq_slice.mean().mean()
         
         return {'low_freq_mean'  : low_freq_mean,
                 'med_freq_mean'  : med_freq_mean,
@@ -1118,26 +1139,43 @@ class SpectrogramDataset(Dataset):
              ''').fetchall()
         samples_tbl_exists = len(tbl_list) > 0
         
-        if samples_tbl_exists:
-            return db
-        
-        db.execute('''DROP TABLE IF EXISTS Samples;''')
-        db.execute('''CREATE TABLE Samples(
-                    sample_id INTEGER PRIMARY KEY,
-                    recording_site varchar(100),
-                    label tinyint,
-                    start_time_tick int,
-                    end_time_tick int,
-                    start_time float,
-                    end_time float,
-                    parent_low_freqs_energy float,
-                    parent_med_freqs_energy float,
-                    parent_high_freqs_energy float,
-                    snippet_low_freqs_energy float,
-                    snippet_med_freqs_energy float,
-                    snippet_high_freqs_energy float,
-                    snippet_filename varchar(1000)
-                    )
-                    ''')
+        if not samples_tbl_exists:
+            # Create the samples table:
+            # By test above, tbl doesn't exist,
+            # but the DROP makes me feel good:
+            
+            db.execute('''DROP TABLE IF EXISTS Samples;''')
+            db.execute('''CREATE TABLE Samples(
+                        sample_id INTEGER PRIMARY KEY,
+                        recording_site varchar(100),
+                        label tinyint,
+                        start_time_tick int,
+                        end_time_tick int,
+                        start_time float,
+                        end_time float,
+                        parent_low_freqs_energy float,
+                        parent_med_freqs_energy float,
+                        parent_high_freqs_energy float,
+                        snippet_low_freqs_energy float,
+                        snippet_med_freqs_energy float,
+                        snippet_high_freqs_energy float,
+                        snippet_filename varchar(1000)
+                        )
+                        ''')
+        # Same for DirsAndFiles table where processed files
+        # and directories are listed so that partial work
+        # can be picked up after failure:
+        tbl_list = db.execute(f'''
+            SELECT name
+              FROM sqlite_master
+             WHERE type='table' AND name='DirsAndFiles';
+             ''').fetchall()
+        dirs_and_files_tbl_exists = len(tbl_list) > 0
+        if not dirs_and_files_tbl_exists:
+            # Create the samples table:
+            db.execute('''CREATE TABLE DirsAndFiles(
+                        dir_or_file_name varchar(1000)
+                        );
+                        ''')
         db.commit()
         return db
