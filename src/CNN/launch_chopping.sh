@@ -17,7 +17,7 @@ Usage: $(basename $0) [-j --jobs][-d --destination] <spectrogram/label files and
     -h: This message
     -j: Number of spectrogram chopping jobs to run simultaneouly;
         default: number of cores
-    -d: Destination directory for chopped spectrograms; 
+    -o: Destination directory for chopped spectrograms; 
         default: with corresponding 24-hr spectrogram
 \n
 EOF
@@ -62,10 +62,13 @@ then
     exit 1
 fi
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 #********
 # echo "Number of jobs: $NUM_WORKERS"
 # echo "Destination:    $OUTDIR"
 # echo "Infiles         $infiles"
+# echo "Script dir      $SCRIPT_DIR"
 # echo "Exiting intentionally"
 # exit
 #********
@@ -82,8 +85,9 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 
 # For testing, use the following as the first
 # line of the command, commented the line below it:
-cmd="time parallel echo  "
-#cmd="time parallel ./chop_spectrograms.py "
+
+#cmd="time parallel echo  "
+cmd="time parallel ${SCRIPT_DIR}/chop_spectrograms.py "
 if [[ ! -z $OUTDIR ]]
 then
     cmd="$cmd --outdir $OUTDIR"
