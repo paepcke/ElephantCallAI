@@ -90,7 +90,7 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 cmd="time parallel ${SCRIPT_DIR}/chop_spectrograms.py "
 if [[ ! -z $OUTDIR ]]
 then
-    cmd="$cmd --outdir $OUTDIR"
+    cmd="$cmd --snippet_outdir $OUTDIR"
 fi
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 

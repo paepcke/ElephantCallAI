@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Created on Jul 28, 2020
 
@@ -10,8 +11,11 @@ import os
 import sqlite3
 import sys
 
-from CNN.spectrogram_dataset import SpectrogramDataset
-from DSP.dsp_utils import AudioType, FileFamily
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from spectrogram_dataset import SpectrogramDataset
+from DSP/dsp_utils import AudioType, FileFamily
 from elephant_utils.logging_service import LoggingService
 
 class SpectrogramChopper(object):
