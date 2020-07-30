@@ -69,7 +69,7 @@ class SpectrogramChopper(object):
             
         # Same with sqlite_db_path:
         if sqlite_db_path is None:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H_%M_%S")
+            timestamp = datetime.now().strftime("%Y%m%d-%H_%M_%S")
             sqlite_db_path = os.path.join(os.path.dirname(__file__),
                                           f"spectrogram_snippets_{timestamp}.sqlite"
                                           )
