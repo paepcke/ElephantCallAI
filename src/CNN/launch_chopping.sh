@@ -106,11 +106,11 @@ $cmd
 sqlite_files=""
 for worker_rank in $WORKER_RANKS
 do
-    sqlite_files="$sqlite_files $OUTDIR/snippet_db_$worker_rank_.sqlite"
+    sqlite_files="$sqlite_files $OUTDIR/snippet_db_${worker_rank}_.sqlite"
 done
 
 #***********
-echo "Worker ranks: $WORKER_RANKs"
+echo "Worker ranks: '${WORKER_RANKS}'s"
 echo "sqlite_files: $sqlite_files"
 #***********
 
