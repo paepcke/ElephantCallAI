@@ -86,8 +86,13 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 # For testing, use the following as the first
 # line of the command, commented the line below it:
 
-cmd="time parallel echo  "
-#******cmd="time parallel ${SCRIPT_DIR}/chop_spectrograms.py "
+# The --bar creates a progress bar in the terminal
+# for each worker. The --joblog enables check of
+# exit status, as well as use of parallel's --resume
+# option:
+
+#*cmd="time parallel --bar --joblog /tmp/chopping.log echo  "
+cmd="time parallel --bar --joblog /tmp/chopping.log ${SCRIPT_DIR}/chop_spectrograms.py "
 if [[ ! -z $OUTDIR ]]
 then
     cmd="$cmd --outdir $OUTDIR"
@@ -123,4 +128,4 @@ sqlite_files="$sqlite_files $OUTDIR/snippet_db.sqlite"
 #exit
 #**************
 
-./sqlite_db_merger.py $sqlite_files
+$SCRIPT_DIR/sqlite_db_merger.py $sqlite_files
