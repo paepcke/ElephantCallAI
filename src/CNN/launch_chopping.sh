@@ -109,12 +109,17 @@ do
     sqlite_files="$sqlite_files $OUTDIR/snippet_db_$worker_rank_.sqlite"
 done
 
+#***********
+echo "Worker ranks: $WORKER_RANKs"
+echo "sqlite_files: $sqlite_files"
+#***********
+
 # Add the destination sqlite:
 sqlite_files="$sqlite_files $OUTDIR/snippet_db.sqlite"
 
 #**************
-printf("Sqlite db files: $sqlite_files")
-printf("Exiting prematurely on purpose")
+echo "Sqlite db files: $sqlite_files"
+echo "Exiting prematurely on purpose"
 exit
 #**************
 ./sqlite_db_merger.py $sqlite_files
