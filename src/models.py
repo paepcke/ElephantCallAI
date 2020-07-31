@@ -80,6 +80,8 @@ def get_model(model_id):
         return Model21(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 22:
         return Model22(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 23:
+        return Model23(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -835,7 +837,7 @@ class Model18(nn.Module):
         return out
 
 """
-ResNet-50! for entire window classification!
+ResNet-50! 
 """
 class Model19(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
@@ -851,7 +853,7 @@ class Model19(nn.Module):
         self.model.fc = nn.Sequential(
            nn.Linear(2048, 512),
            nn.ReLU(inplace=True),
-           nn.Linear(512, 1)) # Single window output!
+           nn.Linear(512, 256)) # Single window output!
 
 
         if loss.lower() == "focal":
@@ -932,20 +934,18 @@ class Model20(nn.Module):
 # For segmentation!
 class Model21(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01,
-                cnn_nb_filt=128, cnn_pool_size=[5, 2, 2]):#, filter_size=[3, 3, 3]):
+                cnn_nb_filt=64, cnn_pool_size=[5, 2, 2]):#, filter_size=[3, 3, 3]):
         super(Model21, self).__init__()
 
-        self.input_size = input_size
-        self.output_size = output_size
-        # May want to make this an array as wel
-        self.cnn_nb_filt = cnn_nb_filt
-        self.cnn_pool_size = cnn_pool_size
+        # In the future should have a map that maps kernal size
+        # to padding size!
         self.kernal_size = [3, 3, 3]
         #self.padding = []
         self.lin_size = 32
+        # For the GRU
         self.hidden_size = 32 # made it small maybe to avoid overfitting
-        self.num_layers = 2 # lstm
-        self.dropout_val = 0.5
+        self.num_layers = 1 # GRU
+        self.dropout_val = 0
 
         # Create the layers
         # For now just have 1 input chanell
@@ -956,8 +956,10 @@ class Model21(nn.Module):
             if layer == 0:
                 # Maybe try 
                 in_channels = 1
-            # Try just 3 for now
-            conv2d = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, padding = 1)
+
+            # Keep dim the same!
+            conv2d = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, padding=1, bias=False)
+            # Should try either BN or LayerNorm
             #batchnorm = nn.BatchNorm2d()
             # Curious to try layer norm which should normalize just over each individual frequency
             layer_norm = nn.LayerNorm(feature_dim)
@@ -970,19 +972,19 @@ class Model21(nn.Module):
         self.conv_layers = nn.Sequential(*self.conv_layers)
 
         # This reflects our new cnn extracted feature dim
-        feature_dim = self.cnn_nb_filt * feature_dim
-        self.lstm = nn.LSTM(feature_dim, self.hidden_size, num_layers=self.num_layers, 
+        feature_dim = cnn_nb_filt * feature_dim
+        self.gru = nn.GRU(feature_dim, self.hidden_size, num_layers=self.num_layers, 
                                 batch_first=True, bidirectional=True, dropout=self.dropout_val)
         # For bi-directional add *2
         self.linear_1 = nn.Linear(self.hidden_size * 2, self.lin_size)
-        self.out = nn.Linear(self.lin_size, self.output_size)
+        self.out = nn.Linear(self.lin_size, output_size)
 
     def forward(self, inputs):
         inputs = inputs.unsqueeze(1)
         # Shape - [batch, channels, seq_len, conv_features]
         conv_features = self.conv_layers(inputs) 
 
-        # Stach all of the conv-layers to form new sequential
+        # Stack all of the conv-layers to form new sequential
         # features - [batch, seq_len, channels * conv_features]
         conv_features = conv_features.permute(0, 2, 1, 3).contiguous()
         conv_features = conv_features.view(conv_features.shape[0], conv_features.shape[1], -1)
@@ -990,9 +992,9 @@ class Model21(nn.Module):
         # Feed through the LSTM
         # Get the final hidden states (h_t for t = seq_len) for the forward and backwards directions!
         # Shape - [num_layers * num_directions, batch, hidden_size]
-        lstm_out, _ = self.lstm(conv_features)
+        gru_out, _ = self.gru(conv_features)
         # Final fully connected layers
-        linear_out = self.linear_1(lstm_out)
+        linear_out = self.linear_1(gru_out)
         linear_out = nn.ReLU()(linear_out)
         logits = self.out(linear_out)
 
@@ -1000,79 +1002,139 @@ class Model21(nn.Module):
 
 
 
-# For window classification!
+# CRNN withough maxpool and directly downsample with convolution!
 class Model22(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01,
-                cnn_nb_filt=128, cnn_pool_size=[5, 2, 2]):#, filter_size=[3, 3, 3]):
+                cnn_nb_filt=64, compress_factors=[5, 2, 2]):#, filter_size=[3, 3, 3]):
         super(Model22, self).__init__()
 
-        self.input_size = input_size
-        self.output_size = output_size
-        # May want to make this an array as wel
-        self.cnn_nb_filt = cnn_nb_filt
-        self.cnn_pool_size = cnn_pool_size
-        self.kernal_size = [3, 3, 3]
         self.lin_size = 32
+        # For the GRU
         self.hidden_size = 32 # made it small maybe to avoid overfitting
-        self.num_layers = 2 # lstm
-        self.dropout_val = 0.5
+        self.num_layers = 1 # GRU
+        self.dropout_val = 0
 
         # Create the layers
         # For now just have 1 input chanell
         self.conv_layers = []
         feature_dim = input_size
-        for layer in range(len(cnn_pool_size)):
+        for layer in range(len(compress_factors)):
             in_channels = cnn_nb_filt
             if layer == 0:
                 # Maybe try 
                 in_channels = 1
-            # Try just 3 for now
-            conv2d = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, padding = 1)
+
+            # Use the stride to compress in the frequency dimension!
+            conv2d = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, 
+                                        stride=(1, compress_factors[layer]), padding=1, bias=False)
+            # Should try either BN or LayerNorm
             #batchnorm = nn.BatchNorm2d()
             # Curious to try layer norm which should normalize just over each individual frequency
+            # Compute as: (feature_dim + 2(padding) - (kernal_size - 1) - 1) / stride + 1
+            feature_dim = int((feature_dim + 2 - 2 - 1) / compress_factors[layer] + 1)
             layer_norm = nn.LayerNorm(feature_dim)
-            # Max pool - consier doing just conv to downsample!
-            max_pool = nn.MaxPool2d(kernel_size=[1, cnn_pool_size[layer]])
-            feature_dim = feature_dim // cnn_pool_size[layer]
 
-            self.conv_layers += [conv2d, layer_norm, nn.ReLU(inplace=True), max_pool, nn.Dropout(self.dropout_val)]
+            self.conv_layers += [conv2d, layer_norm, nn.ReLU(inplace=True), nn.Dropout(self.dropout_val)]
 
         self.conv_layers = nn.Sequential(*self.conv_layers)
 
         # This reflects our new cnn extracted feature dim
-        feature_dim = self.cnn_nb_filt * feature_dim
-        self.lstm = nn.LSTM(feature_dim, self.hidden_size, num_layers=self.num_layers, 
+        feature_dim = cnn_nb_filt * feature_dim 
+        # Use GRU to maybe control overfitting
+        self.gru = nn.GRU(feature_dim, self.hidden_size, num_layers=self.num_layers, 
                                 batch_first=True, bidirectional=True, dropout=self.dropout_val)
         # For bi-directional add *2
         self.linear_1 = nn.Linear(self.hidden_size * 2, self.lin_size)
-        self.out = nn.Linear(self.lin_size, self.output_size)
+        self.out = nn.Linear(self.lin_size, output_size)
 
     def forward(self, inputs):
         inputs = inputs.unsqueeze(1)
         # Shape - [batch, channels, seq_len, conv_features]
         conv_features = self.conv_layers(inputs) 
 
-        # Stach all of the conv-layers to form new sequential
+        # Stack all of the conv-layers to form new sequential
         # features - [batch, seq_len, channels * conv_features]
         conv_features = conv_features.permute(0, 2, 1, 3).contiguous()
         conv_features = conv_features.view(conv_features.shape[0], conv_features.shape[1], -1)
 
+        # Feed through the LSTM
         # Get the final hidden states (h_t for t = seq_len) for the forward and backwards directions!
         # Shape - [num_layers * num_directions, batch, hidden_size]
-        _, (final_hiddens, final_cells) = self.lstm(conv_features)
-
-        # For classification, we take the last hidden units for the forward 
-        # and backward directions, concatenate them and predict
-        # Reshape to - [num_layers, directions, batch, hidden_size]
-        final_hiddens = final_hiddens.view(self.num_layers, 2, final_hiddens.shape[1], self.hidden_size)
-        linear_input = torch.cat((final_hiddens[-1, 0, :, :], final_hiddens[-1, 1, : :]), dim=1)
-
-        # Let us see
-        linear_out = self.linear_1(linear_input)
+        gru_out, _ = self.gru(conv_features)
+        # Final fully connected layers
+        linear_out = self.linear_1(gru_out)
         linear_out = nn.ReLU()(linear_out)
         logits = self.out(linear_out)
 
         return logits
 
 
+# CRNN withough maxpool and using convolutional "blocks" to downsample
+# the feature dimension. Question in res-net when they downsample in a
+# block they use e.g. stride = 2 in conv1 not conv2. 
+class Model23(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01,
+                cnn_nb_filt=64, compress_factors=[5, 2, 2]):#, filter_size=[3, 3, 3]):
+        super(Model23, self).__init__()
+
+        self.lin_size = 32
+        # For the GRU
+        self.hidden_size = 32 # made it small maybe to avoid overfitting
+        self.num_layers = 1 # GRU
+        self.dropout_val = 0
+
+        # Create the layers
+        # For now just have 1 input chanell
+        self.conv_layers = []
+        feature_dim = input_size
+        for layer in range(len(compress_factors)):
+            in_channels = cnn_nb_filt
+            if layer == 0:
+                # Maybe try 
+                in_channels = 1
+
+            # Use the stride to compress in the frequency dimension!
+            conv1 = nn.Conv2d(in_channels=in_channels, out_channels=cnn_nb_filt, kernel_size=3, 
+                                        stride=(1, compress_factors[layer]), padding=1, bias=False)
+            conv2 = nn.Conv2d(cnn_nb_filt, cnn_nb_filt, kernel_size=3, padding=1, bias=False)
+            # Should try either BN or LayerNorm
+            #batchnorm = nn.BatchNorm2d()
+            # Compute as: (feature_dim + 2(padding) - (kernal_size - 1) - 1) / stride + 1
+            feature_dim = int((feature_dim + 2 - 2 - 1) / compress_factors[layer] + 1)
+            layer_norm = nn.LayerNorm(feature_dim)
+
+            self.conv_layers += [conv1, layer_norm, nn.ReLU(inplace=True), nn.Dropout(self.dropout_val),
+                                conv2, layer_norm, nn.ReLU(inplace=True), nn.Dropout(self.dropout_val)]
+
+        self.conv_layers = nn.Sequential(*self.conv_layers)
+
+        # This reflects our new cnn extracted feature dim
+        feature_dim = cnn_nb_filt * feature_dim 
+        # Use GRU to maybe control overfitting
+        self.gru = nn.GRU(feature_dim, self.hidden_size, num_layers=self.num_layers, 
+                                batch_first=True, bidirectional=True, dropout=self.dropout_val)
+        # For bi-directional add *2
+        self.linear_1 = nn.Linear(self.hidden_size * 2, self.lin_size)
+        self.out = nn.Linear(self.lin_size, output_size)
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        # Shape - [batch, channels, seq_len, conv_features]
+        conv_features = self.conv_layers(inputs) 
+
+        # Stack all of the conv-layers to form new sequential
+        # features - [batch, seq_len, channels * conv_features]
+        conv_features = conv_features.permute(0, 2, 1, 3).contiguous()
+        conv_features = conv_features.view(conv_features.shape[0], conv_features.shape[1], -1)
+
+        # Feed through the LSTM
+        # Get the final hidden states (h_t for t = seq_len) for the forward and backwards directions!
+        # Shape - [num_layers * num_directions, batch, hidden_size]
+        gru_out, _ = self.gru(conv_features)
+        # Final fully connected layers
+        linear_out = self.linear_1(gru_out)
+        linear_out = nn.ReLU()(linear_out)
+        logits = self.out(linear_out)
+
+        return logits
 

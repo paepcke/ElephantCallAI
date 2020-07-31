@@ -200,6 +200,8 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.intialize_data(init_pos=True, init_neg=True)
 
     def scale_features(self, pos_factor, neg_factor):
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), pos_factor * len(self.pos_features)))
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), neg_factor * len(self.neg_features)))
         self.pos_features *= pos_factor
         self.pos_labels *= pos_factor
         self.neg_features *= neg_factor

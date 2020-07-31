@@ -26,6 +26,7 @@ elephant_dataset/Test_Old_1/*
 elephant_dataset/Train_Old_2/*
 elephant_dataset/Test_Old_2/*
 Predictions/*
+Writeups/*.pptx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

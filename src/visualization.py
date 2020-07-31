@@ -150,7 +150,7 @@ def visualize_wav(wav, labels, spectrogram_info):
     # Is twice as wide as the call
     NFFT = spectrogram_info['NFFT']
     hop = spectrogram_info['hop']
-    window = spectrogram_info['window']
+    window = spectrogram_info['window'] * 2
     for call in labelFile:
         start_time = float(call['File Offset (s)'])
         call_length = float(call['End Time (s)']) - float(call['Begin Time (s)'])
