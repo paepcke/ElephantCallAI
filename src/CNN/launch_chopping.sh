@@ -17,7 +17,7 @@ Usage: $(basename $0) [-j --jobs][-d --destination] <spectrogram/label files and
     -h: This message
     -j: Number of spectrogram chopping jobs to run simultaneouly;
         default: number of cores
-    -o: Destination directory for chopped spectrograms; 
+    -o: Destination directory for chopped spectrograms and sqlite db; 
         default: with corresponding 24-hr spectrogram
 \n
 EOF
@@ -86,14 +86,35 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 # For testing, use the following as the first
 # line of the command, commented the line below it:
 
-#cmd="time parallel echo  "
-cmd="time parallel ${SCRIPT_DIR}/chop_spectrograms.py "
+cmd="time parallel echo  "
+#******cmd="time parallel ${SCRIPT_DIR}/chop_spectrograms.py "
 if [[ ! -z $OUTDIR ]]
 then
     cmd="$cmd --outdir $OUTDIR"
 fi
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 
+# Invoke all the copies of chop_spectrograms.py:
 $cmd
 
+# When we get here, all chopping
+# will be finished. Each worker will have
+# created an sqlite file with info from their
+# share of the work. Must combine those into
+# one result sqlite db:
 
+sqlite_files=""
+for worker_rank in $WORKER_RANKS
+do
+    sqlite_files="$sqlite_files $OUTDIR/snippet_db_$worker_rank_.sqlite"
+done
+
+# Add the destination sqlite:
+sqlite_files="$sqlite_files $OUTDIR/snippet_db.sqlite"
+
+#**************
+printf("Sqlite db files: $sqlite_files")
+printf("Exiting prematurely on purpose")
+exit
+#**************
+./sqlite_db_merger.py $sqlite_files

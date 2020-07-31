@@ -8,14 +8,12 @@ import os, sys
 import shutil
 import unittest
 
-from CNN.chop_spectrograms import SpectrogramChopper
-from CNN.spectrogram_dataset import SpectrogramDataset
-import pandas as pd
-
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-
+from CNN.chop_spectrograms import SpectrogramChopper
+from CNN.spectrogram_dataset import SpectrogramDataset
+import pandas as pd
 
 TEST_ALL = True
 #TEST_ALL = False
@@ -105,8 +103,10 @@ class Test(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
-        for file in glob.glob('test_spectro*.sqlite'):
-            os.remove(file)
+        #*********
+#         for file in glob.glob('test_spectro*.sqlite'):
+#             os.remove(file)
+        #*********            
         files_to_delete = glob.glob('spectroA*')
         files_to_delete.extend(glob.glob('spectroB*'))
         for file in files_to_delete:
@@ -117,7 +117,7 @@ class Test(unittest.TestCase):
     # testChopOneSpectrogram 
     #-------------------
     
-    #*******@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testChopOneSpectrogram(self):
         
         spectrogram = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
@@ -129,8 +129,7 @@ class Test(unittest.TestCase):
                                     )
         spectro_file1 = os.path.join(self.test_dir, 'spectroA_spectrogram.pickle')
         spectrogram.to_pickle(spectro_file1)
-        self.files_to_delete.append(spectro_file1)
-        
+
         spectroA_label_file = os.path.join(self.test_dir, 'spectroA.txt')
         spectroB_label_file = os.path.join(self.test_dir, 'spectroB.txt')
         
@@ -138,18 +137,13 @@ class Test(unittest.TestCase):
         shutil.copyfile(self.label_file, spectroA_label_file)
         shutil.copyfile(self.label_file, spectroB_label_file)
 
-        try:
-            chopper = SpectrogramChopper (
-                     spectro_file1,
-                     sqlite_db_path=self.test_db_path,
-                     recurse=False,
-                     snippet_outdir=self.test_dir,
-                     num_workers=0,
-                     this_worker=0
-                     )
-        except Exception as e:
-            print(f"Chopping failed: {repr(e)}")
-            return
+        chopper = SpectrogramChopper (
+                 spectro_file1,
+                 self.test_dir,  # Dest dir for individual sqlite db
+                 recurse=False,
+                 num_workers=0,
+                 this_worker=0
+                 )
         
         self.db = chopper.dataset.db
         
@@ -191,6 +185,80 @@ class Test(unittest.TestCase):
 
         self.assertEqual(os.path.basename(row['snippet_filename']),
                          'spectroA_2_spectrogram.pickle')
+
+    #------------------------------------
+    # testParallelChopping 
+    #-------------------
+
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testParallelChopping(self):
+        spectrogram1 = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
+                                     [ 10, 20, 30, 40, 50, 60, 70],
+                                     [100,200,300,400,500,600,700],
+                                     ], dtype=int,
+                                     columns=[0,2,4,6,8,10,12],
+                                     index=[10,30,50]
+                                     )
+        spectro_file1 = os.path.join(self.test_dir, 'spectroA_spectrogram.pickle')
+        spectrogram1.to_pickle(spectro_file1)
+        
+        # A second spectro for the second 
+        # chopper to work on:
+        spectrogram2 = spectrogram1 * 10 
+        
+        spectro_file1 = os.path.join(self.test_dir, 'spectroA_spectrogram.pickle')
+        spectrogram1.to_pickle(spectro_file1)
+        
+        spectro_file2 = os.path.join(self.test_dir, 'spectroB_spectrogram.pickle')
+        spectrogram2.to_pickle(spectro_file2)
+
+        spectroA_label_file = os.path.join(self.test_dir, 'spectroA.txt')
+        spectroB_label_file = os.path.join(self.test_dir, 'spectroB.txt')
+        
+        # Use the same label file for both spectrograms:
+        shutil.copyfile(self.label_file, spectroA_label_file)
+        shutil.copyfile(self.label_file, spectroB_label_file)
+
+        chopper0 = SpectrogramChopper (
+                     spectro_file1,
+                     self.test_dir,  # Dest dir for individual sqlite db
+                     recurse=False,
+                     num_workers=2,
+                     this_worker=0
+                     )
+
+        chopper1 = SpectrogramChopper (
+                     spectro_file2,
+                     self.test_dir,  # Dest dir for individual sqlite db
+                     recurse=False,
+                     num_workers=2,
+                     this_worker=1
+                     )
+        
+        db0 = chopper0.dataset.db
+        db1 = chopper1.dataset.db
+        
+        # db0 holds info for the two snippets of spectroA:
+        rows0 = db0.execute('''SELECT * FROM Samples;''').fetchall()
+        snippet_0_0_info = rows0[0]
+        self.assertEqual(snippet_0_0_info['recording_site'],
+                         'spectroA'
+                         )
+        snippet_0_1_info = rows0[1]
+        self.assertEqual(snippet_0_1_info['recording_site'],
+                         'spectroA'
+                         )
+
+        # db1 holds info for the two snippets of spectroB:
+        rows1 = db1.execute('''SELECT * FROM Samples;''').fetchall()
+        snippet_1_0_info = rows1[0]
+        self.assertEqual(snippet_1_0_info['recording_site'],
+                         'spectroB'
+                         )
+        snippet_1_1_info = rows1[1]
+        self.assertEqual(snippet_1_1_info['recording_site'],
+                         'spectroB'
+                         )
 
 
 # ----------------- Main --------------

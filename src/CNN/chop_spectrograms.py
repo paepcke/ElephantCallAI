@@ -5,10 +5,8 @@ Created on Jul 28, 2020
 @author: paepcke
 '''
 import argparse
-from datetime import datetime
 import math
 import os
-import sqlite3
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
@@ -45,9 +43,8 @@ class SpectrogramChopper(object):
 
     def __init__(self,
                  infiles,
-                 sqlite_db_path=None,
+                 snippet_outdir,
                  recurse=False,
-                 snippet_outdir=None,
                  num_workers=0,
                  this_worker=0,
                  logfile=None
@@ -64,36 +61,23 @@ class SpectrogramChopper(object):
         
         # Make sure the full path to the 
         # outdir exists:
+        if snippet_outdir is None:
+            raise ValueError("Snippet destination directory must be provided; was None")
+        # If snippet_outdir's path does not exist
+        # yet, create all dirs along the path:
         if not os.path.exists(snippet_outdir):
             os.makedirs(snippet_outdir)
             
-        # Same with sqlite_db_path:
-        if sqlite_db_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d-%H_%M_%S")
-            sqlite_db_path = os.path.join(os.path.dirname(__file__),
-                                          f"spectrogram_snippets_{timestamp}.sqlite"
-                                          )
-        else:
-            if os.path.exists(sqlite_db_path):
-                # Ensure the specified file is 
-                # an sqlite db:
-                try:
-                    conn = sqlite3.connect(sqlite_db_path)
-                    # All good:
-                    conn.close()
-                except Exception as e:
-                    self.log.err(f"Could not open specified Sqlite db '{sqlite_db_path}': {repr(e)}")
-                    sys.exit(1)
+        # Create a separate Sqlite db for this 
+        # instance. They all go where the snippets
+        # go:
+        sqlite_name = self.sqlite_name_by_worker(this_worker)
+        sqlite_db_path = os.path.join(snippet_outdir, sqlite_name)
 
-            else:
-                # Path to a not-yet existing sqlite file was given.
-                # If that path exists, use it; else
-                # ensure that the intermediate dirs
-                # exist, and a fresh sqlite db will
-                # be created later in the specified
-                # dir, with the specified name:
-
-                os.makedirs(os.path.dirname(sqlite_db_path))
+        # If a db of this name is left over
+        # from earlier times, remove it:
+        if os.path.exists(sqlite_db_path):
+            os.remove(sqlite_db_path)
 
         # Get a list of FileFamily instances. The
         # list includes all recursively found files:
@@ -112,7 +96,7 @@ class SpectrogramChopper(object):
                                  if family.file_type == AudioType.SPECTRO]
         num_spectro_files = len(my_spectro_files)
 
-        self.log.info(f"Todo: {num_spectro_files} 24-hr spectrogram files")
+        self.log.info(f"Todo (worker{this_worker}): {num_spectro_files} 24-hr spectrogram files")
 
         self.dataset = SpectrogramDataset(
                          dirs_of_spect_files=infiles,
@@ -120,6 +104,32 @@ class SpectrogramChopper(object):
                          recurse=recurse,
                          snippet_outdir=snippet_outdir,
                          )
+
+    #------------------------------------
+    # sqlite_name_by_worker 
+    #-------------------
+    
+    @classmethod
+    def sqlite_name_by_worker(cls, worker_rank):
+        '''
+        Given a worker rank, create a unique 
+        file name that will be the sqlite db file
+        used by the respective worker. 
+        
+        Method is class level so outsiders can 
+        find the sqlite files
+        
+        
+        @param worker_rank: the rank of a worker
+            in the list of all workers that chop
+        @type worker_rank: int
+        @return: file name (w/o dirs) of sqlite file that
+            will only be used by given worker.
+        @rtype str
+        '''
+        
+        sqlite_name = f"snippet_db_{worker_rank}.sqlite"
+        return sqlite_name
 
     #------------------------------------
     # select_my_infiles
