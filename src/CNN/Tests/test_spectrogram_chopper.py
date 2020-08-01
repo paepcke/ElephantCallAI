@@ -15,8 +15,8 @@ from CNN.chop_spectrograms import SpectrogramChopper
 from CNN.spectrogram_dataset import SpectrogramDataset
 import pandas as pd
 
-TEST_ALL = True
-#TEST_ALL = False
+#*******TEST_ALL = True
+TEST_ALL = False
 
 
 class Test(unittest.TestCase):
@@ -54,8 +54,16 @@ class Test(unittest.TestCase):
     
     @classmethod
     def tearDownClass(cls):
+        
         for file in glob.glob('test_spectro*.pickle'):
             os.remove(file)
+
+        for file in glob.glob('snippet_db_*.sqlite'):
+            os.remove(file)
+
+#         for file in glob.glob(os.path.join(os.path.dirname(__file__),
+#                                            'snippet_db_*.sqlite')):
+#             os.remove(file)
             
         for file in glob.glob('test_spectro*.sqlite'):
             os.remove(file)
@@ -103,10 +111,8 @@ class Test(unittest.TestCase):
 
     def tearDown(self):
         self.db.close()
-        #*********
-#         for file in glob.glob('test_spectro*.sqlite'):
-#             os.remove(file)
-        #*********            
+        for file in glob.glob('test_spectro*.sqlite'):
+            os.remove(file)
         files_to_delete = glob.glob('spectroA*')
         files_to_delete.extend(glob.glob('spectroB*'))
         for file in files_to_delete:
@@ -185,12 +191,17 @@ class Test(unittest.TestCase):
 
         self.assertEqual(os.path.basename(row['snippet_filename']),
                          'spectroA_2_spectrogram.pickle')
+        
+        # Clean up while we have a hold
+        # of the db:
+        #**********self.db.close()
+        
 
     #------------------------------------
     # testParallelChopping 
     #-------------------
 
-    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    #********@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testParallelChopping(self):
         spectrogram1 = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
                                      [ 10, 20, 30, 40, 50, 60, 70],
@@ -226,7 +237,26 @@ class Test(unittest.TestCase):
                      num_workers=2,
                      this_worker=0
                      )
+        # Because only one file is to be done above
+        # (i.e. spectro_file1), and 2 workers are
+        # to do the work, that one file is left
+        # for the second worker, and the worker 0
+        # i.e. the call above did nothing:
+        
+        self.assertIsNone(chopper0.dataset)
+        
+        # Create that second worker with the same
+        # file to get it done (note this_worker=1):
+        chopper0 = SpectrogramChopper (
+                     spectro_file1,
+                     self.test_dir,  # Dest dir for individual sqlite db
+                     recurse=False,
+                     num_workers=2,
+                     this_worker=1
+                     )
 
+        # Different work load:
+        
         chopper1 = SpectrogramChopper (
                      spectro_file2,
                      self.test_dir,  # Dest dir for individual sqlite db

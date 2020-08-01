@@ -18,20 +18,24 @@ from elephant_utils.logging_service import LoggingService
 
 class SpectrogramChopper(object):
     '''
-    Initiate chopping of 24-hr spectrograms.
+    Initiate chopping of one 24-hr spectrograms.
     This class may be instantiated multiple
     times to distribute the work of chopping.
-    When this file is executed an one instance
+    When this file is executed, and one instance
     is thereby created, the total number of
     workers is passed in, and a 'rank' among
     these workers is assigned to this particular
-    instance. 
+    instance by the caller, usually launch_chopping.sh.
     
     Each instance selects a subset of all spectrograms
     to chop such that no other worker will work
     on that chosen subset. This decentralized 
     partitioning is modeled on pytorch's 
-    DistributedDataParallel.
+    DistributedDataParallel. Each worker (i.e. instance
+    of this class) creates a subdirectory of the 
+    given snippet_outdir by adding '_<worker-rank>'.
+    All snippets by this worker are placed there, as
+    are accompanying sqlite 
     
     The best method for invoking this file multiple
     times is to use launch_chopping.sh script.
@@ -69,8 +73,10 @@ class SpectrogramChopper(object):
             os.makedirs(snippet_outdir)
             
         # Create a separate Sqlite db for this 
-        # instance. They all go where the snippets
-        # go:
+        # instance. They all go to the given 
+        # snippet_outdir (i.e. to the parent of where
+        # this worker places the actual snippets:
+        
         sqlite_name = self.sqlite_name_by_worker(this_worker)
         sqlite_db_path = os.path.join(snippet_outdir, sqlite_name)
 
@@ -92,17 +98,38 @@ class SpectrogramChopper(object):
         else:
             my_file_families = file_families
 
-        my_spectro_files = [family for family in my_file_families 
+        my_spectro_files = [family.fullpath(AudioType.SPECTRO) for family in my_file_families 
                                  if family.file_type == AudioType.SPECTRO]
         num_spectro_files = len(my_spectro_files)
+        
+        if num_spectro_files == 0:
+            # Nothing to do. This can (intentionally) 
+            # happen through rounding in select_my_infiles().
+            # It means that another worker will pick up 
+            # what might have been this worker's task.
+            # Set dataset to None b/c one unittest
+            # works better that way; it would otherwise
+            # be undefined:
+            self.dataset = None
+            return
 
+        # Because many snippets may be generated, Linux
+        # gets cranky if all are dumped in one directory.
+        # So each worker creates a subdirectory of the 
+        # given snippet_outdir, appending its worker rank:
+        
+        this_worker_snippet_outdir = \
+            f"{snippet_outdir}_{this_worker}"
+        if not os.path.exists(this_worker_snippet_outdir):
+            os.makedirs(this_worker_snippet_outdir)
+            
         self.log.info(f"Todo (worker{this_worker}): {num_spectro_files} 24-hr spectrogram files")
 
         self.dataset = SpectrogramDataset(
-                         dirs_of_spect_files=infiles,
+                         dirs_of_spect_files=my_spectro_files,
                          sqlite_db_path=sqlite_db_path,
                          recurse=recurse,
-                         snippet_outdir=snippet_outdir,
+                         snippet_outdir=this_worker_snippet_outdir
                          )
 
     #------------------------------------
@@ -145,7 +172,7 @@ class SpectrogramChopper(object):
         partitions theses into num_worker batches. Worker with
         this_worker == 0 works on the first batch. Worker 1
         on the second, and so on. If the number of infiles is
-        not divisible by num_workers, the last worker process
+        not divisible by num_workers, the last worker processes
         the left-overs in addition to their regular share.
         
         @param file_families: file info about each infile
@@ -154,8 +181,14 @@ class SpectrogramChopper(object):
         @type num_workers: int
         @param this_worker: rank of this worker in the list of workers
         @type this_worker: int
+        @return the file family instances for this worker to process
+        @rtype [FileFamily]
         '''
         
+        # Note: in case of only one file to do, with more
+        # than one worker, the last worker will pick
+        # up the file in the 'Do I need to take leftovers'
+        # below:
         batch_size = math.floor(len(file_families) / num_workers)
         my_share_start = this_worker * batch_size
         my_share_end   = my_share_start + batch_size
@@ -167,10 +200,7 @@ class SpectrogramChopper(object):
             my_share_end += left_overs
         
         my_families = file_families[my_share_start:my_share_end]
-        # Get the .wav files to the front of the 
-        # to-do list so that spectrograms are created
-        # before 
-         
+
         return my_families
 
     #------------------------------------
