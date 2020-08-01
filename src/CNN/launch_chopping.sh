@@ -128,4 +128,4 @@ sqlite_files="$sqlite_files $OUTDIR/snippet_db.sqlite"
 #exit
 #**************
 
-$SCRIPT_DIR/sqlite_db_merger.py $sqlite_files
+$SCRIPT_DIR/../elephant_utils/sqlite_db_merger.py $sqlite_files
