@@ -246,6 +246,12 @@ HYPERPARAMETERS = {
         'lr_decay_step': 4, 
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
+        },
+25: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
         }
 }
 
