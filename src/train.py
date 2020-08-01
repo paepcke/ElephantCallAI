@@ -2,7 +2,10 @@ import torch
 from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score, get_precission_recall_values
 import time
 import parameters
+import pdb
+import sys
 from collections import deque
+import faulthandler; faulthandler.enable()
 
 
 def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, 
@@ -45,7 +48,6 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         # Forward pass
         logits = model(inputs).squeeze()
         # Are we zeroing out the hidden state in the model???
-
         # Include boundary positions if necessary
         if include_boundaries:
             boundary_masks = batch[2]
@@ -53,6 +55,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         else:
             loss = loss_func(logits, labels)
 
+        #pdb.set_trace()
         loss.backward()
         optimizer.step()
 
