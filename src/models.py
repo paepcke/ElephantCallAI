@@ -84,6 +84,8 @@ def get_model(model_id):
         return Model23(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 24:
         return Model24(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 25:
+        return Model25(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -1160,7 +1162,7 @@ def conv1x1(in_planes, out_planes, stride=1):
     """
     # We only want to downsample the feature dimension 
     stride = (1, stride)
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=(1,1), stride=stride, bias=False)
 
 class BasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, norm_layer=None):
@@ -1207,7 +1209,7 @@ class Model24(nn.Module):
         self.lin_size = 32
         # For the GRU
         self.hidden_size = 32 # made it small maybe to avoid overfitting
-        self.num_layers = 1 # GRU
+        self.num_layers = 2 # GRU
         self.dropout_val = 0
 
         # Note may want to in the future include implementation for layer-norm
@@ -1281,7 +1283,94 @@ class Model24(nn.Module):
         return logits
 
 
+# Use Res-Net with 2 res-net layers!
+class Model25(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01,
+            compress_factors=[2, 2]):#, filter_size=[3, 3, 3]):
+        super(Model25, self).__init__()
 
+        self.lin_size = 32
+        # For the GRU
+        self.hidden_size = 32 # made it small maybe to avoid overfitting
+        self.num_layers = 2 # GRU
+        self.dropout_val = 0
 
+        # Note may want to in the future include implementation for layer-norm
+        self._norm_layer = nn.BatchNorm2d
+        self.feature_dim = input_size
+        self.inplanes = 32
+        # The pre-layer convs from res-net!
+        self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=(1, 2), padding=3,
+                               bias=False)
+        self.feature_dim = int((self.feature_dim - 1) / 2 + 1)
+        self.bn1 = self._norm_layer(self.inplanes)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=(1, 2), padding=1)
+        self.feature_dim = int((self.feature_dim - 1) / 2 + 1)
+
+        # Compress by 5
+        self.layer1 = self._make_layer(BasicBlock, 32, blocks=2, stride=compress_factors[0])
+        # Compress by 2
+        self.layer2 = self._make_layer(BasicBlock, 64, blocks=2, stride=compress_factors[1])
+        
+        # This reflects our new cnn extracted feature dim
+        self.feature_dim = 64 * self.feature_dim 
+        # Use GRU to maybe control overfitting
+        self.gru = nn.GRU(self.feature_dim, self.hidden_size, num_layers=self.num_layers, 
+                                batch_first=True, bidirectional=True, dropout=self.dropout_val)
+        # For bi-directional add *2
+        self.linear_1 = nn.Linear(self.hidden_size * 2, self.lin_size)
+        self.out = nn.Linear(self.lin_size, output_size)
+
+    # Default just 1 block, where a block is 2 conv layers and residual connect
+    def _make_layer(self, block, planes, blocks=1, stride=1, kernel_size=3):
+        norm_layer = self._norm_layer
+        downsample = None
+
+        # Used to downsample the identity block
+        # Note we want to make the stride only in one dimension!!
+        if stride != 1 or self.inplanes != planes:
+            downsample = nn.Sequential(
+                conv1x1(self.inplanes, planes, stride),
+                norm_layer(planes),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample, norm_layer))
+        # Need to look into this!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # This is based on the kernal size being 3, and padding 1! Need to maybe pass 
+        # this around in the block function
+        self.feature_dim = int((self.feature_dim + 2 - (kernel_size-1) - 1) / stride + 1)
+        self.inplanes = planes
+        # This block does not downsample any more!
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes, norm_layer=norm_layer))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, inputs):
+        # Shape - [batch, channels, seq_len, conv_features]
+        inputs = inputs.unsqueeze(1)
+
+        pre_conv = self.conv1(inputs)
+        pre_conv = self.bn1(pre_conv)
+        pre_conv = self.relu(pre_conv)
+        pre_conv = self.maxpool(pre_conv)
+        
+        conv_features = self.layer1(pre_conv)
+        conv_features = self.layer2(conv_features)
+
+        # Stack all of the conv-layers to form new sequential
+        # features - [batch, seq_len, channels * conv_features]
+        conv_features = conv_features.permute(0, 2, 1, 3).contiguous()
+        conv_features = conv_features.view(conv_features.shape[0], conv_features.shape[1], -1)
+
+        gru_out, _ = self.gru(conv_features)
+        # Final fully connected layers
+        linear_out = self.linear_1(gru_out)
+        linear_out = nn.ReLU()(linear_out)
+        logits = self.out(linear_out)
+
+        return logits
 
 
