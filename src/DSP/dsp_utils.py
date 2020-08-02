@@ -8,8 +8,9 @@ from collections import OrderedDict
 import csv
 from enum import Enum
 import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 import re
+import sys
 import time
 
 from scipy.io import wavfile
@@ -470,7 +471,88 @@ class DSPUtils(object):
         
         #time_labels       = np.array(range(num_timeticks))
         return num_time_ticks
+
+
+    #------------------------------------
+    # unix_find 
+    #-------------------
     
+    @classmethod
+    def unix_find(cls, 
+                  start_dir, 
+                  name_regex, 
+                  collected=None,
+                  maxdepth=None):
+        '''
+        Simplified version of Unix 'find' command.
+        Given a starting directory, a regular expression,
+        and optionally a list of already collected file
+        names. Returns a list of all matching file names
+        in a recursive walk down all subdirs of the 
+        given start_dir.
+        
+        The regex may be a (usually) raw string, or a
+        compiled regex. If a string, it is automatically
+        compiled before use.
+        
+        @param start_dir: directory from which to
+            being the file name collection
+        @type start_dir: {str|pathlib.PosixPath}
+        @param name_regex: regular expression against
+            which file names must match to be collected.
+        @type name_regex: {str|re.Pattern}
+        @param collected: list of file names in the dir
+            tree that have already been collected
+        @type collected: {None|[str]}
+        @param maxdepth: maximum depth to which descent
+            will proceed. A value of zero means to 
+            stay within start_dir. None: search till
+            bottom out.
+        @type maxdepth: int
+        '''
+        
+        if type(name_regex) == str:
+            name_regex = re.compile(name_regex)
+            
+        if type(start_dir) == str:
+            # Work with Path instances:
+            start_dir = Path(start_dir)
+        
+        # Initial condition:
+        if collected is None:
+            collected = []
+        if maxdepth is None:
+            # No limit (in practice):
+            maxdepth = sys.maxsize
+        if maxdepth < 0:
+            # Reach max depth in previous 
+            # (recursive) call:
+            return
+        
+        this_dir_iter = start_dir.iterdir()
+        for file_name_obj in this_dir_iter:
+            # Apply search only to the file name,
+            # not the entire path:
+            if name_regex.search(file_name_obj.name) is not None:
+                # Append the full path as a string:
+                collected.append(str(file_name_obj))
+            elif Path.is_dir(file_name_obj):
+                
+                # The recursion:
+
+                # Assignment to collected is not 
+                # neccessary, b/c append is in-place.
+                # So 'collected' would appear with
+                # the additional files automatically.
+                # The "-1" implements the maxdepth
+                # limit, if imposed by original caller:
+                
+                collected = cls.unix_find(file_name_obj, 
+                                          name_regex, 
+                                          collected,
+                                          maxdepth - 1)
+        return collected
+
 # ---------------------------- Class FileFamily
 
 class FileFamily(object):
