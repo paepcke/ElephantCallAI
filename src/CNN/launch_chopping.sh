@@ -111,7 +111,7 @@ $cmd
 sqlite_files=""
 for worker_rank in $WORKER_RANKS
 do
-    sqlite_files="$sqlite_files $OUTDIR/snippet_db_${worker_rank}_.sqlite"
+    sqlite_files="$sqlite_files $OUTDIR/snippet_db_${worker_rank}.sqlite"
 done
 
 #***********
