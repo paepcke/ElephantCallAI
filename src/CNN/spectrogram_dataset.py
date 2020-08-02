@@ -302,7 +302,11 @@ class SpectrogramDataset(Dataset):
             if file_family.file_type == AudioType.SPECTRO:
                 # Looking at a 24hr spectrogram. Map that
                 # to its corresponding label file:
-                full_spectrograms_queued[file] = file_family.fullpath(AudioType.LABEL)
+                label_file = file_family.fullpath(AudioType.LABEL)
+                if not os.path.exists(label_file):
+                    self.log.warn(f"No label file for spectrogram {file}; skipping it.")
+                    continue
+                full_spectrograms_queued[file] = label_file
                 continue
             if file_family.file_type == AudioType.SNIPPET:
                 # No need to process the corresponding full 
@@ -377,7 +381,7 @@ class SpectrogramDataset(Dataset):
                                               parent_freq_energies,
                                               curr_file_family)
         except Exception as e:
-            raise ChopError(f"Error trying to close Sqlite db: {repr(e)}") from e
+            raise ChopError(f"Chop err; spectro_file: {spectro_file}, label_file: {label_file}: {repr(e)}") from e
 
     #------------------------------------
     # mean_magnitudes 
