@@ -148,7 +148,7 @@ class SpectrogramDataset(Dataset):
     the switch_to_split() method.
     '''
 
-    SNIPPET_WIDTH  = 5 # approximate width of spectrogram snippets.
+    SNIPPET_WIDTH  = 30 # approximate width of spectrogram snippets (seconds).
     LOW_FREQ_BAND  = pd.Interval(left=0, right=21)
     MED_FREQ_BAND  = pd.Interval(left=21, right=41)
     HIGH_FREQ_BAND = pd.Interval(left=41, right=51)
