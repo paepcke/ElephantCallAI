@@ -41,23 +41,23 @@ class SqliteDbMerger(object):
         @type tables: {None|[str]}
         '''
 
-        # No tables created yet in dest db:
+        # No tables created yet in dest in_db:
         self.dest_tables = []
         
         dest_db = sqlite3.connect(sqlite_outfile)
         
         for sqlite_file in sqlite_infiles:
-            db = sqlite3.connect(sqlite_file)
-            db.row_factory = sqlite3.Row
+            in_db = sqlite3.connect(sqlite_file)
+            in_db.row_factory = sqlite3.Row
             
             if tables is None:
-                tables = db.execute('''
+                tables = in_db.execute('''
                  SELECT name
                    FROM sqlite_master
                   WHERE type = 'table' 
                 ''').fetchall()
             
-            table_info_rows = db.execute('''
+            table_info_rows = in_db.execute('''
                 SELECT tbl_name, sql 
                   FROM sqlite_master 
                 WHERE type = 'table'
@@ -66,10 +66,12 @@ class SqliteDbMerger(object):
                 tbl_name = table_info_row['tbl_name']
                 if tbl_name in tables:
                     self.copy_table(table_info_row,
-                                    db,
+                                    in_db,
                                     dest_db 
                                     )
-            db.close()
+            in_db.close()
+
+        dest_db.close()
             
     #------------------------------------
     # copy_table
