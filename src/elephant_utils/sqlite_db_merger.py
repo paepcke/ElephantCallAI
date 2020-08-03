@@ -51,7 +51,9 @@ class SqliteDbMerger(object):
                   WHERE type = 'table' 
                 ''').fetchall()                
 
-        self.dest_tables = [tbl_nm_row['name'] for tbl_nm_row in tbl_nm_rows]
+        # If any tables exist, get something
+        # like [('Samples',)]
+        self.dest_tables = [tbl_nm_row[0] for tbl_nm_row in tbl_nm_rows]
 
         for sqlite_file in sqlite_infiles:
             in_db = sqlite3.connect(sqlite_file)
@@ -171,8 +173,9 @@ class SqliteDbMerger(object):
             if prim_key_offset is None:
                 # Destination tbl is empty
                 prim_key_offset = 0
-            # Since 0 based, map to range one higher:
-            prim_key_offset += 1
+            else:
+                # Since 0 based, map to range one higher:
+                prim_key_offset += 1
         except Exception as e:
             # Either the col to be mapped isn't part
             # of the tbl being copied; fine:
