@@ -24,7 +24,8 @@ class SqliteDbMerger(object):
     def __init__(self, 
                  sqlite_infiles,
                  sqlite_outfile,
-                 tables=None
+                 tables=None,
+                 verbose=False
                  ):
         '''
         Given a list of sqlite file names, and 
@@ -50,6 +51,9 @@ class SqliteDbMerger(object):
             in_db = sqlite3.connect(sqlite_file)
             in_db.row_factory = sqlite3.Row
             
+            if verbose:
+                print(f"Processing {sqlite_file}...")
+            
             if tables is None:
                 tables = in_db.execute('''
                  SELECT name
@@ -67,9 +71,14 @@ class SqliteDbMerger(object):
                 if tbl_name in tables:
                     self.copy_table(table_info_row,
                                     in_db,
-                                    dest_db 
+                                    dest_db,
+                                    verbose=verbose 
                                     )
             in_db.close()
+
+            if verbose:
+                print(f"Done processing {sqlite_file}...")
+
 
         dest_db.close()
             
@@ -80,7 +89,8 @@ class SqliteDbMerger(object):
     def copy_table(self, 
                    table_info_dict,
                    src_db,
-                   dst_db
+                   dst_db,
+                   verbose=False
                    ):
         '''
         Copy all entries of one table into 
@@ -111,6 +121,8 @@ class SqliteDbMerger(object):
         @param dst_db: sqlite3 connection instance to the
             destination db.
         @type dst_db: sqlite3.Connection
+        @param verbose: print debug info
+        @type verbose: bool
         '''
         
         tbl_name = table_info_dict['tbl_name']
@@ -125,6 +137,10 @@ class SqliteDbMerger(object):
             SELECT *
               FROM {tbl_name};
             ''').fetchall()
+            
+        if verbose:
+            print(f"Copying {len(dict_list)} rows from table {tbl_name}")
+            
         if len(dict_list) == 0:
             return
         
@@ -151,7 +167,9 @@ if __name__ == '__main__':
                                          formatter_class=argparse.RawTextHelpFormatter,
                                          description="Merges multiple sqlite dbs into one"
                                          )
-    
+        parser.add_argument('-v', '--verbose',
+                            action='store_true',
+                            help='Print progress messages; default False')
         parser.add_argument('-t', '--tables',
                             type=str,
                             nargs='+',
@@ -170,5 +188,6 @@ if __name__ == '__main__':
             
         SqliteDbMerger(args.dbfiles[:-1], # infiles
                        args.dbfiles[-1],  # outfile
-                       tables=args.tables
+                       tables=args.tables,
+                       verbose=args.verbose
                        )
