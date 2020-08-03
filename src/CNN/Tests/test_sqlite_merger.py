@@ -190,7 +190,9 @@ class TestSqliteMerger(unittest.TestCase):
 
         SqliteDbMerger([self.src_db1_path, self.src_db2_path],
                        self.dst_db_path,
-                       tables=['Samples', 'OtherTable'])
+                       tables=['Samples', 'OtherTable'],
+                       verbose=True
+                       )
 
         self.connect_all_dbs()
         rows = self.dst_db.execute('''

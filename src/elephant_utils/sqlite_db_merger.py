@@ -185,6 +185,10 @@ class SqliteDbMerger(object):
             # Or the dest table is empty:
             prim_key_offset = 0
 
+        if verbose:
+            print(f"The col to offset is {col_to_map}")
+            print(f"The prim_key_offset is {prim_key_offset}")
+
         # Copy:
         # Get row dicts for all rows in the
         # input db. For large tables this may
