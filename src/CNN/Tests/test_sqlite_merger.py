@@ -150,6 +150,22 @@ class TestSqliteMerger(unittest.TestCase):
                           ['Samples', 'OtherTable']
                           )
 
+    #------------------------------------
+    # testAllTables
+    #-------------------
+    
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testAllTables(self):
+        SqliteDbMerger([self.src_db1_path, self.src_db2_path],
+                       self.dst_db_path
+                       )
+
+        self.connect_all_dbs()
+        self.assertCopies([self.src_db1, self.src_db2],
+                          self.dst_db, 
+                          ['Samples', 'OtherTable']
+                          )
+
 # ---------------- Utilities --------------
 
     #------------------------------------

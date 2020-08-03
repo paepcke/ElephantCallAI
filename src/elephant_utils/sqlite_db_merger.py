@@ -55,11 +55,12 @@ class SqliteDbMerger(object):
                 print(f"Processing {sqlite_file}...")
             
             if tables is None:
-                tables = in_db.execute('''
+                table_rows = in_db.execute('''
                  SELECT name
                    FROM sqlite_master
                   WHERE type = 'table' 
                 ''').fetchall()
+                tables = [tbl['name'] for tbl in table_rows]
             
             table_info_rows = in_db.execute('''
                 SELECT tbl_name, sql 
