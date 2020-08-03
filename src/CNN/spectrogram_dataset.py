@@ -213,6 +213,7 @@ class SpectrogramDataset(Dataset):
                 dirs_or_files_to_do = set()
     
             if len(dirs_or_files_to_do) > 0:
+                # Chop spectrograms:
                 self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
     
         num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
