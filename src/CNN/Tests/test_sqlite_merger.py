@@ -166,6 +166,44 @@ class TestSqliteMerger(unittest.TestCase):
                           ['Samples', 'OtherTable']
                           )
 
+    #------------------------------------
+    # testTwoTablesTwoSrcDbsPrimKeyConflict 
+    #-------------------
+    
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def testTwoTablesTwoSrcDbsPrimKeyConflict(self):
+        
+        # Make db2 have the same vals for 
+        # sample_id as db1:
+        self.connect_all_dbs()
+        self.src_db2.execute('''
+                UPDATE Samples 
+                  SET sample_id = 0
+                WHERE sample_id = 2;
+                ''')
+        
+        self.src_db2.execute('''
+                UPDATE Samples 
+                  SET sample_id = 1
+                WHERE sample_id = 3;
+                ''')
+
+        SqliteDbMerger([self.src_db1_path, self.src_db2_path],
+                       self.dst_db_path,
+                       tables=['Samples', 'OtherTable'])
+
+        self.connect_all_dbs()
+        rows = self.dst_db.execute('''
+                SELECT sample_id from Samples;
+                ''').fetchall()
+        sample_ids = [row['sample_id'] for row in rows]
+        
+        # assertCountEqual() ensures that 
+        # all elements of second are in 
+        # first, though order is unimportant:
+
+        self.assertCountEqual(sample_ids, [0,1,2,3])
+
 # ---------------- Utilities --------------
 
     #------------------------------------
