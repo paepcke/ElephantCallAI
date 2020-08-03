@@ -42,11 +42,17 @@ class SqliteDbMerger(object):
         @type tables: {None|[str]}
         '''
 
-        # No tables created yet in dest in_db:
-        self.dest_tables = []
-        
         dest_db = sqlite3.connect(sqlite_outfile)
-        
+
+        # Get list of tables already in dst_db:
+        tbl_nm_rows = dest_db.execute('''
+                 SELECT name
+                   FROM sqlite_master
+                  WHERE type = 'table' 
+                ''').fetchall()                
+
+        self.dest_tables = [tbl_nm_row['name'] for tbl_nm_row in tbl_nm_rows]
+
         for sqlite_file in sqlite_infiles:
             in_db = sqlite3.connect(sqlite_file)
             in_db.row_factory = sqlite3.Row
