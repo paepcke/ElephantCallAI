@@ -6,9 +6,11 @@ Created on Jul 30, 2020
 '''
 import os
 import sqlite3
+from sqlite3 import OperationalError as DatabaseError
 import sys
 
 import argparse
+
 
 
 class SqliteDbMerger(object):
@@ -56,7 +58,11 @@ class SqliteDbMerger(object):
         self.dest_tables = [tbl_nm_row[0] for tbl_nm_row in tbl_nm_rows]
 
         for sqlite_file in sqlite_infiles:
-            in_db = sqlite3.connect(sqlite_file)
+            try:
+                in_db = sqlite3.connect(sqlite_file)
+            except DatabaseError as e:
+                print(f"***** Cannot open {sqlite_file}: {repr(e)}. Skipping it.") 
+                
             in_db.row_factory = sqlite3.Row
             
             if verbose:
@@ -173,9 +179,6 @@ class SqliteDbMerger(object):
             if prim_key_offset is None:
                 # Destination tbl is empty
                 prim_key_offset = 0
-            else:
-                # Since 0 based, map to range one higher:
-                prim_key_offset += 1
         except Exception as e:
             # Either the col to be mapped isn't part
             # of the tbl being copied; fine:
@@ -226,7 +229,9 @@ class SqliteDbMerger(object):
             if col_to_map is not None:
                 try:
                     prim_key_pos = col_names.index(col_to_map)
-                    prim_key_val = int(vals_one_row[prim_key_pos])
+                    # The sample_id values come in quoted:
+                    #    "'1234'". Strip those quotes: 
+                    prim_key_val = int(vals_one_row[prim_key_pos].strip("'")) 
                     prim_key_val += prim_key_offset
                     vals_one_row[prim_key_pos] = str(prim_key_val)
                 except ValueError:
