@@ -55,6 +55,9 @@ class Test(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         
+        #******************
+        print("************* In test_spectrogram_chopper")
+        #******************
         for file in glob.glob('test_spectro*.pickle'):
             os.remove(file)
 
@@ -83,6 +86,18 @@ class Test(unittest.TestCase):
             os.remove('SamplesTests.sqlite')
         except Exception:
             pass
+        
+        curr_dir = os.path.dirname(__file__)
+        try:
+            shutil.rmtree(os.path.join(curr_dir, '../Tests_0'))
+        except Exception:
+            pass
+
+        try:
+            shutil.rmtree(os.path.join(curr_dir, '../Tests_1'))
+        except Exception:
+            pass
+        
 
     #------------------------------------
     # setUp 

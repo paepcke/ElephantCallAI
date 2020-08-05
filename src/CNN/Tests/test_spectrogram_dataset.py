@@ -53,6 +53,11 @@ class Test(unittest.TestCase):
     
     @classmethod
     def tearDownClass(cls):
+        
+        #******************
+        print("************* In test_spectrogram_dataset")
+        #******************
+
         for file in glob.glob('test_spectro*.pickle'):
             os.remove(file)
             
