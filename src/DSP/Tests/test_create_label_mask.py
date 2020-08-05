@@ -57,7 +57,6 @@ class Test(unittest.TestCase):
         self.label_file_fd.write(col_headers)
         
         curr_dir = os.path.dirname(__file__)
-        self.wav_file = os.path.join(curr_dir, 'elephant.wav')
         
     #------------------------------------
     # tearDown
