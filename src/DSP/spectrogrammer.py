@@ -748,8 +748,8 @@ class Spectrogrammer(object):
     def create_label_mask_from_raven_table(self,
                                            wav_file_or_sig,
                                            label_txt_file,
-                                           framerate,
-                                           hop_length):
+                                           framerate=None,
+                                           hop_length=None):
         '''
         Given a .wav recording, plus a manually created 
         selection table as produced by the Raven program, 
@@ -772,11 +772,17 @@ class Spectrogrammer(object):
         @param label_file: label file as produced with Raven
         @type label_file: str
         '''
+        
+        if framerate is None:
+            framerate = Spectrogrammer.DEFAULT_FRAMERATE
+        if hop_length is None:
+            hop_length = Spectrogrammer.HOP_LENGTH
+            
         # The x-axis time labels that a spectrogram
         # would have:
         time_tick_secs_labels = DSPUtils.time_ticks_from_wav(wav_file_or_sig,
-                                                             framerate, 
-                                                             hop_length
+                                                             hop_length=hop_length,
+                                                             framerate=framerate
                                                              )
                                      
         # Start with an all-zero label mask:
@@ -897,6 +903,8 @@ class Spectrogrammer(object):
                            label_txt_file
                            ):
 
+        if type(label_times) != np.ndarray:
+            label_times = np.array(label_times)
         
         begin_time_key = 'Begin Time (s)'
         end_time_key   = 'End Time (s)'

@@ -97,6 +97,12 @@ class Test(unittest.TestCase):
         self.spectr_dataset = SpectrogramDataset(testing=True,
                                                  test_db=self.db)
         
+        # Make the snippet width narrower so the tests
+        # below can work with narrow dataframes, yet get
+        # multiple snippets:
+        
+        self.spectr_dataset.SNIPPET_WIDTH = 5 # seconds
+        
         # The frequency bands in which energy means
         # are computed are usually betwen 0 and 60,
         # But our test dfs only have three lines with

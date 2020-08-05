@@ -173,20 +173,47 @@ class SqliteDbMerger(object):
         # that needs to be mapped, find the last
         # value of that table in the dest:
         try:
-            prim_key_offset = next(dst_db.execute(f'''
+            max_dst_key = next(dst_db.execute(f'''
                     SELECT MAX({col_to_map}) FROM {tbl_name};
                     '''))[0]
-            if prim_key_offset is None:
-                # Destination tbl is empty
-                prim_key_offset = 0
+            # Note: max_dst_key will be None if 
+            # dst table is empty. That's OK
+
         except Exception as e:
             # Either the col to be mapped isn't part
             # of the tbl being copied; fine:
             if str(e).find('no such column') > -1:
-                prim_key_offset = None
+                max_dst_key = None
         except StopIteration:
             # Or the dest table is empty:
+            max_dst_key = 0
+            
+        # Now get the lowest key of the source tbl:
+        try:
+            min_src_key = next(src_db.execute(f'''
+                    SELECT MIN({col_to_map}) FROM {tbl_name};
+                    '''))[0]
+            if min_src_key is None:
+                # Src tbl is empty
+                return
+        except Exception as e:
+            # The col to be mapped isn't part
+            # of the tbl being copied; fine:
+            if str(e).find('no such column') > -1:
+                min_src_key = None
+        except StopIteration:
+            # Or the src table is empty:
+            return
+        
+        # Set the mapping of keys in the src to start 
+        # just above the keys in the dst:
+        
+        if (min_src_key is None) or (max_dst_key is None):
             prim_key_offset = 0
+        else:
+            # Number to add to each src key to continue
+            # the last key at the destination:
+            prim_key_offset = 1 + max_dst_key - min_src_key
 
         if verbose:
             print(f"The col to offset is {col_to_map}")

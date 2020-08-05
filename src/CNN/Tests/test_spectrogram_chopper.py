@@ -15,8 +15,8 @@ from CNN.chop_spectrograms import SpectrogramChopper
 from CNN.spectrogram_dataset import SpectrogramDataset
 import pandas as pd
 
-#*******TEST_ALL = True
-TEST_ALL = False
+TEST_ALL = True
+#TEST_ALL = False
 
 
 class Test(unittest.TestCase):
@@ -148,7 +148,8 @@ class Test(unittest.TestCase):
                  self.test_dir,  # Dest dir for individual sqlite db
                  recurse=False,
                  num_workers=0,
-                 this_worker=0
+                 this_worker=0,
+                 test_snippet_width=5
                  )
         
         self.db = chopper.dataset.db
@@ -201,7 +202,7 @@ class Test(unittest.TestCase):
     # testParallelChopping 
     #-------------------
 
-    #********@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testParallelChopping(self):
         spectrogram1 = pd.DataFrame([[  1,  2,  3,  4,  5,  6,  7],
                                      [ 10, 20, 30, 40, 50, 60, 70],
@@ -274,10 +275,6 @@ class Test(unittest.TestCase):
         self.assertEqual(snippet_0_0_info['recording_site'],
                          'spectroA'
                          )
-        snippet_0_1_info = rows0[1]
-        self.assertEqual(snippet_0_1_info['recording_site'],
-                         'spectroA'
-                         )
 
         # db1 holds info for the two snippets of spectroB:
         rows1 = db1.execute('''SELECT * FROM Samples;''').fetchall()
@@ -285,11 +282,6 @@ class Test(unittest.TestCase):
         self.assertEqual(snippet_1_0_info['recording_site'],
                          'spectroB'
                          )
-        snippet_1_1_info = rows1[1]
-        self.assertEqual(snippet_1_1_info['recording_site'],
-                         'spectroB'
-                         )
-
 
 # ----------------- Main --------------
 

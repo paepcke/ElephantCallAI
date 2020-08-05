@@ -49,11 +49,15 @@ class Test(unittest.TestCase):
         
         # Make an empty spectrogrammer: No infile, no actions:
         self.spectrogrammer = Spectrogrammer('foo', [], testing=True)
+        self.spectrogrammer.DEFAULT_FRAMERATE = 2
         
         # Col header row for an in-memory string label 'file'
         col_headers = "col1\tBegin Time (s)\tcol2\tEnd Time (s)\tcol3\n"
         self.label_file_fd = io.StringIO(col_headers)
         self.label_file_fd.write(col_headers)
+        
+        curr_dir = os.path.dirname(__file__)
+        self.wav_file = os.path.join(curr_dir, 'elephant.wav')
         
     #------------------------------------
     # tearDown
@@ -79,13 +83,18 @@ class Test(unittest.TestCase):
         # Create in-memory label CSV 'file'
         # 0.5sec to 1.0sec
         
-        self.label_file_fd.write("foo1\t0.5\tfoo2\t1.0\tfoo3\n")
+        self.label_file_fd.write("foo1\t1024.0\tfoo2\t2048.0\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(6*2048)
+
         label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                self.label_file_fd, self.spectro
-                )
-        # Times are: ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([1,1,0,0,0,0])
+                wav_signal, self.label_file_fd, framerate=2
+                )        
+
+        # Times are: [0.0, 1024.0, 2048.0, 3072.0, 4096.0, 5120.0, 6144.0]
+        expected = np.array([0,1,1,0,0,0,0])
         self.assertTrue((expected == label_mask).all())
         
     #------------------------------------
@@ -95,15 +104,19 @@ class Test(unittest.TestCase):
     @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     def testLabelsOffBoundaries(self):
         # Create in-memory label CSV 'file'
-        # for label 1.0sec to 2.5sec
+        # for label 1000sec to 3000sec
         
-        self.label_file_fd.write("foo1\t1.0\tfoo2\t2.5\tfoo3\n")
+        self.label_file_fd.write("foo1\t1024.0\tfoo2\t3072.0\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(6*2048)
+        
         label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                self.label_file_fd, self.spectro
+                wav_signal, self.label_file_fd, framerate=2
                 )
-        # Times are ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([0,1,1,1,1,0])
+        # Times are [0.0, 1024.0, 2048.0, 3072.0, 4096.0, 5120.0, 6144.0]
+        expected = np.array([0,1,1,1,0,0,0])
         self.assertTrue((expected == label_mask).all())
 
     #------------------------------------
@@ -113,15 +126,20 @@ class Test(unittest.TestCase):
     @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     def testLabelStartBeforeRecording(self):
         # Create in-memory label CSV 'file'
-        # for label 0.2sec to 1.0sec
+        # for label 2048sec to 4096sec
         
-        self.label_file_fd.write("foo1\t0.2\tfoo2\t1.0\tfoo3\n")
+        self.label_file_fd.write("foo1\t2048\tfoo2\t4096\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(1,6*2048)
+
         label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                self.label_file_fd, self.spectro
+                wav_signal, self.label_file_fd, framerate=2
                 )
-        # Times are ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([1,1,0,0,0,0])
+
+        # Times are [0.0, 1024.0, 2048.0, 3072.0, 4096.0, 5120.0, 6144.0]
+        expected = np.array([0,0,1,1,1,0,0])
         self.assertTrue((expected == label_mask).all())
 
     #------------------------------------
@@ -131,15 +149,19 @@ class Test(unittest.TestCase):
     @unittest.skipIf(not TEST_ALL, "Temporarily skipping")
     def testLabelEndBeyondRecording(self):
         # Create in-memory label CSV 'file'
-        # for label 0.2sec to 1.0sec
+        # for label 10,000sec to 12,000sec
         
-        self.label_file_fd.write("foo1\t2.5\tfoo2\t6.0\tfoo3\n")
+        self.label_file_fd.write("foo1\t10000\tfoo2\t12000\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(6*2048)
+        
         label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                self.label_file_fd, self.spectro
+                wav_signal, self.label_file_fd, framerate=2
                 )
-        # Times are ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([0,0,0,0,1,1])
+        # Times are [0.0, 1024.0, 2048.0, 3072.0, 4096.0, 5120.0, 6144.0]
+        expected = np.array([0,0,0,0,0,0,0])
         self.assertTrue((expected == label_mask).all())
 
     #------------------------------------
@@ -153,9 +175,13 @@ class Test(unittest.TestCase):
         
         self.label_file_fd.write("foo1\t2.5\tfoo2\t0.5\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(6*2048)
+        
         with LogCapture('logging_service') as log_content:
             label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                    self.label_file_fd, self.spectro
+                    wav_signal, self.label_file_fd, framerate=2
                     )
         # Ensure we got an error log msg about begin time
         # later than end time:
@@ -164,7 +190,7 @@ class Test(unittest.TestCase):
             )
         
         # Times are ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([0,0,0,0,0,0])
+        expected = np.array([0,0,0,0,0,0,0])
         self.assertTrue((expected == label_mask).all())
 
     #------------------------------------
@@ -177,34 +203,39 @@ class Test(unittest.TestCase):
         # for label 0.2sec to 1.0sec
         
         # Start is after end of recording:
-        self.label_file_fd.write("foo1\t5.5\tfoo2\t6.5\tfoo3\n")
+        self.label_file_fd.write("foo1\t5.5\tfoo2\t3.0\tfoo3\n")
         self.label_file_fd.seek(0)
+        
+        # Create a fake .wav signal:
+        wav_signal = range(6*2048)
+        
         with LogCapture('logging_service') as log_content:
             _label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                    self.label_file_fd, self.spectro
+                    wav_signal, self.label_file_fd, framerate=2
                     )
+
         # Ensure we got an error log msg about begin time
         # later than end time:
         log_content.check(
-            ('logging_service', 'ERROR', "Bad label: begin label after end of recording: 5.5 > 3.0"),
-            )
+            ('logging_service', 'ERROR',
+             'Bad label: end label less than begin label: 3.0 < 5.5'
+            ))
         
         # End before start of recording:
         self.label_file_fd.write("foo1\t0.1\tfoo2\t0.2\tfoo3\n")
         self.label_file_fd.seek(0)
         with LogCapture('logging_service') as log_content:
             label_mask = self.spectrogrammer.create_label_mask_from_raven_table(
-                    self.label_file_fd, self.spectro
+                    wav_signal, self.label_file_fd, framerate=2
                     )
+
         # Ensure we got an error log msg about begin time
         # later than end time:
         log_content.check(
-            ('logging_service', 'ERROR', "Bad label: begin label after end of recording: 5.5 > 3.0"),
-            ('logging_service', 'ERROR', "Bad label: end label before start of recording: 0.2 < 0.5"),
+            ('logging_service', 'ERROR', "Bad label: end label less than begin label: 3.0 < 5.5")
             )
-
-        # Times are ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0']
-        expected = np.array([0,0,0,0,0,0])
+        # Times are [0.0, 1024.0, 2048.0, 3072.0, 4096.0, 5120.0, 6144.0]
+        expected = np.array([1,0,0,0,0,0,0])
         self.assertTrue((expected == label_mask).all())
 
 # -------------------------- Main -------------------

@@ -51,8 +51,30 @@ class SpectrogramChopper(object):
                  recurse=False,
                  num_workers=0,
                  this_worker=0,
-                 logfile=None
+                 logfile=None,
+                 test_snippet_width=-1,
                  ):
+        '''
+        
+        @param infiles: list of files and/or dirs to chop
+        @type infiles: {str|[str]}
+        @param snippet_outdir: where snippets are to be placed
+        @type snippet_outdir: str
+        @param recurse: whether or not so search for .pickle 
+            files recursively.
+        @type recurse: bool
+        @param num_workers: how many instances of this class
+            are working on the problem (including this one)?
+        @type num_workers: int
+        @param this_worker: rank of this node within the workers
+        @type this_worker: int
+        @param logfile: where to log
+        @type logfile: {None|str}
+        @param test_snippet_width: if set to a positive int,
+            set the snippet width to that value. Used by unittests
+            to work with smaller dataframes
+        @type test_snippet_width: int
+        '''
         '''
         Constructor
         '''
@@ -125,6 +147,10 @@ class SpectrogramChopper(object):
             
         self.log.info(f"Todo (worker{this_worker}): {num_spectro_files} 24-hr spectrogram files")
 
+        if test_snippet_width > -1:
+            # Set the snippet width smaller for the unittests:
+            SpectrogramDataset.SNIPPET_WIDTH = test_snippet_width
+            
         self.dataset = SpectrogramDataset(
                          dirs_of_spect_files=my_spectro_files,
                          sqlite_db_path=sqlite_db_path,

@@ -309,9 +309,59 @@ class TestSqliteMerger(unittest.TestCase):
             # assertCountEqual() ensures that 
             # all elements of second are in 
             # first, though order is unimportant:
-            self.assertCountEqual(dst_db_rows, all_src_rows)
 
- 
+            self.assertTrue(self.find_rows_match(dst_db_rows, all_src_rows))
+
+    #------------------------------------
+    # find_rows_match
+    #-------------------
+
+    def find_rows_match(self, rowsA, rowsB, verbose=True):
+        '''
+        Given two lists of db rows that conform
+        to the dict API, return True if
+        the two sets of rows match pairwise.
+        
+        @param rowsA: list of db rows
+        @type rowsA: [sqlite3.Row]
+        @param rowsB: list of db rows
+        @type rowsB: [sqlite3.Row]
+        '''
+        for rowA in rowsA:
+            comparisons = [True if self.rows_equal(rowA,rowB, verbose=verbose)
+                            else False
+                            for rowB in rowsB]
+            if sum(comparisons) > 0:
+                # Found match for curr el of rowsA:
+                continue
+            else:
+                if verbose:
+                    print(f"samples_id {rowA['sample_id']} in rowsA has no partner")
+                return False
+        return True
+    
+    #------------------------------------
+    # rows_equal 
+    #-------------------
+
+    def rows_equal(self, row1, row2, verbose=False):
+        '''
+        Return True if the two db rows 
+        match by content. Assumes that rows
+        conform to dict API
+        
+        @param row1:
+        @type row1:
+        @param row2:
+        @type row2:
+        '''
+        for col_name in row1.keys():
+            if row1[col_name] != row2[col_name]:
+                if verbose:
+                    print(f"Column name {col_name}: {row1[col_name]} vs. {row2[col_name]}")
+                return False
+        return True
+
     #------------------------------------
     # connect_all_dbs 
     #-------------------

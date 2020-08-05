@@ -13,6 +13,11 @@
 # 24-hr spectrogram, which is deposited in the
 # destination directory.
 
+#*********
+echo "Infiles at start: $@ "
+#*********
+
+
 if [ "$(uname)" == "Darwin" ]
 then
     if [[ ! -e /usr/local/Cellar/gnu-getopt/1.1.6/bin/getopt ]]
@@ -28,10 +33,10 @@ fi
 read -r -d '' USAGE <<EOF
 Usage: $(basename $0) [-j --jobs][-o --outdir] <spectrogram/label files and/or dirs>
     -h: This message
-    -j: Number of spectrogram chopping jobs to run simultaneouly;
+    -j: Number of wave file noise gating jobs to run simultaneouly;
         default: number of cores
-    -o: Output directory for 24-hr spectrograms and label files;
-        default: same dir as corresponding 24-hr spectrogram
+    -o: Output directory for gated files.
+        default: same dir as original .wav file
 \n
 EOF
 
@@ -52,7 +57,7 @@ eval set -- $OPTS
 
 NUM_WORKERS=$(getconf _NPROCESSORS_ONLN)
 
-DEST_DIR=''
+OUTDIR=''
 
 while true; do
   case "$1" in
@@ -66,6 +71,18 @@ done
 
 # The rest of the args are input .wav files and  dirs:
 infiles=$@
+
+#*********
+echo "Infiles: '$infiles'"
+#*********
+
+# Don't spawn more workers than
+# there are input files:
+
+if [[ $# -lt $NUM_WORKERS ]]
+then
+    NUM_WORKERS=$#
+fi
 
 # Must have at least one in-file/dir:
 if [[ -z $infiles ]]
@@ -94,7 +111,7 @@ let MAX_WORKER_RANK="$NUM_WORKERS - 1"
 # separator from \n to space:
 WORKER_RANKS=$(seq -s ' ' 0 $MAX_WORKER_RANK)
                
-echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
+echo "Starting $NUM_WORKERS copies of wave_maker.py"
 
 # For testing, use the following as the first
 # line of the command, commented the line below it:
@@ -104,17 +121,20 @@ echo "Starting $NUM_WORKERS copies of chop_spectrograms.py"
 # exit status, as well as use of parallel's --resume
 # option:
 
-cmd="/usr/local/bin/parallel echo  "
-#cmd="time /usr/local/bin/parallel --bar --joblog /tmp/wave_making.log $SCRIPT_DIR/wave_maker.py "
+#cmd="/usr/local/bin/parallel --link --bar echo "
+cmd="time /usr/local/bin/parallel --bar --joblog /tmp/parallel_wave_making.log $SCRIPT_DIR/wave_maker.py "
 
-if [[ ! -z $DEST_DIR ]]
+if [[ ! -z $OUTDIR ]]
 then
-    cmd="$cmd --outdir $DEST_DIR"
+    cmd="$cmd --outdir $OUTDIR"
 fi
 cmd="$cmd --threshold_db=-30 --low_freq=20 --high_freq=40 --freq_cap=30 "
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 
+#**********
+echo "Cmd: $cmd"
+#exit
+#**********
+
 # Execute:
 $cmd
-
-

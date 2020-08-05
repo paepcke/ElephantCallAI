@@ -423,7 +423,7 @@ class DSPUtils(object):
         time_per_spectro_tick = hop_length / framerate
         
         # Generate the sequence of fractional seconds
-        # that would label the x axis of the .wav file's
+        # that would label the x axis of the .wcav file's
         # spectrogram. Cannot use Python range(), b/c it
         # only works with ints:
         

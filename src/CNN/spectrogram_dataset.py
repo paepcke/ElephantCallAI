@@ -494,6 +494,9 @@ class SpectrogramDataset(Dataset):
         # If not an even division, we leave on the table
         # less than self.SNIPPET_WIDTH seconds of samples:
         num_snippets =  int(np.floor(time_span / self.SNIPPET_WIDTH))
+        # But: if the time span is smaller than a SNIPPET_WIDTH,
+        # we do want that bit:
+        num_snippets = max(num_snippets, 1)
         snippet_file_root = curr_file_family.file_root
         # Like /foo/bar/nouabile0012, to which we'll add
         # '_<snippet_id>_spectrogram.pickle below:

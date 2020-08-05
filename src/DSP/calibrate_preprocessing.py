@@ -613,8 +613,11 @@ class Experiment(OrderedDict):
         # around (need to fix that). Check whether
         # outfile is one of those, as indicated
         # by its length being zero:
-        if Path(outfile).stat().st_size == 0:
-            os.remove(outfile)
+        try:
+            if Path(outfile).stat().st_size == 0:
+                os.remove(outfile)
+        except FileNotFoundError:
+            pass
          
         if append and os.path.exists(outfile):
             # To append we need to read the current
