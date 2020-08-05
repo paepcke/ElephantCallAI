@@ -54,6 +54,13 @@ class PrecRecComputer(object):
         Constructor
         '''
         PrecRecComputer.log = LoggingService(logfile=self.logfile)
+        
+        #*********
+        import logging
+        self.log.logging_level = logging.ERROR
+        #*********
+
+        
         self.log = PrecRecComputer.log
 
         if not isinstance(overlap_percentages, list):
@@ -93,7 +100,11 @@ class PrecRecComputer(object):
     # compute_performance
     #-------------------
     
-    def compute_performance(self, signal_treatment, samples, label_file_path, overlap_perc_requirement):
+    def compute_performance(self, 
+                            signal_treatment, 
+                            samples, 
+                            label_file_path, 
+                            overlap_perc_requirement):
         '''
         Workhorse. Takes audio sample array, and a csv path. 
         The percentage number is the overlap between audio-derived 
@@ -326,7 +337,9 @@ class PrecRecComputer(object):
     # compute_overlap_percentage
     #-------------------
     
-    def compute_overlap_percentage(self, audio_burst_indices, elephant_burst_indices):
+    def compute_overlap_percentage(self, 
+                                   audio_burst_indices, 
+                                   elephant_burst_indices):
         '''
         Given start/end indices into the discovered audio 
         events, and the same for the labeled events, compute
@@ -389,7 +402,7 @@ class PrecRecComputer(object):
         @param audio_burst_indices: list of discovered burst start/stops
         @type audio_burst_indices: [(start,stop)]
         @param elephant_burst_indices: list of burst start/stops from labels
-        @type elephant_burst_indices: (start,stop)]
+        @type elephant_burst_indices: [(start,stop)]
         @return: dict with percent_overlaps, matches_aud, 
             true_pos_events, false_neg_events, false_pos_events)
         '''
@@ -475,6 +488,16 @@ class PrecRecComputer(object):
         
         # Turn the matches we found above into an np array:
         matches     = np.array(labeled_with_aud_interval_ptr_matches)
+        
+        if len(matches) == 0:
+            # No match found at all?
+            results = OrderedDict({'percent_overlaps' : [],
+                                   'matches_aud'      : [],
+                                   'true_pos_events'  : 0,
+                                   'false_neg_events' : 0,
+                                   'false_pos_events' : 0
+                                  })
+            return results
         
         # The matches are pts into the elephant_burst_indices,
         # and audio_burst_indices. De-reference to get the 
@@ -599,6 +622,12 @@ class PrecRecComputer(object):
         audio_mask = ma.masked_not_equal(samples_padded, 0).mask
         self.log.info("Done creating audio event mask.")
         
+        # If entire audio event seq was 0, we are done.
+        # The audio_mask is still an np array. But 
+        # it has 'no shape':
+        if audio_mask.shape == ():
+            return([], 0)
+         
         # We have one extra mask bit at the front, and the
         # end: chop those off:
         audio_mask = audio_mask[1:-1]
@@ -618,7 +647,7 @@ class PrecRecComputer(object):
         the length of the number of samples, where burst 
         regions have 1s, and other regions have 0s.
         
-        Note that the Ravel label files have start/stop in 
+        Note that the Raven label files have start/stop in 
         fractional seconds. We convert to samples.
         
         The start_stop indices are of the form:
@@ -986,13 +1015,17 @@ class PerformanceResult(OrderedDict):
     #-------------------
 
     def confusion_matrix_samples(self):
-        if self['confusion_matrix_samples'] is not None:
-            return self['confusion_matrix_samples']
+        
+        try:
+            if self['confusion_matrix_samples'] is not None:
+                return self['confusion_matrix_samples']
+        except KeyError:
+            pass
         self['confusion_matrix_samples'] = np.array([[self['true_pos_samples'], self['false_pos_samples']],
                                                     [self['false_neg_samples'], self['true_neg_samples']]
                                                     ]
                                                    )
-        return['confusion_matrix_samples']
+        return self['confusion_matrix_samples']
 
 
     #------------------------------------
@@ -1000,8 +1033,12 @@ class PerformanceResult(OrderedDict):
     #-------------------
 
     def confusion_matrix_events(self):
-        if self['confusion_matrix_events'] is not None:
-            return self['confusion_matrix_events']
+        
+        try:
+            if self['confusion_matrix_events'] is not None:
+                return self['confusion_matrix_events']
+        except KeyError:
+            pass
         self['confusion_matrix_events'] = np.array([[self['true_pos_events'], self['false_pos_events']],
                                                     [self['false_neg_events'], self['true_neg_events']]
                                                     ]

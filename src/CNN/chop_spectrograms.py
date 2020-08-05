@@ -1,74 +1,116 @@
 #!/usr/bin/env python
 '''
-Created on May 4, 2020
-
-Given a list of elephant recording .wav files, 
-batch-creates noise gated elephant files, associated
-24-hr spectrograms, and mask files (if requested).
-
-Results are placed into a command line specified
-destination dir. On request, associated text files
-are copied to that destination as well. 
-
-Input paths may be a mix of .wav files, and directories.
-All .wav files in the subdirs are recursively included.
+Created on Jul 28, 2020
 
 @author: paepcke
 '''
-import os
-import shutil
-import sys
-import math
-
 import argparse
+import math
+import os
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from dsp_utils import AudioType
-from dsp_utils import FileFamily
+from spectrogram_dataset import SpectrogramDataset
+from DSP.dsp_utils import AudioType, FileFamily
 from elephant_utils.logging_service import LoggingService
-from spectrogrammer import Spectrogrammer
 
-class WavMaker(object):
+class SpectrogramChopper(object):
     '''
-    classdocs
+    Initiate chopping of one 24-hr spectrograms.
+    This class may be instantiated multiple
+    times to distribute the work of chopping.
+    When this file is executed, and one instance
+    is thereby created, the total number of
+    workers is passed in, and a 'rank' among
+    these workers is assigned to this particular
+    instance by the caller, usually launch_chopping.sh.
+    
+    Each instance selects a subset of all spectrograms
+    to chop such that no other worker will work
+    on that chosen subset. This decentralized 
+    partitioning is modeled on pytorch's 
+    DistributedDataParallel. Each worker (i.e. instance
+    of this class) creates a subdirectory of the 
+    given snippet_outdir by adding '_<worker-rank>'.
+    All snippets by this worker are placed there, as
+    are accompanying sqlite 
+    
+    The best method for invoking this file multiple
+    times is to use launch_chopping.sh script.
     '''
 
     #------------------------------------
     # Constructor
     #-------------------
 
-    def __init__(self, 
+    def __init__(self,
                  infiles,
-                 outdir='/tmp/',
-                 normalize=True,
-                 threshold_db=-40,
-                 copy_label_files=True,
-                 low_freq=10,
-                 high_freq=50,
-                 spectrogram_freq_cap=150, # Hz
-                 limit=None,
+                 snippet_outdir,
+                 recurse=False,
                  num_workers=0,
                  this_worker=0,
-                 logfile=None
+                 logfile=None,
+                 test_snippet_width=-1,
                  ):
+        '''
+        
+        @param infiles: list of files and/or dirs to chop
+        @type infiles: {str|[str]}
+        @param snippet_outdir: where snippets are to be placed
+        @type snippet_outdir: str
+        @param recurse: whether or not so search for .pickle 
+            files recursively.
+        @type recurse: bool
+        @param num_workers: how many instances of this class
+            are working on the problem (including this one)?
+        @type num_workers: int
+        @param this_worker: rank of this node within the workers
+        @type this_worker: int
+        @param logfile: where to log
+        @type logfile: {None|str}
+        @param test_snippet_width: if set to a positive int,
+            set the snippet width to that value. Used by unittests
+            to work with smaller dataframes
+        @type test_snippet_width: int
+        '''
         '''
         Constructor
         '''
+            
+        if type(infiles) != list:
+            infiles = [infiles]
+            
+        self.log = LoggingService(logfile=logfile,
+                                  msg_identifier=f"chop_spectrograms#{this_worker}")
+        
         # Make sure the full path to the 
         # outdir exists:
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-        self.log = LoggingService(logfile=logfile,
-                                  msg_identifier=f"wave_maker#{this_worker}")
+        if snippet_outdir is None:
+            raise ValueError("Snippet destination directory must be provided; was None")
+        # If snippet_outdir's path does not exist
+        # yet, create all dirs along the path:
+        if not os.path.exists(snippet_outdir):
+            os.makedirs(snippet_outdir)
+            
+        # Create a separate Sqlite db for this 
+        # instance. They all go to the given 
+        # snippet_outdir (i.e. to the parent of where
+        # this worker places the actual snippets:
+        
+        sqlite_name = self.sqlite_name_by_worker(this_worker)
+        sqlite_db_path = os.path.join(snippet_outdir, sqlite_name)
 
+        # If a db of this name is left over
+        # from earlier times, remove it:
+        if os.path.exists(sqlite_db_path):
+            os.remove(sqlite_db_path)
 
         # Get a list of FileFamily instances. The
         # list includes all recursively found files:
         file_families = self.get_files_todo_info(infiles)
-        num_wav_files = len(file_families)
-        
+
         # If this instance is one of several gnu parallel
         # workers, find which of the files this worker
         # is supposed to do:
@@ -77,68 +119,70 @@ class WavMaker(object):
             my_file_families = self.select_my_infiles(file_families, num_workers, this_worker)
         else:
             my_file_families = file_families
+
+        my_spectro_files = [family.fullpath(AudioType.SPECTRO) for family in my_file_families 
+                                 if family.file_type == AudioType.SPECTRO]
+        num_spectro_files = len(my_spectro_files)
         
-        if copy_label_files:
-            # We are to copy txt files where available:
-            num_lab = len([True for file_family in my_file_families \
-                                if os.path.exists(file_family.fullpath(AudioType.LABEL))
-                                ])
-            self.log.debug(f"Todo: {num_wav_files} .wav files; copy {num_lab} label files.")
-            if num_wav_files > num_lab:
-                self.log.debug(f"Missing label file(s) for {num_wav_files - num_lab} file(s).")
-        else:
-            self.log.info(f"Todo: {num_wav_files} .wav files")
+        if num_spectro_files == 0:
+            # Nothing to do. This can (intentionally) 
+            # happen through rounding in select_my_infiles().
+            # It means that another worker will pick up 
+            # what might have been this worker's task.
+            # Set dataset to None b/c one unittest
+            # works better that way; it would otherwise
+            # be undefined:
+            self.dataset = None
+            return
 
-        files_done = 0
-        for file_family in my_file_families:
+        # Because many snippets may be generated, Linux
+        # gets cranky if all are dumped in one directory.
+        # So each worker creates a subdirectory of the 
+        # given snippet_outdir, appending its worker rank:
+        
+        this_worker_snippet_outdir = \
+            f"{snippet_outdir}_{this_worker}"
+        if not os.path.exists(this_worker_snippet_outdir):
+            os.makedirs(this_worker_snippet_outdir)
             
-            # Reconstruct the full file path
-            infile = file_family.fullpath(file_family.file_type)
-            if not os.path.isfile(infile):
-                # At this point we should only be seeing existing .wav files:
-                raise IOError(f"File {infile} does not exist, but should.")
+        self.log.info(f"Todo (worker{this_worker}): {num_spectro_files} 24-hr spectrogram files")
+
+        if test_snippet_width > -1:
+            # Set the snippet width smaller for the unittests:
+            SpectrogramDataset.SNIPPET_WIDTH = test_snippet_width
             
-            try:
-                if file_family.file_type == AudioType.WAV:
-                    actions = ['spectro', 'cleanspectro']
-                elif file_family.file_type == AudioType.LABEL:
-                    actions = ['labelmask']
-                    if copy_label_files:
-                        try:
-                            full_label_path = file_family.fullpath(AudioType.LABEL)
-                            shutil.copy(full_label_path, outdir)
-                        except Exception as e:
-                            self.log.err(f"Could not copy label file {full_label_path} to {outdir}: {repr(e)}")
-                            continue
-                else:
-                    continue
-                
-                self.log.info(f"Submitting {actions} request on '{infile}' to spectrogrammer...")
-                Spectrogrammer(infile,
-                               actions,
-                               outdir=outdir,
-                               normalize=normalize,
-                               low_freq=low_freq,
-                               high_freq=high_freq,
-                               threshold_db=threshold_db,
-                               spectrogram_freq_cap=spectrogram_freq_cap
-                               )
-                self.log.info(f"Spectrogrammer finished; done with {infile}...")
+        self.dataset = SpectrogramDataset(
+                         dirs_of_spect_files=my_spectro_files,
+                         sqlite_db_path=sqlite_db_path,
+                         recurse=recurse,
+                         snippet_outdir=this_worker_snippet_outdir
+                         )
 
-            except Exception as e:
-                self.log.err(f"Processing failed for '{infile}: {repr(e)}")
-                continue
-
-            files_done += 1
-            if limit is not None and (files_done >= limit):
-                self.log.info(f"Completed {files_done}, completing the limit of {limit}")
-                break
-            if files_done > 0 and (files_done % 10) == 0:
-                if limit is not None:
-                    self.log.info(f"\nBatch gated {files_done} of {limit} wav files.")
-                else:
-                    self.log.info(f"\nBatch gated {files_done} of {len(my_file_families)} wav files.")
-
+    #------------------------------------
+    # sqlite_name_by_worker 
+    #-------------------
+    
+    @classmethod
+    def sqlite_name_by_worker(cls, worker_rank):
+        '''
+        Given a worker rank, create a unique 
+        file name that will be the sqlite db file
+        used by the respective worker. 
+        
+        Method is class level so outsiders can 
+        find the sqlite files
+        
+        
+        @param worker_rank: the rank of a worker
+            in the list of all workers that chop
+        @type worker_rank: int
+        @return: file name (w/o dirs) of sqlite file that
+            will only be used by given worker.
+        @rtype str
+        '''
+        
+        sqlite_name = f"snippet_db_{worker_rank}.sqlite"
+        return sqlite_name
 
     #------------------------------------
     # select_my_infiles
@@ -154,7 +198,7 @@ class WavMaker(object):
         partitions theses into num_worker batches. Worker with
         this_worker == 0 works on the first batch. Worker 1
         on the second, and so on. If the number of infiles is
-        not divisible by num_workers, the last worker process
+        not divisible by num_workers, the last worker processes
         the left-overs in addition to their regular share.
         
         @param file_families: file info about each infile
@@ -163,8 +207,14 @@ class WavMaker(object):
         @type num_workers: int
         @param this_worker: rank of this worker in the list of workers
         @type this_worker: int
+        @return the file family instances for this worker to process
+        @rtype [FileFamily]
         '''
         
+        # Note: in case of only one file to do, with more
+        # than one worker, the last worker will pick
+        # up the file in the 'Do I need to take leftovers'
+        # below:
         batch_size = math.floor(len(file_families) / num_workers)
         my_share_start = this_worker * batch_size
         my_share_end   = my_share_start + batch_size
@@ -176,10 +226,7 @@ class WavMaker(object):
             my_share_end += left_overs
         
         my_families = file_families[my_share_start:my_share_end]
-        # Get the .wav files to the front of the 
-        # to-do list so that spectrograms are created
-        # before 
-         
+
         return my_families
 
     #------------------------------------
@@ -188,7 +235,7 @@ class WavMaker(object):
 
     def get_files_todo_info(self, infiles):
         '''
-        Input: a possibly mixed list of .wav, .txt, files,
+        Input: a possibly mixed list of .pickle, .txt, files,
         and directories. Returns a list of FileFamily instances
 
         Where each FileFamily instance is guaranteed to have both, 
@@ -213,7 +260,7 @@ class WavMaker(object):
         # entries:
         indices_backw = range(len(file_todos)-1, -1, -1)
         for i in indices_backw:
-            if not os.path.exists(file_todos[i].fullpath(AudioType.WAV)):
+            if not os.path.exists(file_todos[i].fullpath(AudioType.SPECTRO)):
                 del file_todos[i]
         
         return file_todos
@@ -253,8 +300,8 @@ class WavMaker(object):
             # A file (not a directory)
             filename = file_or_dir
             # A file name; is it a .wav file that does not exist?
-            if  filename.endswith('.wav') and not os.path.exists(filename):
-                self.log.warn(f"Audio file '{filename}' does not exist; skipping it.")
+            if  filename.endswith('.pickle') and not os.path.exists(filename):
+                self.log.warn(f"Spectrogram '{filename}' does not exist; skipping it.")
                 continue 
             
             # Make a family instance:
@@ -265,7 +312,7 @@ class WavMaker(object):
                 continue
 
             # Only keep audio and label files:    
-            if file_family.file_type not in [AudioType.WAV, AudioType.LABEL]:
+            if file_family.file_type not in [AudioType.SPECTRO, AudioType.LABEL]:
                 continue
 
             file_family_list.append(file_family)    
@@ -286,36 +333,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--outdir',
                         help='directory for outfiles; default /tmp',
                         default='/tmp');
-    parser.add_argument('-n', '--no_normalize',
-                        action='store_true',
-                        default=False,
-                        help='do not normalize wave form to fill int16 range',
-                        );
-    parser.add_argument('-t', '--threshold_db',
-                        type=int,
-                        default=-40,
-                        help='dB off peak voltage below which signal is zeroed; default -40',
-                        );
-    parser.add_argument('-m', '--low_freq',
-                        type=int,
-                        default=10,
-                        help='low end of front end bandpass filter; default 10Hz'
-                        );
-    parser.add_argument('-i', '--high_freq',
-                        type=int,
-                        default=50,
-                        help='high end of front end bandpass filter; default 50Hz'
-                        );
-    parser.add_argument('-s', '--freq_cap',
-                        type=int,
-                        default=150,
-                        help='highest frequencies to keep in the spectrograms; default 150Hz'
-                        );
-    parser.add_argument('-x', '--limit',
-                        type=int,
-                        default=None,
-                        help='maximum number of wav files to process; default: all'
-                        );
     parser.add_argument('--num_workers',
                         type=int,
                         default=0,
@@ -328,24 +345,13 @@ if __name__ == '__main__':
                         );
     parser.add_argument('infiles',
                         nargs='+',
-                        help='Repeatable: .wav input files and directories')
+                        help='Repeatable: spectrogram input files and directories')
 
     args = parser.parse_args();
     
-    if args.threshold_db > 0:
-        print("Threshold dB value should be less than 0.")
-        sys.exit(1)
-        
-    WavMaker(args.infiles,
-             outdir=args.outdir,
-             # If no_normalize is True, don't normalize:
-             normalize=not args.no_normalize,
-             low_freq=args.low_freq,
-             high_freq=args.high_freq,
-             threshold_db=args.threshold_db,
-             spectrogram_freq_cap=args.freq_cap,
-             limit=args.limit,
-             num_workers=args.num_workers,
-             this_worker=args.this_worker,
-             logfile=args.logfile
-             )
+    SpectrogramChopper(args.infiles,
+        snippet_outdir=args.outdir,
+        num_workers=args.num_workers,
+        this_worker=args.this_worker,
+        logfile=args.logfile)
+    

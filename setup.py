@@ -14,18 +14,24 @@ setup(
     # Dependencies on other packages:
     # Couldn't get numpy install to work without
     # an out-of-band: sudo apt-get install python-dev
-    setup_requires   = [],
-    install_requires = ['requests>=2.22.0',
+    setup_requires   = ['pytest-runner'],
+    install_requires = ['requests>=2.21.0',
                         'matplotlib>=3.1.3',
                         'sklearn',
                         'PTable>=0.9.2',
+                        'torch>=1.5.1',
+                        'torchaudio>=0.5.1',
+                        'pandas>=1.0.5',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']
     # Unit tests; they are initiated via 'python setup.py test'
-    test_suite       = 'nose.collector',
+    #test_suite       = 'nose.collector',
     #test_suite       = 'tests',
-    tests_require    =['nose'],
+    #test_suite        = 'unittest2.collector',
+    tests_require    =['pytest',
+                       'testfixtures>=6.14.1',
+                       ],
 
     # metadata for upload to PyPI
     author = "Nikita-Girey Nechvet Demir, Jonathan Michael Gomes Selman, Andreas Paepcke",
