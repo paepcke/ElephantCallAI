@@ -9,7 +9,7 @@ from sklearn.metrics import f1_score
 import parameters
 from data import get_loader, ElephantDatasetFull
 from visualization import visualize, visualize_predictions
-from utils import sigmoid, calc_accuracy, get_f_score
+from utils import sigmoid, calc_accuracy, get_f_score, hierarchical_model_1_path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
@@ -609,10 +609,8 @@ def main(args):
     # Load Model_0 and Model_1 of the hierarchical models
     hierarchical_model_path = args.models
     model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
-    model_1_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + \
-                    '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower() 
-    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
-        model_1_name += '_OversizeCalls'
+    # Get the model_1 name
+    model_1_name = hierarchical_model_1_path()
     model_1_name += "/model.pt"
     model_1_path = os.path.join(hierarchical_model_path, model_1_name)
 
