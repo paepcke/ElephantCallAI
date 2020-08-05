@@ -39,7 +39,8 @@ HIERARCHICAL_SHIFT_WINDOWS = False
 MODEL_ID = 17
 
 # This now represents whether to use noab or bai
-DATASET = 'Call'
+DATASET = 'noab'
+PRE_TRAIN = True
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
