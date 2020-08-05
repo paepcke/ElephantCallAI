@@ -34,6 +34,10 @@ parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
 parser.add_argument('--model_0', type=str,
     help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')
+parser.add_argument('--pre_train_0', type=str,
+    help='Use a pre-trained model to initialize model 0')
+parser.add_argument('--pre_train_1', type=str,
+    help='Use a pre-trained model to initialize model 1')
 
 """
     General approach ideas. Train the first model, we will call this model
@@ -136,7 +140,7 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
     return adversarial_examples
 
 
-def initialize_training(model_id, save_path):
+def initialize_training(model_id, save_path, model_type=0, pre_train_path=None):
     # The get_model method is in charge of 
     # setting the same seed for each loaded model.
     # Thus, for each inner loop we train the same initialized model
@@ -145,6 +149,12 @@ def initialize_training(model_id, save_path):
         final_slash  = save_path.rindex('/')
         model_0_path = os.path.join(save_path[:final_slash], "Model_0/model.pt")
         model = torch.load(model_0_path, map_location=parameters.device)
+    elif parameters.PRE_TRAIN and model_type == 0: # Load a pre-trained model
+        print ("Loading Pre-Trained Model 0")
+        model = torch.load(pre_train_path, map_location=parameters.device)
+    elif parameters.HIERARCHICAL_PRE_TRAIN and model_type == 1:
+        print ("Loading Pre-Trained Model 1")
+        model = torch.load(pre_train_path, map_location=parameters.device)
     else:
         model = get_model(model_id).to(parameters.device)
 
@@ -163,7 +173,7 @@ def initialize_training(model_id, save_path):
 
     return model, loss_func, include_boundaries, optimizer, scheduler, writer
 
-def train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path):
+def train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path, pre_train_path=None):
 
     print ("++===============================++")
     print ("++Training Error Correcting Model++") 
@@ -189,7 +199,8 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     # For now just use same model for 0 and 1
     start_time = time.time()
     model_1, loss_func, include_boundaries, optimizer, scheduler, writer = initialize_training(parameters.HIERARCHICAL_MODEL, 
-                                                                                second_model_save_path)
+                                                                                second_model_save_path, model_type=1,
+                                                                                pre_train_path=pre_train_path)
     model_1_wts = train(dloaders, model_1, loss_func, optimizer, scheduler, 
                     writer, parameters.NUM_EPOCHS, include_boundaries=include_boundaries)
 
@@ -243,7 +254,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
 
     return adversarial_train_files, adversarial_test_files
 
-def train_model_0(train_loader, test_loader, save_path):
+def train_model_0(train_loader, test_loader, save_path, pre_train_path=None):
     """
         Train the "sound" detector - Model_0
     """
@@ -256,7 +267,9 @@ def train_model_0(train_loader, test_loader, save_path):
 
     dloaders = {'train':train_loader, 'valid':test_loader}
     start_time = time.time()
-    model_0, loss_func, include_boundaries, optimizer, scheduler, writer = initialize_training(parameters.MODEL_ID, first_model_save_path)
+    model_0, loss_func, include_boundaries, optimizer, scheduler, writer = initialize_training(parameters.MODEL_ID, 
+                                                                                            first_model_save_path, model_type=0,
+                                                                                            pre_train_path=pre_train_path)
     model_0_wts = train(dloaders, model_0, loss_func, optimizer, scheduler, 
                     writer, parameters.NUM_EPOCHS, include_boundaries=include_boundaries)
 
@@ -277,8 +290,6 @@ def train_model_0(train_loader, test_loader, save_path):
 
 
 def main():
-    args = parser.parse_args()
-
     # What do we need to do across all of the settings!
     # Get the data loaders!
     args = parser.parse_args()
@@ -342,7 +353,7 @@ def main():
     if args.full_pipeline:
         # Train and save model_0
         if args.model_0 == None:
-            model_0 = train_model_0(model_0_train_loader, model_0_test_loader , save_path)
+            model_0 = train_model_0(model_0_train_loader, model_0_test_loader , save_path, args.pre_train_0)
         else: # Load and save model_0
             model_0 = torch.load(args.model_0, map_location=parameters.device)
             first_model_save_path = os.path.join(save_path, "Model_0")
@@ -355,7 +366,8 @@ def main():
         # Do the adversarial discovery
         adversarial_train_files, adversarial_test_files = adversarial_discovery(full_train_path, full_test_path, model_0, save_path)
         # Train and save model 1
-        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, save_path)
+        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, 
+                                                save_path, args.pre_train_1)
     
     # Just generate new adversarial examples 
     elif args.adversarial:
@@ -385,7 +397,8 @@ def main():
             for file in files:
                 adversarial_test_files.append(file.strip())
 
-        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, save_path)
+        train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, 
+                        model_1_test_loader, save_path, args.pre_train_1)
 
     else:
         print ("Invalid running mode!")
