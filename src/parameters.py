@@ -28,17 +28,17 @@ ADVERSARIAL_THRESHOLD = 0
 
 FALSE_NEGATIVE_THRESHOLD = 15 # Test this!
 # Specify 'same' to keep training Model_0
-HIERARCHICAL_MODEL = 17
+HIERARCHICAL_MODEL = 26
 # Specify the number of repeats for ONLY the 
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
-HIERARCHICAL_REPEATS = 5
+HIERARCHICAL_REPEATS = 1
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
-MODEL_ID = 24
+MODEL_ID = 17
 
-# WE SHOULD PHASE THIS OUT!
+# This now represents whether to use noab or bai
 DATASET = 'Call'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
@@ -82,6 +82,8 @@ LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs'
 
 REMOTE_TRAIN_FILES = '/home/data/elephants/processed_data/Train_nouab/'
 REMOTE_TEST_FILES = "/home/data/elephants/processed_data/Test_nouab/"
+REMOTE_BAI_TRAIN_FILES = '/home/data/elephants/processed_data/Train_bai/'
+REMOTE_BAI_TEST_FILES = '/home/data/elephants/processed_data/Test_bai/'
 REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs'
 REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs'
 
@@ -252,6 +254,14 @@ HYPERPARAMETERS = {
         'lr_decay_step': 4, 
         'lr_decay': 0.95,
         'l2_reg': 1e-5,
+        },
+26: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        'compress_factors': [5, 4, 2],
+        'num_filters': [32, 64, 64]
         }
 }
 

@@ -40,6 +40,12 @@ parser.add_argument('--save_local', dest='save_local', action='store_true',
     'The default is to save to the quatro data directory.')
 
 
+"""
+    Add the ability to 
+    1) train on the bai sounds and save a model that reflects that!
+    2) Load a pre-trained model as the starting point of training
+"""
+
 def main():
     args = parser.parse_args()
 

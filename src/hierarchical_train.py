@@ -10,7 +10,7 @@ import argparse
 
 import parameters
 from data import get_loader, get_loader_fuzzy
-from utils import create_save_path, create_dataset_path
+from utils import create_save_path, create_dataset_path, hierarchical_model_1_path
 from models import * # Note for some reason we need to import the models as well
 from loss import get_loss
 from train import train
@@ -180,10 +180,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
 
     dloaders = {'train':train_loader, 'valid':test_loader}
 
-    model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + '_CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
-    # Add if we are using shifting windows
-    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
-        model_name += '_OversizeCalls'
+    model_name = hierarchical_model_1_path()
 
     second_model_save_path = os.path.join(save_path, model_name)
     if not os.path.exists(second_model_save_path):
