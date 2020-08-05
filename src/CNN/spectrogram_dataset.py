@@ -158,13 +158,40 @@ class SpectrogramDataset(Dataset):
     #-------------------
 
     def __init__(self,
-                 dirs_of_spect_files=None,
+                 dirs_or_spect_files=None,
                  sqlite_db_path=None,
                  recurse=False,
+                 chop=False,
                  snippet_outdir=None,
                  testing=False,
                  test_db=None
                  ):
+        '''
+        
+        @param dirs_or_spect_files: list of files and/or directories
+            where spectrograms reside. These may be 24-hr spectrograms,
+            or snippets.
+        @type dirs_or_spect_files: {str|[str]}
+        @param sqlite_db_path: fully qualified path to the sqlite
+            db that holds info of already existing snippets. If None,
+            such a db will be created.
+        @type sqlite_db_path: str
+        @param recurse: whether or not to search for spectrograms
+            in subtrees of dirs_or_spect_files
+        @type recurse: bool
+        @param chop: whether or not to perform any chopping of
+            24-hr spectrograms. If all spectrograms in dirs_or_spect_files
+            and their subtrees are snippets, set this value to False.
+        @type chop: bool
+        @param snippet_outdir: if chopping is requested: where to place
+            the resulting snippets
+        @type snippet_outdir: str
+        @param testing: whether caller is a unittest
+        @type testing: bool
+        @param test_db: in case of testing, a db created by
+            the unittest.
+        @type test_db: sqlite3.Connection
+        '''
         #***** if snippet_outdir is None, snippets
         #      go where spectrogram is.
         self.snippet_outdir = snippet_outdir
@@ -184,7 +211,7 @@ class SpectrogramDataset(Dataset):
             
             
         if not testing:
-            if dirs_of_spect_files is None and sqlite_db_path is None:
+            if dirs_or_spect_files is None and sqlite_db_path is None:
                 raise ValueError("Directories and sqlite_db_path args must not both be None")
             
             self.log = LoggingService()
@@ -196,25 +223,26 @@ class SpectrogramDataset(Dataset):
 
             self.db = SpectrogramDataset.get_db(sqlite_db_path)
             
-            # Get already processed dirs. The 'list()' pulls all hits from
-            # the db at once (like any other iterator)
-            try:
-                processed_dirs = list(self.db.execute('''
-                                            SELECT dir_or_file_name FROM DirsAndFiles;
-                                                      '''))
-            except DatabaseError as e:
-                raise DatabaseError(f"Could not check for already processed work: {repr(e)}") from e
-                
-            if dirs_of_spect_files is not None:
-                # Process those of the given dirs_of_spect_files that 
-                # are not already in the db:
-                dirs_or_files_to_do = set(dirs_of_spect_files) - set(processed_dirs)
-            else:
-                dirs_or_files_to_do = set()
-    
-            if len(dirs_or_files_to_do) > 0:
-                # Chop spectrograms:
-                self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
+            if chop:
+                # Get already processed dirs. The 'list()' pulls all hits from
+                # the db at once (like any other iterator)
+                try:
+                    processed_dirs = list(self.db.execute('''
+                                                SELECT dir_or_file_name FROM DirsAndFiles;
+                                                          '''))
+                except DatabaseError as e:
+                    raise DatabaseError(f"Could not check for already processed work: {repr(e)}") from e
+                    
+                if dirs_or_spect_files is not None:
+                    # Process those of the given dirs_or_spect_files that 
+                    # are not already in the db:
+                    dirs_or_files_to_do = set(dirs_or_spect_files) - set(processed_dirs)
+                else:
+                    dirs_or_files_to_do = set()
+        
+                if len(dirs_or_files_to_do) > 0:
+                    # Chop spectrograms:
+                    self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
     
         num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
         

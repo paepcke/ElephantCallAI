@@ -152,7 +152,7 @@ class SpectrogramChopper(object):
             SpectrogramDataset.SNIPPET_WIDTH = test_snippet_width
             
         self.dataset = SpectrogramDataset(
-                         dirs_of_spect_files=my_spectro_files,
+                         dirs_or_spect_files=my_spectro_files,
                          sqlite_db_path=sqlite_db_path,
                          recurse=recurse,
                          snippet_outdir=this_worker_snippet_outdir
