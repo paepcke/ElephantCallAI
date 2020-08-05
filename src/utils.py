@@ -94,6 +94,10 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
 
 def hierarchical_model_1_path():
     model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + "_"
+
+    if parameters.HIERARCHICAL_PRE_TRAIN:
+        model_name += 'BAI-Pre-Train_'
+
     # Add the downsampling sizes and the number of filters as model specific parameters
     if parameters.HIERARCHICAL_MODEL == 26:
         model_name += 'DownSample-['
