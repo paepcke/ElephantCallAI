@@ -122,7 +122,8 @@ def generate_labels_fuzzy(labels, spectrogram_info, len_wav):
         # are doing per call boarders
         if spectrogram_info['individual_boarders']: 
             # Fudge_factor should be chosen such that it is << len call.
-            assert(length > fudge_factor)
+            if length < fudge_factor:
+                continue
             # Make sure to not go over the ends of the file
             # Add 1 to the right fudge idx.
             fudge_start_left = max(0, start_spec - fudge_factor)

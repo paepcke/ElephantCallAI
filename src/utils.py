@@ -37,6 +37,23 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
 
     # TIME TO GET RID OF THE CALL_DATASET STUFF!
     save_path += 'Model-' + str(parameters.MODEL_ID) + '_'
+
+    # Add the downsampling sizes and the number of filters as model specific parameters
+    if parameters.MODEL_ID == 26:
+        save_path += 'DownSample-['
+        compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+        for factor in compress_factors:
+            save_path += str(factor) + '-'
+
+        save_path = save_path[:-1] + ']_'
+
+        save_path += 'Filters-['
+        num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+        for filter in num_filters:
+            save_path += str(filter) + '-'
+
+        save_path = save_path[:-1] + ']_'
+
     # Add the model random seed only if the Dataset Random Seed
     # and the Model Random seed differ. Hacky for now!
     if parameters.MODEL_SEED != parameters.DATASET_SEED:
@@ -62,13 +79,37 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
         if parameters.BOUNDARY_LOSS.lower() == "weight":
             save_path += "BoundaryWeight-" + str(parameters.BOUNDARY_WEIGHT) + "_"
 
-
     if parameters.SHIFT_WINDOWS:
         save_path += "ShiftWindows_"
 
     save_path +=  str(save_time)
     
     return save_path
+
+def hierarchical_model_1_path():
+    model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + "_"
+    # Add the downsampling sizes and the number of filters as model specific parameters
+    if parameters.HIERARCHICAL_MODEL == 26:
+        model_name += 'DownSample-['
+        compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+        for factor in compress_factors:
+            model_name += str(factor) + '-'
+
+        model_name = model_name[:-1] + ']_'
+
+        model_name += 'Filters-['
+        num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+        for filter in num_filters:
+            model_name += str(filter) + '-'
+
+        model_name = model_name[:-1] + ']_'
+
+    model_name += 'CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
+    # Add if we are using shifting windows
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        model_name += '_OversizeCalls'
+
+    return model_name
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):
     init_path += 'Neg_Samples_x' + str(neg_samples) + "_Seed_" + str(parameters.DATASET_SEED) + \
