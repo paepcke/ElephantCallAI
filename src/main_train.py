@@ -38,6 +38,8 @@ parser.add_argument('--local_files', dest='local_files', action='store_true',
 parser.add_argument('--save_local', dest='save_local', action='store_true',
     help='Flag specifying to save model run information to the local models directory.'
     'The default is to save to the quatro data directory.')
+parser.add_argument('--pre_train', type=str, 
+    help='Specifies the model path for the pre-trained model')
 
 
 """
@@ -53,8 +55,12 @@ def main():
         train_data_path = parameters.LOCAL_TRAIN_FILES
         test_data_path = parameters.LOCAL_TEST_FILES
     else:
-        train_data_path = parameters.REMOTE_TRAIN_FILES
-        test_data_path = parameters.REMOTE_TEST_FILES
+        if parameters.DATASET.lower() == "noab":
+            train_data_path = parameters.REMOTE_TRAIN_FILES
+            test_data_path = parameters.REMOTE_TEST_FILES
+        else:
+            train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
+            test_data_path = parameters.REMOTE_BAI_TEST_FILES
 
     train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.DATASET_SEED) + \
                         "_CallRepeats_" + str(parameters.CALL_REPEATS)
@@ -86,8 +92,12 @@ def main():
     dloaders = {'train':train_loader, 'valid':test_loader}
 
     ## Training
-    model = get_model(parameters.MODEL_ID)
-    model.to(parameters.device)
+    # Load a pre-trained model
+    if parameters.PRE_TRAIN:
+        model = torch.load(args.pre_train, map_location=parameters.device)
+    else:
+        model = get_model(parameters.MODEL_ID)
+        model.to(parameters.device)
 
     print(model)
 

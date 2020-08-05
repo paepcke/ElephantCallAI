@@ -35,8 +35,14 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     if save_prefix is not None:
         save_path += save_prefix
 
+    if parameters.DATASET.lower() == 'bai':
+        save_path += 'BAI-Pre-Train_'
+
     # TIME TO GET RID OF THE CALL_DATASET STUFF!
     save_path += 'Model-' + str(parameters.MODEL_ID) + '_'
+
+    if parameters.PRE_TRAIN:
+        save_path += 'Pre-Trained_'
 
     # Add the downsampling sizes and the number of filters as model specific parameters
     if parameters.MODEL_ID == 26:
