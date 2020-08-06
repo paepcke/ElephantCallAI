@@ -155,7 +155,8 @@ class SpectrogramChopper(object):
                          dirs_of_spect_files=my_spectro_files,
                          sqlite_db_path=sqlite_db_path,
                          recurse=recurse,
-                         snippet_outdir=this_worker_snippet_outdir
+                         snippet_outdir=this_worker_snippet_outdir,
+                         chop=True
                          )
 
     #------------------------------------

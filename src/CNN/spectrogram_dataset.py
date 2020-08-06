@@ -199,6 +199,8 @@ class SpectrogramDataset(Dataset):
         @type debugging: bool
         '''
 
+        self.debugging = debugging
+
         self.snippet_outdir = snippet_outdir
         
         if type(dirs_or_spect_files) != list:
@@ -257,7 +259,8 @@ class SpectrogramDataset(Dataset):
                 # pickle files we have in our debug env:
             sample_id_rows = self.db.execute(f'''SELECT sample_id
                                                   FROM Samples
-                                                  WHERE snippet_filename LIKE '{dirs_or_spect_files[0]}%'
+                                                  WHERE sample_id in 
+                                                  (57726,57748,58084,58095,58297,60628,60630,60632,60635,60896,57560,57561,57562,57563,57564,57565,57566,57567,57568,57569)
                                                   ''')
         else:
             sample_id_rows = self.db.execute('''SELECT sample_id
