@@ -8,7 +8,7 @@ from collections import OrderedDict
 import csv
 from enum import Enum
 import os
-from pathlib import Path, PosixPath
+from pathlib import Path
 import re
 import sys
 import time
@@ -20,6 +20,7 @@ from torchaudio import transforms
 from elephant_utils.logging_service import LoggingService
 import numpy as np
 import pandas as pd
+from sqlite3 import DatabaseError
 
 
 class PrecRecFileTypes(Enum):
@@ -552,6 +553,70 @@ class DSPUtils(object):
                                           collected,
                                           maxdepth - 1)
         return collected
+
+    #------------------------------------
+    # map_sample_filenames 
+    #-------------------
+    
+    @classmethod
+    def map_sample_filenames(cls,
+                             sqlite_db,
+                             curr_to_dst_dir_dict,
+                             filename_col='snippet_filename'
+                             ):
+        '''
+        Used to batch replace spectrogram snippet location
+        paths in a snippet db to point to new locations. Relevant
+        where the snippets are copied or moved to locations other
+        than where they were place during chopping.
+        
+        The keys in curr_to_dst_dir_dict are directories that occur
+        in the snippet_filename columns of the db and should be
+        replaced. The values of the dict are the directories to
+        which the values are to be changed.
+        
+        @param sqlite_db: open Sqlite db with at least columns
+            sample_id and filename_col
+        @type sqlite_db: sqlite3.Connection
+        @param curr_to_dst_dir_dict: map from current snippet directories
+            to new directories
+        @type curr_to_dst_dir_dict: {str : str}
+        @param filename_col: name of column that is to be modified
+        @type filename_col: str
+        '''
+
+        for curr_dir in curr_to_dst_dir_dict.keys():
+            
+            # If needed, add ending slash to dir names to replace,
+            # and the replacement:
+            if not curr_dir.endswith('/'):
+                curr_dir_slashed = curr_dir + '/'
+            else:
+                curr_dir_slashed = curr_dir
+                
+            if not curr_to_dst_dir_dict[curr_dir].endswith('/'):
+                curr_to_dst_dir_dict[curr_dir] = curr_to_dst_dir_dict[curr_dir] + '/'
+
+            batch_update_cmd = f'''
+                    WITH Tmp AS
+                       (SELECT sample_id, REPLACE({filename_col},
+                                                  '{curr_dir_slashed}',
+                                                  '{curr_to_dst_dir_dict[curr_dir]}') AS snippet_filename
+                          FROM Samples)
+                    UPDATE Samples
+                    SET snippet_filename = (SELECT snippet_filename
+                                              FROM Tmp
+                                             WHERE Samples.sample_id = Tmp.sample_id);
+    
+                            
+                            '''
+            try:
+                sqlite_db.execute(batch_update_cmd)
+            except Exception as e:
+                raise DatabaseError(
+                    f"Samples snippet filename updates from {curr_dir} to \n"
+                    f"{curr_to_dst_dir_dict[curr_dir]} failed: {repr(e)}") from e
+
 
 # ---------------------------- Class FileFamily
 
