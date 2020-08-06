@@ -154,7 +154,8 @@ class SpectrogramDataLoader(DataLoader):
         @returns nothing
         '''
         
-        self.dataset(n_splits=n_splits,
+        self.dataset.kfold_stratified(
+                     n_splits=n_splits,
                      n_repeats=n_repeats,
                      shuffle=shuffle,
                      random_state=random_state)
