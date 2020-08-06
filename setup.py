@@ -21,7 +21,7 @@ setup(
                         'PTable>=0.9.2',
                         'torch>=1.5.1',
                         'torchaudio>=0.5.1',
-                        'pandas>=1.0.5',
+                        'pandas>=1.1.0',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']
