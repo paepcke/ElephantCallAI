@@ -158,16 +158,51 @@ class SpectrogramDataset(Dataset):
     #-------------------
 
     def __init__(self,
-                 dirs_of_spect_files=None,
+                 dirs_or_spect_files=None,
                  sqlite_db_path=None,
                  recurse=False,
+                 chop=False,
                  snippet_outdir=None,
                  testing=False,
-                 test_db=None
+                 test_db=None,
+                 debugging=False
                  ):
-        #***** if snippet_outdir is None, snippets
-        #      go where spectrogram is.
+        '''
+        
+        @param dirs_or_spect_files: list of files and/or directories
+            where spectrograms reside. These may be 24-hr spectrograms,
+            or snippets.
+        @type dirs_or_spect_files: {str|[str]}
+        @param sqlite_db_path: fully qualified path to the sqlite
+            db that holds info of already existing snippets. If None,
+            such a db will be created.
+        @type sqlite_db_path: str
+        @param recurse: whether or not to search for spectrograms
+            in subtrees of dirs_or_spect_files
+        @type recurse: bool
+        @param chop: whether or not to perform any chopping of
+            24-hr spectrograms. If all spectrograms in dirs_or_spect_files
+            and their subtrees are snippets, set this value to False.
+        @type chop: bool
+        @param snippet_outdir: if chopping is requested: where to place
+            the resulting snippets
+        @type snippet_outdir: str
+        @param testing: whether caller is a unittest
+        @type testing: bool
+        @param test_db: in case of testing, a db created by
+            the unittest.
+        @type test_db: sqlite3.Connection
+        @param debugging: set to True if debugging where not all
+            sample snippets are available, such as a purely dev machine.
+            Will cause only samples from the first dirs_or_spect_files
+            to be included.
+        @type debugging: bool
+        '''
+
         self.snippet_outdir = snippet_outdir
+        
+        if type(dirs_or_spect_files) != list:
+            dirs_or_spect_files = [dirs_or_spect_files]
 
         # Allow unittests to create an instance and
         # then call methods selectively:
@@ -184,7 +219,7 @@ class SpectrogramDataset(Dataset):
             
             
         if not testing:
-            if dirs_of_spect_files is None and sqlite_db_path is None:
+            if dirs_or_spect_files is None and sqlite_db_path is None:
                 raise ValueError("Directories and sqlite_db_path args must not both be None")
             
             self.log = LoggingService()
@@ -196,35 +231,42 @@ class SpectrogramDataset(Dataset):
 
             self.db = SpectrogramDataset.get_db(sqlite_db_path)
             
-            # Get already processed dirs. The 'list()' pulls all hits from
-            # the db at once (like any other iterator)
-            try:
-                processed_dirs = list(self.db.execute('''
-                                            SELECT dir_or_file_name FROM DirsAndFiles;
-                                                      '''))
-            except DatabaseError as e:
-                raise DatabaseError(f"Could not check for already processed work: {repr(e)}") from e
-                
-            if dirs_of_spect_files is not None:
-                # Process those of the given dirs_of_spect_files that 
-                # are not already in the db:
-                dirs_or_files_to_do = set(dirs_of_spect_files) - set(processed_dirs)
-            else:
-                dirs_or_files_to_do = set()
-    
-            if len(dirs_or_files_to_do) > 0:
-                # Chop spectrograms:
-                self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
-    
-        num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
+            if chop:
+                # Get already processed dirs. The 'list()' pulls all hits from
+                # the db at once (like any other iterator)
+                try:
+                    processed_dirs = list(self.db.execute('''
+                                                SELECT dir_or_file_name FROM DirsAndFiles;
+                                                          '''))
+                except DatabaseError as e:
+                    raise DatabaseError(f"Could not check for already processed work: {repr(e)}") from e
+                    
+                if dirs_or_spect_files is not None:
+                    # Process those of the given dirs_or_spect_files that 
+                    # are not already in the db:
+                    dirs_or_files_to_do = set(dirs_or_spect_files) - set(processed_dirs)
+                else:
+                    dirs_or_files_to_do = set()
         
-        # Total number of samples in the db:
-        self.num_samples = num_samples_row['num_samples']
-
-        # Our sample ids go from 0 to n. List of all sample ids:
-        self.sample_ids = list(range(self.num_samples))
+                if len(dirs_or_files_to_do) > 0:
+                    # Chop spectrograms:
+                    self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
+    
+        if debugging:
+            # Only keep the samples whose corresponding 
+                # pickle files we have in our debug env:
+            sample_id_rows = self.db.execute(f'''SELECT sample_id
+                                                  FROM Samples
+                                                  WHERE snippet_filename LIKE '{dirs_or_spect_files[0]}%'
+                                                  ''')
+        else:
+            sample_id_rows = self.db.execute('''SELECT sample_id
+                                                  FROM Samples''')
+            
+        self.sample_ids  = [row['sample_id'] for row in sample_id_rows]
+        self.num_samples = len(self.sample_ids)
         
-        # So for, folds*() was not called, so using
+        # So far, folds*() was not called, so using
         # the entire dataset:
         self.num_folds = 0
 
@@ -550,9 +592,10 @@ class SpectrogramDataset(Dataset):
             # Fill the snippet id into the file family:
             curr_file_family.snippet_id = db_snippet_id
             
-            # Save the snippet to file:
-            snippet.to_pickle(snippet_file_name)
-            
+            # Save the snippet to file. Latest protocol
+            # is 5, but pd.read_pickle() only works up 
+            # to 4 (at least with version <= 1.1.0):
+            snippet.to_pickle(snippet_file_name, protocol=4)
 
     #------------------------------------
     # label_for_snippet 
@@ -846,7 +889,11 @@ class SpectrogramDataset(Dataset):
                                WHERE sample_id = {next_sample_id}
                              ''')
         row = next(res)
-        snippet_df = DSPUtils.load_spectrogram(row['snippet_filename'])
+        try:
+            snippet_fname = row['snippet_filename']
+            snippet_df = DSPUtils.load_spectrogram(snippet_fname)
+        except Exception as e:
+            raise IOError(f"Attempt to load spectro snippet {row['snippet_filename']}: {repr(e)}") from e
         return {'spectrogram' : snippet_df, 'label' : row['label']}
 
     #------------------------------------
@@ -1039,11 +1086,7 @@ class SpectrogramDataset(Dataset):
                                                            n_repeats=n_repeats,
                                                            random_state=random_state)
             
-        # The following retrieves *indices* into 
-        # our list of sample_ids. However, since
-        # our sample_ids are just numbers from 0 to n,
-        # the indices are equivalent to the sample ids
-        # themselves
+
         
         # The split method will return a generator
         # object. Each item in this generator is
@@ -1054,9 +1097,17 @@ class SpectrogramDataset(Dataset):
         
         all_labels = self.labels_from_db(self.sample_ids)
         self.folds_iter = self.cross_validator.split(self.sample_ids, all_labels) 
-        (self.train_sample_ids, self.validate_sample_ids) = \
+        
+        # The following retrieves *indices* into 
+        # our list of sample_ids.
+        (self.train_sample_idxs, self.validate_sample_idxs) = \
             next(self.folds_iter)
-            
+        
+        # Get actual sample_ids from the indices
+        # into the sample ids:
+        self.train_sample_ids = [self.sample_ids[idx] for idx in self.train_sample_idxs]
+        self.validate_sample_ids = [self.sample_ids[idx] for idx in self.validate_sample_idxs]
+        
         self.train_queue = deque(self.train_sample_ids)
         self.val_queue   = deque(self.validate_sample_ids)
         self.train_labels = self.labels_from_db(self.train_sample_ids)
