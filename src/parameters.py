@@ -37,8 +37,8 @@ HIERARCHICAL_REPEATS = 1
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
-MODEL_ID = 17
-PRE_TRAIN = True
+MODEL_ID = 27
+PRE_TRAIN = False
 
 # This now represents whether to use noab or bai
 DATASET = 'noab'
@@ -264,6 +264,14 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         'compress_factors': [5, 4, 2],
         'num_filters': [32, 64, 64]
+        },
+27: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        'compress_factors': [1, 2, 2, 2],
+        'num_filters': [32, 64, 64, 128]
         }
 }
 

@@ -45,16 +45,16 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
         save_path += 'Pre-Trained_'
 
     # Add the downsampling sizes and the number of filters as model specific parameters
-    if parameters.MODEL_ID == 26:
+    if parameters.MODEL_ID == 26 or parameters.MODEL_ID == 27:
         save_path += 'DownSample-['
-        compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+        compress_factors = parameters.HYPERPARAMETERS[parameters.MODEL_ID]['compress_factors']
         for factor in compress_factors:
             save_path += str(factor) + '-'
 
         save_path = save_path[:-1] + ']_'
 
         save_path += 'Filters-['
-        num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+        num_filters = parameters.HYPERPARAMETERS[parameters.MODEL_ID]['num_filters']
         for filter in num_filters:
             save_path += str(filter) + '-'
 
@@ -99,16 +99,16 @@ def hierarchical_model_1_path():
         model_name += 'BAI-Pre-Train_'
 
     # Add the downsampling sizes and the number of filters as model specific parameters
-    if parameters.HIERARCHICAL_MODEL == 26:
+    if parameters.HIERARCHICAL_MODEL == 26 or parameters.HIERARCHICAL_MODEL == 27:
         model_name += 'DownSample-['
-        compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+        compress_factors = parameters.HYPERPARAMETERS[parameters.HIERARCHICAL_MODEL]['compress_factors']
         for factor in compress_factors:
             model_name += str(factor) + '-'
 
         model_name = model_name[:-1] + ']_'
 
         model_name += 'Filters-['
-        num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+        num_filters = parameters.HYPERPARAMETERS[parameters.HIERARCHICAL_MODEL]['num_filters']
         for filter in num_filters:
             model_name += str(filter) + '-'
 
