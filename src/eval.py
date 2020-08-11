@@ -820,20 +820,20 @@ def test_elephant_call_metric(dataset, results):
 
         print ("Testing False Negative Results")        
         visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], 
-                                labels, label="False Negative", times=times)
+                               results[data_id]['predictions'], labels, label="False Negative", times=times)
 
         print ("Testing False Positive Results")  
         print (len(results[data_id]['false_pos']))      
         visualize_predictions(results[data_id]['false_pos'], spectrogram, results[data_id]['binary_preds'], 
-                                labels, label="False Positive", times=times)
+                                results[data_id]['predictions'], labels, label="False Positive", times=times)
 
         print ("Testing True Positive Predictions Results")        
         visualize_predictions(results[data_id]['true_pos'], spectrogram, results[data_id]['binary_preds'], 
-                                labels, label="True Positive Predictions", times=times)
+                                results[data_id]['predictions'], labels, label="True Positive Predictions", times=times)
 
         print ("Testing True Positive Recall Results")        
         visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, results[data_id]['binary_preds'], 
-                                labels, label="True Positive Recall", times=times)
+                                results[data_id]['predictions'], labels, label="True Positive Recall", times=times)
 
 def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
     """
