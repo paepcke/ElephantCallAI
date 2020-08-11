@@ -77,7 +77,7 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries
         else:
             ax3.plot(np.arange(binary_preds.shape[0]), binary_preds)
         ax3.set_ylim([0,1])
-        ax3.axhline(y=0.5, color='r', linestyle='-')
+
         # Include vertical lines if we want to show what
         # call we are focusing on
         if vert_lines is not None:
@@ -154,7 +154,8 @@ def spect_call_to_time(call, NFFT=4096, hop=800):
 
     return (begin_s, end_s, length_s)
 
-def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chunk_size=256, label='True_Pos', times=None):
+def visualize_predictions(calls, spectrogram, prediction_labels_binary, prediction_labels_smoothed, 
+                                gt_labels, chunk_size=256, label='True_Pos', times=None):
     '''
         Visualize the predicted labels and gt labels for the calls provided.
         This is used to visualize the results of predictions on for example
@@ -179,8 +180,8 @@ def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chun
         window_start = max(start - padding, 0)
         window_end = min(end + padding, spectrogram.shape[0])
         print (spectrogram.shape)
-        visualize(spectrogram[window_start: window_end], 
-            prediction_labels[window_start: window_end], gt_labels[window_start: window_end],
+        visualize(spectrogram[window_start: window_end], outputs=prediction_labels_smoothed[window_start:window_end], 
+            labels=gt_labels[window_start: window_end], binary_preds=prediction_labels_binary[window_start: window_end],
             title=label, vert_lines=(start - window_start, end - window_start), times=times[window_start:window_end])
 
 
