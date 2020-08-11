@@ -20,7 +20,7 @@ parser.add_argument('--hop', type=int, default=800, help='Hop size used for crea
 parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
 
 
-def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries=None, title=None, vert_lines=None):
+def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries=None, title=None, vert_lines=None, times=None):
     """
     Visualizes the spectogram and associated predictions/labels. 
     features is the entire spectrogram that will be visualized
@@ -46,34 +46,62 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries
     min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
     max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
 
-    ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, interpolation='none', origin="lower", aspect="auto")
+    if times is not None:
+        # Adjust the x and y axis ticks to have time on the x axis and freq on the y axis (Note we have freq up to 150)!
+        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
+                interpolation='none', origin="lower", aspect="auto", extent=[times[0], times[times.shape[0] - 1], 0, 150])
+    else:
+        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
+                interpolation='none', origin="lower", aspect="auto")
     
     if outputs is not None:
-        ax2.plot(np.arange(outputs.shape[0]), outputs)
+        if times is not None:
+            ax2.plot(times, outputs)
+        else:
+            ax2.plot(np.arange(outputs.shape[0]), outputs)
         ax2.set_ylim([0,1])
         ax2.axhline(y=0.5, color='r', linestyle='-')
         # Include vertical lines if we want to show what
         # call we are focusing on
         if vert_lines is not None:
-            ax2.axvline(x=vert_lines[0], color='r', linestyle=':')
-            ax2.axvline(x=vert_lines[1], color='r', linestyle=':')
+            if times is not None:
+                ax2.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
+                ax2.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
+            else:
+                ax2.axvline(x=vert_lines[0], color='r', linestyle=':')
+                ax2.axvline(x=vert_lines[1], color='r', linestyle=':')
 
     if binary_preds is not None:
-        ax3.plot(np.arange(binary_preds.shape[0]), binary_preds)
+        if times is not None:
+            ax3.plot(times, binary_preds)
+        else:
+            ax3.plot(np.arange(binary_preds.shape[0]), binary_preds)
         ax3.set_ylim([0,1])
         ax3.axhline(y=0.5, color='r', linestyle='-')
         # Include vertical lines if we want to show what
         # call we are focusing on
         if vert_lines is not None:
-            ax3.axvline(x=vert_lines[0], color='r', linestyle=':')
-            ax3.axvline(x=vert_lines[1], color='r', linestyle=':')
+            if times is not None:
+                ax3.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
+                ax3.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
+            else:
+                ax3.axvline(x=vert_lines[0], color='r', linestyle=':')
+                ax3.axvline(x=vert_lines[1], color='r', linestyle=':')
 
     if labels is not None:
         gt_ax = ax3 if binary_preds is None else ax4
-        gt_ax.plot(np.arange(labels.shape[0]), labels)
+        if times is not None:
+            gt_ax.plot(times, labels)
+        else:
+            gt_ax.plot(np.arange(labels.shape[0]), labels)
+
         if vert_lines is not None:
-            gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
-            gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
+            if times is not None:
+                gt_ax.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
+                gt_ax.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
+            else:
+                gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
+                gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
 
     if boundaries is not None:
         bound_ax = None 
@@ -101,8 +129,32 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries
 
     plt.show()
 
+def spect_frame_to_time(frame, NFFT=4096, hop=800, samplerate=8000):
+    """
+        Given the index of a spectrogram frame compute 
+        the corresponding time in seconds for the middle of the 
+        window.
+    """
+    middle_s = (float(NFFT) / samplerate / 2.)
+    frame_s = middle_s + frame * (float(hop) / samplerate)
+    
+    return frame_s
+    
+    
+def spect_call_to_time(call, NFFT=4096, hop=800):
+    """
+        Given a elephant call prediction of the form
+        (spect start, spect end, length), convert
+        the spectrogram frames to time in seconds
+    """
+    begin, end, length = call
+    begin_s = spect_frame_to_time(begin)
+    end_s = spect_frame_to_time(end)
+    length_s = begin_s - end_s
 
-def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chunk_size=256, label='True_Pos'):
+    return (begin_s, end_s, length_s)
+
+def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chunk_size=256, label='True_Pos', times=None):
     '''
         Visualize the predicted labels and gt labels for the calls provided.
         This is used to visualize the results of predictions on for example
@@ -117,9 +169,9 @@ def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chun
         Down the road maybe we should include the % overlap
     '''
     for call in calls:
-        start = call[0]
-        end = call[1]
-        length = call[2]
+        start, end, length = call
+        start_s, end_s, _ = spect_call_to_time(call)
+        print ("Visualizing Call Prediction ({}, {})".format(start_s, end_s))
 
         # Let us position the call in the middle
         # Then visualize
@@ -129,7 +181,7 @@ def visualize_predictions(calls, spectrogram, prediction_labels, gt_labels, chun
         print (spectrogram.shape)
         visualize(spectrogram[window_start: window_end], 
             prediction_labels[window_start: window_end], gt_labels[window_start: window_end],
-            title=label, vert_lines=(start - window_start, end - window_start))
+            title=label, vert_lines=(start - window_start, end - window_start), times=times[window_start:window_end])
 
 
 

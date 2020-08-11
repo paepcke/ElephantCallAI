@@ -14,21 +14,22 @@ from utils import sigmoid, calc_accuracy, get_f_score, hierarchical_model_1_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
+parser.add_argument('--call_preds_path', type=str, dest='call_predictions_path', default='../Call_Predictions',
+    help='Path to the folder where we save model csv predictions')
 
-parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/Neg_Samples_x1/files.txt')
-# For quatro
-#parser.add_argument('--test_files', type=str, default='../elephant_dataset/Test/files.txt')
-
-parser.add_argument('--spect_path', type=str, default="../elephant_dataset/New_Data/Spectrograms", 
+# Defaults based on quatro
+parser.add_argument('--test_files', type=str, default='/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt')
+parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/", 
     help='Path to the processed spectrogram files')
-# For quatro
-#parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/", 
-#    help='Path to the processed spectrogram files')
+
 
 parser.add_argument('--make_full_preds', action='store_true', 
     help = 'Generate predictions for the full test spectrograms')
 parser.add_argument('--full_stats', action='store_true',
     help = 'Compute statistics on the full test spectrograms')
+parser.add_argument('--save_calls', action='store_true',
+    help = 'Save model predictions to a CSV file')
+
 #parser.add_argument('--pred_calls', action='store_true', 
 #    help = 'Generate the predicted (start, end) calls for test spectrograms')
 parser.add_argument('--visualize', action='store_true',
@@ -43,7 +44,7 @@ Example runs
 
 # Make predictions 
 # To customize change the model flag!
-python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/selected_runs/Adversarial_training_17_nouab_and_bai_0.25_sampling_one_model/Call_model_17_norm_Negx1_Seed_8_2020-04-28_01:58:26/model_adversarial_iteration_9_.pt --make_full_pred
+python eval.py --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/selected_runs/Adversarial_training_17_nouab_and_bai_0.25_sampling_one_model/Call_model_17_norm_Negx1_Seed_8_2020-04-28_01:58:26/model_adversarial_iteration_9_.pt --make_full_pred
 
 # Calculate Stats 
 python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt --spect_path /home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/ --model /home/data/elephants/models/selected_runs/Adversarial_training_17_nouab_and_bai_0.25_sampling_one_model/Call_model_17_norm_Negx1_Seed_8_2020-04-28_01:58:26/model_adversarial_iteration_9_.pt --full_stats
@@ -63,6 +64,46 @@ def loadModel(model_path, is_hierarchical=True):
         model_id = tokens[-2]
 
     return model, model_id
+
+def convert_frames_to_time(num_frames, NFFT=4096, hop=800, samplerate=8000):
+    """
+        Given the number of spectrogram frames, return an array
+        times of length num_frames, where times[i] = the time in seconds
+        represented by the middle of the spectrogram frame
+    """
+    time_array = np.zeros(num_frames)
+    curr_time = (float(NFFT) / samplerate / 2.)
+    for i in range(num_frames):
+        time_array[i] = curr_time
+        curr_time += (float(hop) / samplerate)
+
+    return time_array
+
+
+def spect_frame_to_time(frame, NFFT=4096, hop=800, samplerate=8000):
+    """
+        Given the index of a spectrogram frame compute 
+        the corresponding time in seconds for the middle of the 
+        window.
+    """
+    middle_s = (float(NFFT) / samplerate / 2.)
+    frame_s = middle_s + frame * (float(hop) / samplerate)
+    
+    return frame_s
+    
+    
+def spect_call_to_time(call, NFFT=4096, hop=800):
+    """
+        Given a elephant call prediction of the form
+        (spect start, spect end, length), convert
+        the spectrogram frames to time in seconds
+    """
+    begin, end, length = call
+    begin_s = spect_frame_to_time(begin)
+    end_s = spect_frame_to_time(end)
+    length_s = begin_s - end_s
+
+    return (begin_s, end_s, length_s)
 
 
 def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hierarchical_model=None, hierarchy_threshold=10):
@@ -425,12 +466,13 @@ def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerat
                 # (NFFT / sr / 2) + (k) * (hop / sr)
                 # Meaning the first time it captures is (k) * (hop / sr)
                 # Remember we zero index!
-                begin_s = (begin) * (hop / samplerate) #(NFFT / samplerate / 2.) + 
+                #begin_s = (begin) * (hop / samplerate) #(NFFT / samplerate / 2.) + 
                 # Here we subtract 1 because end goes one past last column
                 # And the last time it captures is (k) * (hop / sr) + NFFT / sr
-                end_s = (end - 1) * (hop / samplerate) + (NFFT / samplerate)
+                #end_s = (end - 1) * (hop / samplerate) + (NFFT / samplerate)
                 # k frames spans ==> (NFFT / sr) + (k-1) * (hop / sr) seconds
-                call_length_s = (NFFT / samplerate) + (call_length - 1) * (hop / samplerate)
+                #call_length_s = (NFFT / samplerate) + (call_length - 1) * (hop / samplerate)
+                begin_s, end_s, call_length_s = spect_call_to_time((begin, end-1, call_length))
 
                 calls.append((begin_s, end_s, call_length_s))
         else: # zero out the too short predictions
@@ -571,6 +613,116 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
 
     return results
 
+def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold=0.5, smooth=True, 
+            in_seconds=False, min_call_lengh=10, visualize=False):
+    """
+        Extract model predictions as calls of the form (start, end, length) 
+        and save each call for with its given audio file
+
+    """
+    # Maps spectrogram ids to dictionary of results for each spect
+    results = {} 
+    
+    num_preds = 0
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Generating Prediction for:", data_id)
+        
+        predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
+
+        binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
+
+        # Process the predictions to get predicted elephant calls
+        # Note that processed_preds zeros out predictions that are not long
+        # enough to be an elephant call
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, in_seconds=in_seconds)
+        print ("Num predicted calls", len(predicted_calls))
+
+        # Visualize the predictions around the gt calls
+        if visualize: # This is not super important
+            visual_full_recall(spectrogram, smoothed_predictions, labels, processed_preds)       
+        
+        
+        results[data_id] = predicted_calls
+       
+    return results
+
+def visualize_elephant_call_metric(dataset, results):
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Testing Metric Results for:", data_id)
+
+        # Include times
+        times = convert_frames_to_time(labels.shape[0])
+
+        print ("Testing False Negative Results")        
+        visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], 
+                                labels, label="False Negative", times=times)
+
+        print ("Testing False Positive Results")  
+        print (len(results[data_id]['false_pos']))      
+        visualize_predictions(results[data_id]['false_pos'], spectrogram, results[data_id]['binary_preds'], 
+                                labels, label="False Positive", times=times)
+
+        print ("Testing True Positive Predictions Results")        
+        visualize_predictions(results[data_id]['true_pos'], spectrogram, results[data_id]['binary_preds'], 
+                                labels, label="True Positive Predictions", times=times)
+
+        print ("Testing True Positive Recall Results")        
+        visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, results[data_id]['binary_preds'], 
+                                labels, label="True Positive Recall", times=times)
+
+def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
+    """
+        For each 24hr test file, output the model predictions
+        in the form of the ground truth label files
+
+        Params:
+        in_seconds - signifies that predictions are already converted to seconds
+    """
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        print ("Outputing Results for:", data_id)
+
+        # Save preditions
+        with open(save_path + '/' + data_id + '.txt', 'w') as f:
+            # Create the hedding
+            f.write('Selection\tView\tChannel\tBegin Time (s)\tEnd Time (s)\tBegin File\thour\n')
+
+            # Output the individual predictions
+            i = 1
+            for prediction in predictions[data_id]:
+                # Get the time in seconds
+                if in_seconds:
+                    pred_start, pred_end, length = prediction
+                else:
+                    pred_start, pred_end, length = spect_call_to_time(prediction)
+                # Convert to hours and minutes as well
+                Hs = math.floor(pred_start / 3600.)
+
+                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t{}\t{}\n'.format(i, pred_start, pred_end, data_id+'.wav',Hs))
+
+
 def get_spectrogram_paths(test_files_path, spectrogram_path):
     """
         In the test set folder, there is a file that includes
@@ -633,7 +785,7 @@ def main(args):
         results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path)
 
         if args.visualize: # Visualize the metric results
-            test_elephant_call_metric(full_dataset, results)
+            visualize_elephant_call_metric(full_dataset, results)
 
         # Display the output of results as peter did
         TP_truth = results['summary']['true_pos_recall']
@@ -655,6 +807,14 @@ def main(args):
         print("False positve rate (FP / hr):", false_pos_per_hour)
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
+    elif args.save_calls:
+        predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path)
+        # Save for now to a folder determined by the model id
+        save_path = args.call_predictions_path + '/' + model_id
+        if not os.path.isdir(save_path):
+            os.mkdir(save_path)
+        # Save the predictions
+        create_predictions_csv(full_dataset, predictions, save_path)
 
 
 if __name__ == '__main__':
