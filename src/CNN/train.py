@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 Created on Jul 7, 2020 based heavily on
 Jonathan and Nikita's Code.
@@ -506,7 +507,7 @@ if __name__ == '__main__':
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      description="Train from a set of spectrogram snippets."
                                      )
-
+# 
 #     parser.add_argument('-l', '--logfile',
 #                         help='fully qualified log file name to which info and error messages \n' +\
 #                              'are directed. Default: stdout.',
@@ -527,15 +528,15 @@ if __name__ == '__main__':
 #                         nargs='+',
 #                         help='Repeatable: directories/files containing .pickle spectrogram dataframes, '
 #                              'and corresponding .txt label files')
-
+# 
     args = parser.parse_args();
     
     #***********
     args.snippet_db_path = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training//tiny_chop_info.sqlite'
     args.files_and_dirs  = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training/Threshold_-30_MinFreq_20_MaxFreq_40_FreqCap_30_snippets_0'
-    args.batchsize=2
-    #args.batchsize=1
-    args.num_epochs=2
+    #args.batchsize=2
+    args.batchsize=16
+    args.epochs=2
     args.logfile =None
     #***********
     
@@ -547,4 +548,4 @@ if __name__ == '__main__':
                        args.snippet_db_path,
                        batch_size=args.batchsize,
                        logfile=args.logfile
-                       ).train(args.num_epochs)
+                       ).train(args.epochs)

@@ -315,36 +315,20 @@ class SpectrogramDataloader(DataLoader):
             
             (data_height, data_width) = spectro_tns.shape
             
-            # The unsqueeze() will be collapsed back
-            # down by torch.cat() below:
-            res_spectro_tns.append(spectro_tns.unsqueeze(0))
-            res_label_tns.append(label_tns.unsqueeze(0))
+            # The two unsqueeze() will turn the 
+            # 2D tensor (H,W) into (1,1,H,W). The
+            # first dim will turn into the batch size
+            # in the cat() call below. The second
+            # dim will remain a 1, indicating a single
+            # layer:
+            res_spectro_tns.append(spectro_tns.unsqueeze(0).unsqueeze(0))
+            res_label_tns.append(label_tns.unsqueeze(0).unsqueeze(0))
 
+        # We will end up with shape (BATCH_SIZE, CHANNELS, H, W):
         res_spectros = torch.cat(res_spectro_tns)
         res_labels   = torch.cat(res_label_tns)
-        
-        # Now have res_spectros.shape:
-        #    [2,HEIGHT, WIDTH)
-        # The unsqueeze adds an empty dimenasion
-        # to indicate single-channel to make
-        #    [1,2,HEIGHT,WIDTH] 
-        res_spectros = res_spectros.unsqueeze(0)
-        res_labels   = res_labels.unsqueeze(0)
-        
-        # But ResNet wants:
-        #    [batch_size, channels, HEIGHT, WIDTH]
-        
-        res_spectros_batchsize_chnls_h_w = \
-            res_spectros.reshape([self.batch_size,
-                                  1,   # Single channel
-                                  data_height,
-                                  data_width
-                                  ])
-        # Make labels stacked like the samples:
-        res_labels = res_labels.reshape(self.batch_size, 1)
 
-        return (res_spectros_batchsize_chnls_h_w,
-                res_labels)
+        return (res_spectros, res_labels)
 
     #------------------------------------
     # __iter__ 
