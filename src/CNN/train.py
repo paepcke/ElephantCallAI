@@ -80,7 +80,8 @@ class SpectrogramTrainer(object):
                                                 batch_size=batch_size)
         
         self.model = Resnet18Grayscale(num_classes=1)
-        self.model.to(self.device)
+        # Move to GPU if available:
+        self.to_best_device(self.model)
         
         # Hyper parameter for chosen model
         model_hypers = HyperParameters['resnet18']
@@ -152,11 +153,11 @@ class SpectrogramTrainer(object):
                 self.log.info (f"Batch number {idx} of {len(self.dataloader)}")
                 self.log.info (f"Total correct predictions {running_tp}, Total true positives {running_tp}")
     
-            # Cast the variables to the correct type and 
-            # put on the correct torch device
+            # Put input and labels to where the
+            # model is:
                  
-            spectros_tns.to(Defaults.device)
-            labels_tns.to(Defaults.device)
+            spectros_tns.to(self.model.device())
+            labels_tns.to(self.model.device())
     
             # Forward pass
             # The unsqueeze() adds a dimension
@@ -498,6 +499,21 @@ class Resnet18Grayscale(ResNet):
         self.inplanes = 64 #******* Should be batch size?
         self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3,
                                bias=False)
+
+    #------------------------------------
+    # device 
+    #-------------------
+    
+    def device(self):
+        '''
+        Returns device where model resides.
+        Can use like this to move a tensor
+        to wherever the model is:
+        
+            some_tensor.to(<model_instance>.device())
+
+        '''
+        return next(self.parameters()).device
 
 
 # ------------------------ Main ------------
