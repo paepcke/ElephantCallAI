@@ -27,8 +27,8 @@ import pandas as pd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-
-
+class DatasetError(Exception):
+    pass
 
 TESTING = False
 #TESTING = True
@@ -864,8 +864,11 @@ class SpectrogramDataset(Dataset):
             # throw StopIteration if no folds are
             # left:
 
-            (train_sample_ids, validate_sample_ids) = \
-               next(self.folds_iter)
+            try:
+                (train_sample_ids, validate_sample_ids) = \
+                   next(self.folds_iter)
+            except AttributeError:
+                raise DatasetError("The kfold_stratified() method must be called on the dataloader before drawing samples.")
 
             # To help unittests: indicate the 
             # lengths of the new folds:

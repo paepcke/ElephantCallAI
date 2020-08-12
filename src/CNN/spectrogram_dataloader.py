@@ -3,13 +3,16 @@ Created on Jul 26, 2020
 
 @author: paepcke
 '''
-from contextlib import contextmanager
 
+from contextlib import contextmanager
+import math
+
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 
-class SpectrogramDataLoader(DataLoader):
+class SpectrogramDataloader(DataLoader):
     '''
     A dataloader that works with instances of 
     SpectrogramDataset (see spectrogram_dataset.py).
@@ -57,6 +60,8 @@ class SpectrogramDataLoader(DataLoader):
     
     def __init__(self, dataset, *args, **kwargs):
         super().__init__(dataset, *args, **kwargs)
+        # Cache used by __len__():
+        self.num_batches = None
 
     #------------------------------------
     # kfold 
@@ -204,7 +209,31 @@ class SpectrogramDataLoader(DataLoader):
     #-------------------
 
     def __len__(self):
-        return len(self.dataset)
+        '''
+        Returns number of batches that will are
+        available from this loader. If drop_last
+        was set to True, a possibly incomplete
+        batch at the end will be dropped, and will
+        therefore not be included in the length
+        '''
+        # Use cache if it's filled:
+        if self.num_batches is not None:
+            return self.num_batches
+        
+        num_samples = len(self.dataset)
+        num_batches = num_samples / self.batch_size
+        if (num_samples % self.batch_size) == 0:
+            # Samples fit exactly into the desired
+            # number of batches:
+            self.num_batches = int(num_batches)
+        
+        # Will have a partially filled last batch:
+        if self.drop_last:
+            self.num_batches = math.floor(num_batches)
+        else:
+            self.num_batches = math.ceil(num_batches)
+
+        return self.num_batches
     
     #------------------------------------
     # __next__ 
@@ -212,28 +241,117 @@ class SpectrogramDataLoader(DataLoader):
     
     def __next__(self):
         '''
-        Returns the next item from
+        Returns the next item batch from
         either the validation set, or the
         test set, depending on the current-split
         switch. 
         
-        Each item is a dict:
-           {'snippet_df' : <dataframe with spectrogram snippet>,
+        Switch between train and validation set by
+        calling switch_to_split(split_id), where split_id
+        is {'train', 'validate'}
+        
+        Each item received from the underlying 
+        spectrogram dataset is a dict:
+           {'spectrogram' : <dataframe with spectrogram snippet>,
             'label'      : <corresponding label>
             }
             
-        Switch between train and validation set by
-        calling switch_to_split(split_id), where split_id
-        is {'train', 'validate'} 
+        If drop_last was set to True when creating
+        this dataloader instance, the final batch
+        is discarded if it is incomplete.
+        
+        Returns a 2-tuple of tensor stacks, one with
+        batch_size stacked spectrogram tensors, and
+        one with equal-height label tensors. Each of
+        the label tensors will just be a single int.
             
-        @return a spectgrogram and associated label
-        @rtype: {str : pd.dataframe, str : int}
+        @return tensor [batch_size, spectro-height, spectro_width]
+        @rtype: torch.Tensor
         @raise StopIteration: when no more items
             left in queue
         '''
-        
-        return next(self.dataset)
+        batch = []
+        # Assemble a list of samples into a batch:
+        for _i in range(self.batch_size):
+            try:
+                batch.append(next(self.dataset))
+            except StopIteration:
+                # If we are to drop the last batch
+                # if it is incomplete, do that:
+                if self.drop_last or len(batch) == 0:
+                    raise StopIteration()
+                else:
+                    # Return the final partial batch:
+                    return self.to_batch_d_tensor(batch)
+                
+        # Successfully filled a complete batch:
+        return self.to_batch_d_tensor(batch)
 
+    #------------------------------------
+    # to_batch_d_tensor 
+    #-------------------
+    
+    def to_batch_d_tensor(self, spectro_label_dict_list):
+        '''
+        Takes a list of dicts, and returns
+        two multi-d tensors. Each dict is 
+        {'spectrogram' : pd.Dataframe,
+         'label'       : int}
+         
+        Turn each df into a tensor, and stack
+        those into batch-size planes.
+        
+        @param spectro_label_dict_list:
+        @type spectro_label_dict_list:
+        @return one batch_size-D tensor of 
+            spectrograms, and one batch_size-D
+            tensor of label ints
+        '''
+        res_spectro_tns = []
+        res_label_tns   = []
+        for spectro_label in spectro_label_dict_list:
+            spectro_tns = torch.tensor(spectro_label['spectrogram'].values)
+            label_tns   = torch.tensor(spectro_label['label'])
+            
+            (data_height, data_width) = spectro_tns.shape
+            
+            # The unsqueeze() will be collapsed back
+            # down by torch.cat() below:
+            res_spectro_tns.append(spectro_tns.unsqueeze(0))
+            res_label_tns.append(label_tns.unsqueeze(0))
+
+        res_spectros = torch.cat(res_spectro_tns)
+        res_labels   = torch.cat(res_label_tns)
+        
+        # Now have res_spectros.shape:
+        #    [2,HEIGHT, WIDTH)
+        # The unsqueeze adds an empty dimenasion
+        # to indicate single-channel to make
+        #    [1,2,HEIGHT,WIDTH] 
+        res_spectros = res_spectros.unsqueeze(0)
+        res_labels   = res_labels.unsqueeze(0)
+        
+        # But ResNet wants:
+        #    [batch_size, channels, HEIGHT, WIDTH]
+        
+        res_spectros_batchsize_chnls_h_w = \
+            res_spectros.reshape([self.batch_size,
+                                  1,   # Single channel
+                                  data_height,
+                                  data_width
+                                  ])
+        # Make labels stacked like the samples:
+        res_labels = res_labels.reshape(self.batch_size, 1)
+
+        return (res_spectros_batchsize_chnls_h_w,
+                res_labels)
+
+    #------------------------------------
+    # __iter__ 
+    #-------------------
+
+    def __iter__(self):
+        return self
     
     #------------------------------------
     # __getitem__
@@ -244,7 +362,7 @@ class SpectrogramDataLoader(DataLoader):
 
 # -------------------- Multiprocessing Dataloader -----------
 
-class MultiprocessingDataloader(SpectrogramDataLoader):
+class MultiprocessingDataloader(SpectrogramDataloader):
     
     #------------------------------------
     # Constructor 

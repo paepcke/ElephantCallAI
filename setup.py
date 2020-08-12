@@ -16,12 +16,17 @@ setup(
     # an out-of-band: sudo apt-get install python-dev
     setup_requires   = ['pytest-runner'],
     install_requires = ['requests>=2.21.0',
-                        'matplotlib>=3.1.3',
+                        'matplotlib>=3.3.0',
                         'sklearn',
                         'PTable>=0.9.2',
-                        'torch>=1.5.1',
-                        'torchaudio>=0.5.1',
+                        'torch>=1.6.0',
+                        'torchaudio>=0.6.0',
+                        'torchvision>=0.7.0',
                         'pandas>=1.1.0',
+                        'numpy>=1.19.1',
+                        'scipy>=1.5.2',
+                        'soundfile',
+                        'tensorboard>=2.3.0',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']

@@ -13,7 +13,7 @@ else
 fi
 
 read -r -d '' USAGE <<EOF
-Usage: $(basename $0) [-j --jobs][-d --destination] <spectrogram/label files and/or dirs>
+Usage: $(basename $0) [-j --jobs][-o --outdir] <spectrogram/label files and/or dirs>
     -h: This message
     -j: Number of spectrogram chopping jobs to run simultaneouly;
         default: number of cores

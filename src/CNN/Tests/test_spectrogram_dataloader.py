@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from spectrogram_dataset import SpectrogramDataset
-from spectrogram_dataloader import SpectrogramDataLoader
+from spectrogram_dataloader import SpectrogramDataloader
 
 TEST_ALL = True
 #TEST_ALL = False
@@ -125,7 +125,7 @@ class Test(unittest.TestCase):
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testLen(self):
         
-        dataloader = SpectrogramDataLoader(self.spectr_dataset)
+        dataloader = SpectrogramDataloader(self.spectr_dataset)
         num_samples = len(dataloader)
         self.assertEqual(num_samples, 21)
 
@@ -135,7 +135,7 @@ class Test(unittest.TestCase):
     
     @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testGetitem(self):
-        dataloader = SpectrogramDataLoader(self.spectr_dataset)
+        dataloader = SpectrogramDataloader(self.spectr_dataset)
         spectro_label_dict = dataloader[14]
         sample_id = spectro_label_dict['spectrogram'].iloc[0,0]
         self.assertEqual(sample_id, 14)
