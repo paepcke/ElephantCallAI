@@ -214,7 +214,7 @@ def visualize_adversarial(adversarial_train_files, train_loader, model_0, model_
                 # Go a bit against the actual visualization inputs.
                 # To visualize model_0 and model_1 predictions just put
                 # model_1 as what would be the binary (second) set of predictions
-                visualize(features, outputs=outputs_0, labels=label, binary_preds=output_1)
+                visualize(features, outputs=output_0, labels=label, binary_preds=output_1)
 
 
 def train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path, pre_train_path=None):
