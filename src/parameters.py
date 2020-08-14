@@ -29,7 +29,7 @@ ADVERSARIAL_THRESHOLD = 0
 FALSE_NEGATIVE_THRESHOLD = 15 # Test this!
 # Specify 'same' to keep training Model_0
 HIERARCHICAL_MODEL = 17
-HIERARCHICAL_PRE_TRAIN = True
+HIERARCHICAL_PRE_TRAIN = False
 # Specify the number of repeats for ONLY the 
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
@@ -37,7 +37,7 @@ HIERARCHICAL_REPEATS = 1
 HIERARCHICAL_SHIFT_WINDOWS = False
 
 # Model 18 = entire window classification
-MODEL_ID = 27
+MODEL_ID = 17
 PRE_TRAIN = False
 
 # This now represents whether to use noab or bai
