@@ -95,7 +95,7 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries
         else:
             gt_ax.plot(np.arange(labels.shape[0]), labels)
 
-        ax3.set_ylim([0,1])
+        gt_ax.set_ylim([0,1])
 
         if vert_lines is not None:
             if times is not None:

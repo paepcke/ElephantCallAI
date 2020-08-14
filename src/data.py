@@ -346,6 +346,8 @@ class ElephantDatasetFuzzy(data.Dataset):
             data = (data - np.mean(data)) / np.std(data)
         elif self.preprocess == "globalnorm":
             data = (data - 132.228) / 726.319 # Calculated these over the training dataset 
+        elif self.preprocess == "feature":
+            data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
 
         return data
 
