@@ -24,12 +24,17 @@ parser.add_argument('--local_files', dest='local_files', action='store_true',
 parser.add_argument('--save_local', dest='save_local', action='store_true',
     help='Flag specifying to save model run information to the local models directory.'
     'The default is to save to the quatro data directory.')
+
+# Running Flages
 parser.add_argument('--full', dest='full_pipeline', action='store_true',
     help='Flag specifying to run the full hierarchical model pipeline.')
 parser.add_argument('--adversarial', dest='adversarial', action='store_true',
     help='Flag specifying to generate a new set of adversarial_examples.')
 parser.add_argument('--model_1', dest='model1', action='store_true',
     help='Flag specifying to just train Model_1.')
+parser.add_argument('--visualize', action='store_true',
+    help='Visualize the adversarial examples and Model_0 and Model_1 predictions on them')
+
 parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
 parser.add_argument('--model_0', type=str,
@@ -38,6 +43,7 @@ parser.add_argument('--pre_train_0', type=str,
     help='Use a pre-trained model to initialize model 0')
 parser.add_argument('--pre_train_1', type=str,
     help='Use a pre-trained model to initialize model 1')
+
 
 """
     General approach ideas. Train the first model, we will call this model
@@ -172,6 +178,44 @@ def initialize_training(model_id, save_path, model_type=0, pre_train_path=None):
                                             gamma=parameters.HYPERPARAMETERS[parameters.MODEL_ID]['lr_decay'])
 
     return model, loss_func, include_boundaries, optimizer, scheduler, writer
+
+def visualize_adversarial(adversarial_train_files, train_loader, model_0, model_1):
+    print ("++================================++")
+    print ("++Visualizing Adversarial Examples++") 
+    print ("++================================++")
+    # Load the adversarial examples and zero out the true positives
+    train_loader.dataset.set_featues(pos_features=[], neg_features=adversarial_train_files)
+
+    # Get the model predictions over the adversarial examples
+    model_0.eval()
+    model_1.eval()
+    with torch.no_grad(): 
+        for idx, batch in enumerate(train_loader):
+            print ("Batch number {} of {}".format(idx, len(dataloader)))
+            # Cast the variables to the correct type and 
+            # put on the correct torch device
+            inputs = batch[0].clone().float()
+            labels = batch[1].clone().float()
+            inputs = inputs.to(parameters.device)
+            labels = labels.to(parameters.device)
+
+            # Forward pass
+            logits_0 = model_0(inputs).squeeze() # Shape - (batch_size, seq_len)
+            logits_1 = model_1(inputs).squeeze() # Shape - (batch_size, seq_len)
+
+            # Visualize the individual example
+            for i in range(len(inputs)):
+                features = inputs[i].cpu().detach().numpy()
+                output_0 = torch.sigmoid(logits_0[i]).cpu().detach().numpy()
+                output_1 = torch.sigmoid(logits_1[i]).cpu().detach().numpy()
+                label = labels[i].cpu().detach().numpy()
+                # Maybe also show the masks
+
+                # Go a bit against the actual visualization inputs.
+                # To visualize model_0 and model_1 predictions just put
+                # model_1 as what would be the binary (second) set of predictions
+                visualize(features, outputs=outputs_0, labels=label, binary_preds=output_1)
+
 
 def train_model_1(adversarial_train_files, adversarial_test_files, train_loader, test_loader, save_path, pre_train_path=None):
 
@@ -399,6 +443,27 @@ def main():
 
         train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, 
                         model_1_test_loader, save_path, args.pre_train_1)
+
+    elif args.visualize:
+        model_0_path = os.path.join(save_path, "Model_0/model.pt")
+        model_0 = torch.load(model_0_path, map_location=parameters.device)
+        model_1_name = hierarchical_model_1_path()
+        model_1_path = os.path.join(save_path, model_1_name+'/model.pt')
+        model_1 = torch.load(model_1_path, map_location=parameters.device)
+
+        # Read in the adversarial files
+        train_adversarial_file = "model_0-False_Pos_Train.txt"
+        if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+            train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
+
+        adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
+        adversarial_train_files = []
+        with open(adversarial_train_save_path, 'r') as f:
+            files = f.readlines()
+            for file in files:
+                adversarial_train_files.append(file.strip())
+
+        visualize_adversarial(adversarial_train_files, model_1_train_loader, model_0, model_1)
 
     else:
         print ("Invalid running mode!")

@@ -46,7 +46,7 @@ parser.add_argument('--call_preds_path', type=str, dest='call_predictions_path',
 # Defaults based on quatro
 parser.add_argument('--test_files', type=str, default='/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt')
 
-parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale\ ele\ general\ test\ sounds/", 
+parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale ele general test sounds/", 
     help='Path to the processed spectrogram files')
 
 
