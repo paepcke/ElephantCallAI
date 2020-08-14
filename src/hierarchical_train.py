@@ -191,7 +191,7 @@ def visualize_adversarial(adversarial_train_files, train_loader, model_0, model_
     model_1.eval()
     with torch.no_grad(): 
         for idx, batch in enumerate(train_loader):
-            print ("Batch number {} of {}".format(idx, len(dataloader)))
+            print ("Batch number {} of {}".format(idx, len(train_loader)))
             # Cast the variables to the correct type and 
             # put on the correct torch device
             inputs = batch[0].clone().float()
