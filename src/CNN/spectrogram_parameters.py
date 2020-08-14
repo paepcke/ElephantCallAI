@@ -5,6 +5,8 @@ from collections import Mapping
 class Defaults():
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # Probability threshold beyond which 
+    # a prediction is considered a '1':
     THRESHOLD = 0.5
     VERBOSE = False
     

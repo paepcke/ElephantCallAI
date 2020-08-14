@@ -52,7 +52,6 @@ class SpectrogramTrainer(object):
     KERNEL_WIDTH   = 13   # Evenly divides into 117 (9)
     
     STRIDE = 2
-    DEFAULT_BATCH_SIZE = 1
     NUM_CHANNELS = 1
 
     #------------------------------------
@@ -62,12 +61,13 @@ class SpectrogramTrainer(object):
     def __init__(self,
                  dirs_and_files,
                  sqlite_db_path,
-                 batch_size=1,
+                 batch_size=Defaults.BATCH_SIZE,
+                 decision_threshold=Defaults.THRESHOLD,
                  logfile=None
                  ):
         self.log = LoggingService(logfile)
-        if batch_size is None:
-            batch_size = self.DEFAULT_BATCH_SIZE
+        self.decision_threshold = decision_threshold
+        
         self.device = torch.device('cuda' if cuda.is_available() else 'cpu')
         self.cuda   = torch.device('cuda')
         self.cpu    = torch.device('cpu')
@@ -78,7 +78,9 @@ class SpectrogramTrainer(object):
                                       )
         self.dataloader = SpectrogramDataloader(dataset, 
                                                 batch_size=batch_size)
-        
+
+        # Make a one-channel model with probability
+        # decision boundary found in the parameters file:
         self.model = Resnet18Grayscale(num_classes=1)
         # Move to GPU if available:
         self.to_best_device(self.model)
@@ -117,6 +119,83 @@ class SpectrogramTrainer(object):
 
 
     #------------------------------------
+    # tally_result
+    #-------------------
+
+    def tally_result(self, 
+                     labels_tns, 
+                     pred_prob_tns, 
+                     loss,
+                     tallies
+                     ):
+        '''
+        Given a set of batch results, and a dict
+        of running tallies, update and return the
+        tallies. All quantities, even counts, are 
+        kept as float tensors.
+        
+        This method is shared between train_epoch() and eval_epoch()
+        
+        Tallies is expected to contain:
+            running_loss,
+            running_true_non_zero,
+            running_corrects, 
+            running_samples, 
+            running_tp_fp, 
+            running_tp, 
+            running_tp_fn
+
+        @param labels_tns: ground truth labels for batch
+        @type labels_tns: torch.Tensor (floats)
+        @param pred_prob_tns: model prediction probabilities for this batch
+        @type pred_prob_tns: torch.Tensor
+        @param loss: result of loss function for one batch
+        @type loss: torch.Tensor (float)
+        @param tallies: running tallies to be updated
+        @type tallies: dict
+        '''
+        
+        # Turn into 1 or 0, depending on the
+        # threshold noted in the parameters file:
+        
+        pred_tns = torch.where(pred_prob_tns > self.decision_threshold, torch.tensor(1.), torch.tensor(0.))
+        
+        num_positive_labels = torch.sum(labels_tns)
+        tallies['running_true_non_zero'] += num_positive_labels
+        tallies['running_loss'] += loss.item()
+        tp = sum(torch.logical_and(labels_tns, pred_tns)).float()
+        if len(pred_tns.shape) == 2:
+            # Count the number slices for accuracy calculations
+            tallies['running_samples'] += (torch.tensor(pred_tns.shape[0] * pred_tns.shape[1])).float()
+        else:
+            # For the binary window classification
+            tallies['running_samples'] += torch.tensor(pred_tns.shape[0]).float()
+        
+        # For fp: where pred is 0, and labels is 1.
+        # Element-wise subtract labels from pred. Where 
+        # result is zero: True positive. Where result
+        # is -1: FN. Where result is 1: FP: 
+        
+        diff = torch.sub(pred_tns,labels_tns)
+        # Tie the -1s to 0; sum all the 1s. Finally, get an int:
+        fp = torch.sum(torch.max(torch.tensor(0.), diff))
+        # Count the -1s, then get an int:
+        fn = torch.sum(diff == -1).float()
+        
+        tn = sum(torch.logical_and(pred_tns==0, labels_tns==0)).float()
+
+        tp_fp = tp + fp
+        tp_fn = tp + fn
+        
+        tallies['running_corrects'] += tp + tn
+
+        tallies['running_tp'] += tp
+        tallies['running_tp_fp'] += tp_fp
+        tallies['running_tp_fn'] += tp_fn
+        
+        return tallies
+    
+    #------------------------------------
     # train_epoch 
     #-------------------
 
@@ -128,22 +207,19 @@ class SpectrogramTrainer(object):
         self.dataloader.switch_to_split('train')
         
         time_start = time.time()
-    
-        running_loss = 0.0
-        running_corrects = 0
-        running_samples = 0
-        # True positives
-        running_tp = 0
-        # True positives + false positives
-        running_tp_fp = 0
-        # True positives + false negatives
-        running_tp_fn = 0
-        #running_fscore = 0.0
-        #running_precission = 0.0
-        #running_recall = 0.0
-    
-        # For focal loss purposes
-        running_true_non_zero = 0
+        
+        tallies = {'running_loss' : 0.0,
+                   'running_corrects' : 0,
+                   'running_samples' : 0,
+                   # True positives
+                   'running_tp' : 0,
+                   # True positives + false positives
+                   'running_tp_fp' : 0,
+                   # True positives + false negatives
+                   'running_tp_fn' : 0,
+                   # For focal loss purposes
+                   'running_true_non_zero' : 0
+            }
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         for idx, (spectros_tns, labels_tns) in enumerate(self.dataloader):
@@ -151,7 +227,7 @@ class SpectrogramTrainer(object):
             self.optimizer.zero_grad()
             if (idx % 250 == 0) and Defaults.VERBOSE:
                 self.log.info (f"Batch number {idx} of {len(self.dataloader)}")
-                self.log.info (f"Total correct predictions {running_tp}, Total true positives {running_tp}")
+                self.log.info (f"Total correct predictions {tallies['running_corrects']}, Total true positives {tallies['running_tp']}")
     
             # Put input and labels to where the
             # model is:
@@ -162,51 +238,40 @@ class SpectrogramTrainer(object):
             # Forward pass
             # The unsqueeze() adds a dimension
             # for holding the batch_size?
-            logits = self.model(spectros_tns)
+            pred_prob_tns = self.model(spectros_tns)
             
             # The Binary Cross Entropy function wants 
             # equal datatypes for prediction and targets:
             
             labels_tns = labels_tns.float()
-            pred = nn.Softmax(0)(logits)
-            loss =  self.loss_func(pred, labels_tns)
+            loss =  self.loss_func(pred_prob_tns, labels_tns)
             loss.backward()
             self.optimizer.step()
     
             # Free GPU memory:
             spectros_tns.to('cpu')
             labels_tns.to('cpu')
+            pred_prob_tns.to('cpu')            
 
-            running_true_non_zero += torch.sum(labels_tns).item()
-            running_loss += loss.item()
-            running_corrects += num_correct(pred, labels_tns)
-            if len(logits.shape) == 2:
-                # Count the number slices for accuracy calculations
-                running_samples += logits.shape[0] * logits.shape[1] 
-            else: # For the binary window classification
-                running_samples += logits.shape[0]
-            #running_fscore += get_f_score(logits, labels)
-            tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels_tns)
-            running_tp += tp
-            running_tp_fp += tp_fp
-            running_tp_fn += tp_fn 
-            
-    
-            train_epoch_loss = running_loss / (idx + 1)
-            train_epoch_acc = float(running_corrects) / running_samples
-            #train_epoch_fscore = running_fscore / (idx + 1)
+            tallies = self.tally_result(labels_tns, pred_prob_tns, loss, tallies) 
+
+            train_epoch_loss = tallies['running_loss'] / (idx + 1)
+            train_epoch_acc = float(tallies['running_corrects']) / tallies['running_samples']
         
             # If denom is zero: no positive sample was
             # fed into the training, and the classifier
             # correctly identified none as positive:
             
-            train_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
+            train_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] if tallies['running_tp_fp'] > 0 else 1
             
             # If denom is zero: no positive samples 
             # were encountered, and the classifier did not
             # claim that any samples were positive:
             
-            train_epoch_recall = running_tp / running_tp_fn if running_tp_fn > 0 else 1
+            #******This yiels:
+            #*****RuntimeError: Integer division of tensors using div or / is no longer supported, and in a future release div will perform true division as in Python 3. Use true_divide or floor_divide (// in Python) instead.
+
+            train_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn'] if tallies['running_tp_fn'] > 0 else 1
             
             if train_epoch_precision + train_epoch_recall > 0:
                 train_epoch_fscore = (2 * train_epoch_precision * train_epoch_recall) / (train_epoch_precision + train_epoch_recall)
@@ -214,6 +279,7 @@ class SpectrogramTrainer(object):
                 train_epoch_fscore = 0
         
         #Logging
+        #********TypeError: unsupported format string passed to Tensor.__format__:
         self.log.info('Training loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
             train_epoch_loss, train_epoch_acc, train_epoch_precision, train_epoch_recall, train_epoch_fscore ,(time.time()-time_start)/60))
         
@@ -233,20 +299,18 @@ class SpectrogramTrainer(object):
         self.dataloader.switch_to_split('validate')
         
         time_start = time.time()
-    
-        running_loss = 0.0
-        running_corrects = 0
-        running_samples = 0
-        running_fscore = 0.0
-        # True positives
-        running_tp = 0
-        # True positives, false positives
-        running_tp_fp = 0
-        # True positives, false negatives
-        running_tp_fn = 0
-    
-        # For focal loss purposes
-        running_true_non_zero = 0
+        tallies = {'running_loss' : 0.0,
+                   'running_corrects' : 0,
+                   'running_samples' : 0,
+                   # True positives
+                   'running_tp' : 0,
+                   # True positives + false positives
+                   'running_tp_fp' : 0,
+                   # True positives + false negatives
+                   'running_tp_fn' : 0,
+                   # For focal loss purposes
+                   'running_true_non_zero' : 0
+            }
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         with torch.no_grad():
@@ -256,48 +320,39 @@ class SpectrogramTrainer(object):
                 self.optimizer.zero_grad()
                 if (idx % 250 == 0) and Defaults.VERBOSE:
                     self.log.info (f"Batch number {idx} of {len(self.dataloader)}")
-                    self.log.info (f"Total correct predictions {running_tp}, Total true positives {running_tp}")
+                    self.log.info (f"Total correct predictions {tallies['running_tp']}, Total true positives {tallies['running_tp']}")
         
-                # Cast the variables to the correct type and 
-                # put on the correct torch device
+                # Put input and labels to where the
+                # model is:
                      
-                spectros_tns.to(Defaults.device)
-                labels_tns.to(Defaults.device)
+                spectros_tns.to(self.model.device())
+                labels_tns.to(self.model.device())
         
                 # Forward pass
                 # The unsqueeze() adds a dimension
                 # for holding the batch_size?
-                logits = self.model(spectros_tns)
+                pred_prob_tns = self.model(spectros_tns)
                 
                 # The Binary Cross Entropy function wants 
                 # equal datatypes for prediction and targets:
                 
                 labels_tns = labels_tns.float()
-                pred = nn.Softmax(0)(logits)
-                loss =  self.loss_func(pred, labels_tns)
-    
-                running_true_non_zero += torch.sum(labels_tns).item()
-                running_loss += loss.item()
-                running_corrects += num_correct(logits, labels_tns)
+                loss =  self.loss_func(pred_prob_tns, labels_tns)
+                
+                # Free GPU memory:
+                spectros_tns.to('cpu')
+                labels_tns.to('cpu')
+                pred_prob_tns.to('cpu')
 
-                if len(logits.shape) == 2:
-                    # Count the number slices for accuracy calculations
-                    running_samples += logits.shape[0] * logits.shape[1] 
-                else: # For the binary window classification
-                    running_samples += logits.shape[0]
-                #running_fscore += get_f_score(logits, labels)
-                tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels_tns)
-                running_tp += tp
-                running_tp_fp += tp_fp
-                running_tp_fn += tp_fn 
+                tallies = self.tally_result(labels_tns, pred_prob_tns, loss, tallies) 
 
-        valid_epoch_loss = running_loss / (idx + 1)
-        valid_epoch_acc = float(running_corrects) / running_samples
+        valid_epoch_loss = tallies['running_loss'] / (idx + 1)
+        valid_epoch_acc = float(tallies['running_corrects']) / tallies['running_samples']
         #valid_epoch_fscore = running_fscore / (idx + 1)
     
         # If this is zero issue a warning
-        valid_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
-        valid_epoch_recall = running_tp / running_tp_fn
+        valid_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] if tallies['running_tp_fp'] > 0 else 1
+        valid_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn']
         if valid_epoch_precision + valid_epoch_recall > 0:
             valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
         else:
@@ -464,6 +519,38 @@ class SpectrogramTrainer(object):
             lr = scheduler.get_lr()
         return lr
 
+    #------------------------------------
+    # get_prec_rec_components
+    #-------------------
+    
+    def get_prec_rec_components(self, pred_tns, label_tns):
+        '''
+        Given tensor of finalized predictions (0s and 1s),
+        and the label tensor from the dataloader, return
+        numbers of true positive, the sum of true positive
+        and false positive, and the sum of true positive,
+        and false negatives (tp, tp_fp, tp_fn)
+        
+        @param pred_tns: tensors of 1.0 and 0.0 stacked batch_size high
+        @type pred_tns: torch.Tensor [batch_size, 1]
+        @param label_tns: 1.0 or 2.0 true labels stacked batch_size high
+        @type label_tns: torch.Tensor [batch_size, 1]
+        @return: precision values tp, tp_fp, tp_fn
+        @rtype: [int,int,int]
+        '''
+        
+        # Get the values from tensor [batch_size, label_val]:
+        label_vals = label_tns.view(-1)
+        tp         = torch.sum(label_vals)
+        pred_pos = torch.sum(pred_tns)
+        fp = max(0, pred_pos - tp)
+        fn = max(0, tp - pred_pos)
+        tp_fp = tp + fp
+        tp_fn = tp + fn
+        
+        return (tp, tp_fp, tp_fn)
+        
+
 
 # ---------------------- Resnet18Grayscale ---------------
 
@@ -485,6 +572,7 @@ class Resnet18Grayscale(ResNet):
         '''
         Args and kwargs as per https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
         class ResNet.__init__()
+        
         '''
         # The [2,2,2,2] is an instruction to the
         # superclass' __init__() for how many layers
@@ -499,6 +587,20 @@ class Resnet18Grayscale(ResNet):
         self.inplanes = 64 #******* Should be batch size?
         self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3,
                                bias=False)
+        
+    #------------------------------------
+    # forward 
+    #-------------------
+    
+    def forward(self, x):
+        out_logit = super().forward(x)
+
+        # Since we have binary classification,
+        # the Sigmoid function does what a 
+        # softmax would do for multi-class:
+
+        out_probs  = nn.Sigmoid()(out_logit)
+        return out_probs
 
     #------------------------------------
     # device 
