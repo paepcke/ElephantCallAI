@@ -706,10 +706,14 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
         print ("Outputing Results for:", data_id)
 
         # Save preditions
+        # Save preditions
         with open(save_path + '/' + data_id + '.txt', 'w') as f:
             # Create the hedding
-            f.write('Selection\tView\tChannel\tBegin Time (s)\tEnd Time (s)\tBegin File\thour\n')
+            f.write('Selection\tView\tChannel\tBegin Time (s)\tEnd Time (s)\tLow Freq (Hz)\tHigh Freq (Hz)\tBegin Path\tFile Offset (s)\tBegin File\tSite\thour\tfileDate\tdate(raven)\tTag 1\tTag 2\tnotes\tAnalyst\n')
 
+            # Get the site name
+            site_tags = data_id.split('_')
+            site = site_tags[0]
             # Output the individual predictions
             i = 1
             for prediction in predictions[data_id]:
@@ -721,7 +725,7 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
                 # Convert to hours and minutes as well
                 Hs = math.floor(pred_start / 3600.)
 
-                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t{}\t{}\n'.format(i, pred_start, pred_end, data_id+'.wav',Hs))
+                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t\t\t\t{}\t{}\t{}\t{}\t\t\t\t\t\t{}\n'.format(i, pred_start, pred_end, pred_start,data_id+'.wav', site, Hs, "AI"))
 
 
 def get_spectrogram_paths(test_files_path, spectrogram_path):
