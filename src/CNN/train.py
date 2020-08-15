@@ -7,34 +7,30 @@ Jonathan and Nikita's Code.
 '''
 
 
+import argparse
 from collections import deque
 import sys, os
 import time
 
-import argparse
-import torch
-import torch.nn as nn
-from torch.nn import BCELoss
+import numpy as np
+
 from torch import cuda
 from torch import optim
+import torch
+from torch.nn import BCELoss
 from torch.utils.tensorboard import SummaryWriter
-
 from torchvision.models.resnet import ResNet, BasicBlock
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from elephant_utils.logging_service import LoggingService
-from spectrogram_parameters import Defaults
-from spectrogram_parameters import HyperParameters
 from spectrogram_dataloader import SpectrogramDataloader
 from spectrogram_dataset import SpectrogramDataset
-from utils import get_precission_recall_values
-from utils import num_correct 
-from utils import num_non_zero, get_f_score
-
 from spectrogram_models import ModelSelector
-
+from spectrogram_parameters import Defaults
+from spectrogram_parameters import HyperParameters
+import torch.nn as nn
 
 import faulthandler; faulthandler.enable()
 
@@ -117,6 +113,32 @@ class SpectrogramTrainer(object):
         else:
             item.to(device=self.cpu)
 
+    #------------------------------------
+    # zero_tallies 
+    #-------------------
+    
+    def zero_tallies(self):
+        '''
+        Returns a dict with the running 
+        tallies that are maintained in both
+        train_epoch and eval_epoch.
+        
+        @return: dict with float zeros
+        @rtype: {str : float}
+        '''
+        tallies = {'running_loss' : 0.0,
+                   'running_corrects' : 0.0,
+                   'running_samples' : 0.0,
+                   # True positives
+                   'running_tp' : 0.0,
+                   # True positives + false positives
+                   'running_tp_fp' : 0.0,
+                   # True positives + false negatives
+                   'running_tp_fn' : 0.0,
+                   # For focal loss purposes
+                   'running_true_non_zero' : 0.0
+            }
+        return tallies
 
     #------------------------------------
     # tally_result
@@ -207,19 +229,9 @@ class SpectrogramTrainer(object):
         self.dataloader.switch_to_split('train')
         
         time_start = time.time()
-        
-        tallies = {'running_loss' : 0.0,
-                   'running_corrects' : 0,
-                   'running_samples' : 0,
-                   # True positives
-                   'running_tp' : 0,
-                   # True positives + false positives
-                   'running_tp_fp' : 0,
-                   # True positives + false negatives
-                   'running_tp_fn' : 0,
-                   # For focal loss purposes
-                   'running_true_non_zero' : 0
-            }
+
+        # Get a zeroed out set of running tallies:
+        tallies = self.zero_tallies()
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         for idx, (spectros_tns, labels_tns) in enumerate(self.dataloader):
@@ -251,7 +263,7 @@ class SpectrogramTrainer(object):
             # Free GPU memory:
             spectros_tns.to('cpu')
             labels_tns.to('cpu')
-            pred_prob_tns.to('cpu')            
+            pred_prob_tns.to('cpu')
 
             tallies = self.tally_result(labels_tns, pred_prob_tns, loss, tallies) 
 
@@ -262,27 +274,22 @@ class SpectrogramTrainer(object):
             # fed into the training, and the classifier
             # correctly identified none as positive:
             
-            train_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] if tallies['running_tp_fp'] > 0 else 1
+            train_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] \
+                if tallies['running_tp_fp'] > 0 else torch.tensor(1.)
             
             # If denom is zero: no positive samples 
             # were encountered, and the classifier did not
             # claim that any samples were positive:
             
-            #******This yiels:
-            #*****RuntimeError: Integer division of tensors using div or / is no longer supported, and in a future release div will perform true division as in Python 3. Use true_divide or floor_divide (// in Python) instead.
-
-            train_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn'] if tallies['running_tp_fn'] > 0 else 1
+            train_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn'] \
+                if tallies['running_tp_fn'] > 0 else torch.tensor(1.)
             
             if train_epoch_precision + train_epoch_recall > 0:
                 train_epoch_fscore = (2 * train_epoch_precision * train_epoch_recall) / (train_epoch_precision + train_epoch_recall)
             else:
-                train_epoch_fscore = 0
+                train_epoch_fscore = torch.tensor(0.)
         
-        #Logging
-        #********TypeError: unsupported format string passed to Tensor.__format__:
-        self.log.info('Training loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
-            train_epoch_loss, train_epoch_acc, train_epoch_precision, train_epoch_recall, train_epoch_fscore ,(time.time()-time_start)/60))
-        
+        self.log.info(f"Epoch train time: {(time.time() - time_start) / 60}")
         return {'train_epoch_acc': train_epoch_acc, 'train_epoch_fscore': train_epoch_fscore, 
                 'train_epoch_loss': train_epoch_loss, 'train_epoch_precision':train_epoch_precision, 
                 'train_epoch_recall': train_epoch_recall} 
@@ -299,18 +306,8 @@ class SpectrogramTrainer(object):
         self.dataloader.switch_to_split('validate')
         
         time_start = time.time()
-        tallies = {'running_loss' : 0.0,
-                   'running_corrects' : 0,
-                   'running_samples' : 0,
-                   # True positives
-                   'running_tp' : 0,
-                   # True positives + false positives
-                   'running_tp_fp' : 0,
-                   # True positives + false negatives
-                   'running_tp_fn' : 0,
-                   # For focal loss purposes
-                   'running_true_non_zero' : 0
-            }
+        # Get a zeroed out set of running tallies:
+        tallies = self.zero_tallies()
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         with torch.no_grad():
@@ -351,19 +348,15 @@ class SpectrogramTrainer(object):
         #valid_epoch_fscore = running_fscore / (idx + 1)
     
         # If this is zero issue a warning
-        valid_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] if tallies['running_tp_fp'] > 0 else 1
+        valid_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] \
+            if tallies['running_tp_fp'] > 0 else torch.tensor(1.)
         valid_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn']
         if valid_epoch_precision + valid_epoch_recall > 0:
             valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
         else:
-            valid_epoch_fscore = 0
-    
-        #Logging
-        self.log.info('Validation loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
-                valid_epoch_loss, valid_epoch_acc, valid_epoch_precision, valid_epoch_recall,
-                valid_epoch_fscore, (time.time()-time_start)/60))
-    
-    
+            valid_epoch_fscore = torch.tensor(0.)
+        
+        self.log.info(f"Epoch validation time: {(time.time() - time_start) / 60}")
         return {'valid_epoch_acc': valid_epoch_acc, 'valid_epoch_fscore': valid_epoch_fscore, 
                 'valid_epoch_loss': valid_epoch_loss, 'valid_epoch_precision':valid_epoch_precision, 
                 'valid_epoch_recall': valid_epoch_recall}
@@ -380,20 +373,13 @@ class SpectrogramTrainer(object):
                
         
         train_start_time = time.time()
+        res_obj = TrainResults()
         
-        best_valid_acc = 0.0
-        best_valid_fscore = 0.0
-        # Best precision and recall reflect
-        # the best fscore
-        best_valid_precision = 0.0
-        best_valid_recall = 0.0
-        best_valid_loss = float("inf")
-        best_model_wts = None
     
         # Check this
-        last_validation_accuracies = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
-        last_validation_fscores = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
-        last_validation_losses = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
+        previous_validation_accuracies = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
+        previous_validation_fscores = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
+        previous_validation_losses = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
     
         try:
             for epoch in range(starting_epoch, num_epochs):
@@ -405,6 +391,16 @@ class SpectrogramTrainer(object):
                 self.log.info (f'Epoch [{epoch + 1}/{num_epochs}]')
     
                 train_epoch_results = self.train_epoch(include_boundaries)
+
+                #Logging
+                msg = (f"Epoch [{epoch + 1}/{num_epochs}] Training:\n"
+                       f"Training loss        {train_epoch_results['train_epoch_loss']:.6f}\n"
+                       f"Accuracy             {train_epoch_results['train_epoch_acc'].item():.4f}\n"
+                       f"Precision            {train_epoch_results['train_epoch_precision'].item():.4f}\n"
+                       f"Recall               {train_epoch_results['train_epoch_recall'].item():.4f}\n"
+                       f"f-score              {train_epoch_results['train_epoch_fscore'].item():.4f}"
+                       )
+                self.log.info(msg)
 
                 ## Write train metrics to tensorboard
                 self.writer.add_scalar('train_epoch_loss', train_epoch_results['train_epoch_loss'], epoch)
@@ -419,44 +415,61 @@ class SpectrogramTrainer(object):
 
                     # Update the schedular
                     self.scheduler.step(val_epoch_results['valid_epoch_loss'])
-    
+
+                    #Logging
+                    msg = (f"Epoch [{epoch + 1}/{num_epochs}] Validation:\n"
+                           f"Validation loss      {val_epoch_results['valid_epoch_loss']:.6f}\n"
+                           f"Accuracy             {val_epoch_results['valid_epoch_acc'].item():.4f}\n"
+                           f"Precision            {val_epoch_results['valid_epoch_precision'].item():.4f}\n"
+                           f"Recall               {val_epoch_results['valid_epoch_recall'].item():.4f}\n"
+                           f"f-score              {val_epoch_results['valid_epoch_fscore'].item():.4f}"
+                           )
+                    self.log.info(msg)
+                    
                     ## Write val metrics to tensorboard
                     self.writer.add_scalar('valid_epoch_loss', val_epoch_results['valid_epoch_loss'], epoch)
                     self.writer.add_scalar('valid_epoch_acc', val_epoch_results['valid_epoch_acc'], epoch)
                     self.writer.add_scalar('valid_epoch_fscore', val_epoch_results['valid_epoch_fscore'], epoch)
     
                     # Update eval tracking statistics!
-                    last_validation_accuracies.append(val_epoch_results['valid_epoch_acc'])
-                    last_validation_fscores.append(val_epoch_results['valid_epoch_fscore'])
-                    last_validation_losses.append(val_epoch_results['valid_epoch_loss'])
+                    previous_validation_accuracies.append(val_epoch_results['valid_epoch_acc'])
+                    previous_validation_fscores.append(val_epoch_results['valid_epoch_fscore'])
+                    previous_validation_losses.append(val_epoch_results['valid_epoch_loss'])
     
-                    if val_epoch_results['valid_epoch_acc'] > best_valid_acc:
-                        best_valid_acc = val_epoch_results['valid_epoch_acc']
-                        if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'acc':
-                            best_model_wts = self.model.state_dict()
+                    curr_best_acc = res_obj.best_valid_acc
+                    res_obj.best_valid_acc = max(val_epoch_results['valid_epoch_acc'],
+                                                 res_obj.best_valid_acc)
+                    if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'acc' \
+                            and curr_best_acc != val_epoch_results['best_valid_acc']:
+                        best_model_wts = self.model.state_dict()
     
-                    if val_epoch_results['valid_epoch_fscore'] > best_valid_fscore:
-                        best_valid_fscore = val_epoch_results['valid_epoch_fscore']
-                        best_valid_precision = val_epoch_results['valid_epoch_precision']
-                        best_valid_recall = val_epoch_results['valid_epoch_recall']
-                        if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'fscore':
-                            best_model_wts = self.model.state_dict()
+                    curr_best_fs = res_obj.best_valid_fscore
+                    res_obj.best_valid_fscore = torch.max(val_epoch_results['valid_epoch_fscore'],
+                                                          res_obj.best_valid_fscore)
+                    if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'fscore' and \
+                            curr_best_fs != val_epoch_results['best_valid_fscore']:
+                        best_model_wts = self.model.state_dict()
+                    
+                    res_obj.best_valid_precision = torch.max(val_epoch_results['valid_epoch_precision'],
+                                                     res_obj.best_valid_precision)
+                    res_obj.best_valid_recall = torch.max(val_epoch_results['valid_epoch_recall'],
+                                                          res_obj.best_valid_recall)
     
-                    if val_epoch_results['valid_epoch_loss'] < best_valid_loss:
-                        best_valid_loss = val_epoch_results['valid_epoch_loss'] 
+                    res_obj.best_valid_loss = min(val_epoch_results['valid_epoch_loss'],
+                                                  res_obj.best_valid_loss)
     
                     # Check whether to early stop due to decreasing validation acc or f-score
                     if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'acc':
-                        if all([val_accuracy < best_valid_acc for val_accuracy in last_validation_accuracies]):
+                        if all([val_accuracy < res_obj.best_valid_acc for val_accuracy in previous_validation_accuracies]):
                             self.log.info(f"Early stopping because last {Defaults.TRAIN_STOP_ITERATIONS} "
-                                          f"validation accuracies have been {last_validation_accuracies} " 
-                                          f"and less than best val accuracy {best_valid_acc}")
+                                          f"validation accuracies have been {previous_validation_accuracies} " 
+                                          f"and less than best val accuracy {res_obj.best_valid_acc}")
                             break
                     elif Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'fscore':
-                        if all([val_fscore < best_valid_fscore for val_fscore in last_validation_fscores]):
+                        if all([val_fscore < res_obj.best_valid_fscore for val_fscore in previous_validation_fscores]):
                             self.log.info(f"Early stopping because last {Defaults.TRAIN_STOP_ITERATIONS} "
-                                          f"validation f-scores have been {last_validation_fscores} "
-                                          f"and less than best val f-score {best_valid_fscore}")
+                                          f"validation f-scores have been {previous_validation_fscores} "
+                                          f"and less than best val f-score {res_obj.best_valid_fscore}")
                             break
     
                 self.log.info(f'Finished Epoch [{epoch + 1}/{num_epochs}] - Total Time: {(time.time()-train_start_time)/60}')
@@ -464,11 +477,16 @@ class SpectrogramTrainer(object):
         except KeyboardInterrupt:
             self.log.info("Early stopping due to keyboard intervention")
     
-        self.log.info('Best val Acc: {:4f}'.format(best_valid_acc))
-        self.log.info('Best val F-score: {:4f} with Precision: {:4f} and Recall: {:4f}'.format(best_valid_fscore, best_valid_precision, best_valid_recall))
-        self.log.info ('Best val Loss: {:6f}'.format(best_valid_loss))
+        msg = (f"\nBest val Acc    {res_obj.best_valid_acc.item():.4f}\n"
+               f"Best val fscore    {res_obj.best_valid_fscore.item():.4f}\n"
+               f"    with precision {res_obj.best_valid_precision.item():.4f}\n"
+               f"    and recall {res_obj.best_valid_recall.item():.4f}\n"
+               f"Best val loss    {res_obj.best_valid_loss:.6f}"
+               )
+        self.log.info(msg)
     
-        return best_model_wts
+        res_obj.best_model_wts = best_model_wts
+        return res_obj
 
     # ------------- Utils -----------
 
@@ -551,7 +569,27 @@ class SpectrogramTrainer(object):
         return (tp, tp_fp, tp_fn)
         
 
+    #------------------------------------
+    # set_seed  
+    #-------------------
 
+    def set_seed(self, seed):
+        '''
+        Set the seed across all different necessary platforms
+        to allow for comparison of different models and runs
+        
+        @param seed: random seed to set for all random num generators
+        @type seed: int
+        '''
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        # Not totally sure what these two do!
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        #random.seed = seed
+    
 # ---------------------- Resnet18Grayscale ---------------
 
 class Resnet18Grayscale(ResNet):
@@ -616,6 +654,31 @@ class Resnet18Grayscale(ResNet):
 
         '''
         return next(self.parameters()).device
+
+
+# ----------------------- Class Train Results -----------
+
+class TrainResults(object):
+    '''
+    Instances of this class hold training results
+    accumulated during method train(). The method
+    returns such an instance. Used e.g. for unittests
+    '''
+    
+    #------------------------------------
+    # Constructor 
+    #-------------------
+
+    def __init__(self):
+        self.best_valid_acc = torch.tensor(0.0)
+        self.best_valid_fscore = torch.tensor(0.0)
+        # Best precision and recall, which reflect
+        # the best fscore
+        self.best_valid_precision = torch.tensor(0.0)
+        self.best_valid_recall = torch.tensor(0.0)
+        self.best_valid_loss = torch.tensor(float("inf"))
+        self.best_model_wts = None
+
 
 
 # ------------------------ Main ------------
