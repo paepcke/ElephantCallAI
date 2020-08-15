@@ -35,10 +35,13 @@ parser.add_argument('--model_1', dest='model1', action='store_true',
 parser.add_argument('--visualize', action='store_true',
     help='Visualize the adversarial examples and Model_0 and Model_1 predictions on them')
 
+# Model Paths
 parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
 parser.add_argument('--model_0', type=str,
     help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')
+
+# Pre train flags
 parser.add_argument('--pre_train_0', type=str,
     help='Use a pre-trained model to initialize model 0')
 parser.add_argument('--pre_train_1', type=str,
