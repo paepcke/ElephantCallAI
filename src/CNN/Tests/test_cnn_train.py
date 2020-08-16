@@ -6,13 +6,11 @@ Created on Aug 15, 2020
 import os
 import unittest
 
-from torch import tensor
-
-from CNN.train import SpectrogramTrainer
+from CNN.train import SpectrogramTrainer, TrainResult
 
 
-#*********TEST_ALL = True
-TEST_ALL = False
+TEST_ALL = True
+#TEST_ALL = False
 
 class TestCNNTrain(unittest.TestCase):
 
@@ -38,7 +36,7 @@ class TestCNNTrain(unittest.TestCase):
     # testTrainEpoch 
     #-------------------
     
-    #******@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def testTrainEpoch(self):
 
         trainer = SpectrogramTrainer(
@@ -78,23 +76,47 @@ class TestCNNTrain(unittest.TestCase):
             self.assertDictEqual(res_dict, true_res_dict_A)
         except AssertionError:
             self.assertDictEqual(res_dict, true_res_dict_B)
-            
-        print('foo')
-
 
     #------------------------------------
-    # testName
+    # test1EpochBatchSize1Train
     #-------------------
 
-    def test2EpocsBatchSize16(self):
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    def test1EpochBatchSize1Train(self):
         
         trainer = SpectrogramTrainer(
                         self.snippet_dir,
                         self.snippet_db_path,
-                        batch_size = 16)
-                        
+                        batch_size = 1)
 
+        res_obj_tensors = trainer.train(num_epochs=1)
 
+        res_obj = TrainResult()
+        
+        res_obj.best_valid_acc       = res_obj_tensors.best_valid_acc.item()
+        res_obj.best_valid_fscore    = res_obj_tensors.best_valid_fscore.item()
+        res_obj.best_valid_precision = res_obj_tensors.best_valid_precision.item()
+        res_obj.best_valid_recall    = res_obj_tensors.best_valid_recall.item()
+        
+        # Two result possibilities (in spite of trying
+        # to suppress randomness :-( ):
+        
+        true_res_obj_A = TrainResult()
+         
+        true_res_obj_A.best_valid_acc = 0.5000
+        true_res_obj_A.best_valid_fscore = 0.6667
+        true_res_obj_A.best_valid_precision = 0.5
+        true_res_obj_A.best_valid_recall = 1.
+        
+        true_res_obj_B = TrainResult() 
+        
+        true_res_obj_B.best_valid_acc = 0.5000
+        true_res_obj_B.best_valid_fscore = 0.
+        true_res_obj_B.best_valid_precision = 1.
+        true_res_obj_B.best_valid_recall = 0.
+
+        self.assertTrue(res_obj == true_res_obj_A or
+                        res_obj == true_res_obj_B)
 
 # ------------------ Main -----------------
 

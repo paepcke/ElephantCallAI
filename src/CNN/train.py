@@ -373,7 +373,7 @@ class SpectrogramTrainer(object):
                
         
         train_start_time = time.time()
-        res_obj = TrainResults()
+        res_obj = TrainResult()
         
     
         # Check this
@@ -440,7 +440,7 @@ class SpectrogramTrainer(object):
                     res_obj.best_valid_acc = max(val_epoch_results['valid_epoch_acc'],
                                                  res_obj.best_valid_acc)
                     if Defaults.TRAIN_MODEL_SAVE_CRITERIA.lower() == 'acc' \
-                            and curr_best_acc != val_epoch_results['best_valid_acc']:
+                            and curr_best_acc != res_obj.best_valid_acc:
                         best_model_wts = self.model.state_dict()
     
                     curr_best_fs = res_obj.best_valid_fscore
@@ -658,7 +658,7 @@ class Resnet18Grayscale(ResNet):
 
 # ----------------------- Class Train Results -----------
 
-class TrainResults(object):
+class TrainResult(object):
     '''
     Instances of this class hold training results
     accumulated during method train(). The method
@@ -670,16 +670,53 @@ class TrainResults(object):
     #-------------------
 
     def __init__(self):
-        self.best_valid_acc = torch.tensor(0.0)
-        self.best_valid_fscore = torch.tensor(0.0)
+        self.best_valid_acc       = torch.tensor(0.0)
+        self.best_valid_fscore    = torch.tensor(0.0)
         # Best precision and recall, which reflect
         # the best fscore
         self.best_valid_precision = torch.tensor(0.0)
-        self.best_valid_recall = torch.tensor(0.0)
-        self.best_valid_loss = torch.tensor(float("inf"))
-        self.best_model_wts = None
+        self.best_valid_recall    = torch.tensor(0.0)
+        self.best_valid_loss      = torch.tensor(float("inf"))
+        self.best_model_wts       = None
 
+    #------------------------------------
+    # __eq__ 
+    #-------------------
+    
+    def __eq__(self, other):
+        '''
+        Return True if given TrainResult instance
+        is equal to self in all but loss and weights
+        @param other: instance to compare to
+        @type other: TrainResult
+        @return: True for equality
+        @rtype: bool
+        '''
+        if not isinstance(other, TrainResult):
+            return False
+        
+        if  round(self.best_valid_acc,4)       ==  round(other.best_valid_acc,4)         and \
+            round(self.best_valid_fscore,4)    ==  round(other.best_valid_fscore,4)      and \
+            round(self.best_valid_precision,4) ==  round(other.best_valid_precision,4)   and \
+            round(self.best_valid_recall,4)    ==  round(other.best_valid_recall,4):
+            return True
+        else:
+            return False
 
+    #------------------------------------
+    # print 
+    #-------------------
+    
+    def print(self, include_weights=False):
+        msg = (f"best_valid_acc      : {self.best_valid_acc}\n"
+               f"best_valid_fscore   : {self.best_valid_fscore}\n"
+               f"best_valid_precision: {self.best_valid_precision}\n"
+               f"best_valid_recall   : {self.best_valid_recall}\n"
+               f"best_valid_loss     : {self.best_valid_loss}\n"
+               )
+        if include_weights:
+            msg += f"best_valid_weights: {self.best_valid_wts}\n" 
+        print(msg)
 
 # ------------------------ Main ------------
 if __name__ == '__main__':
