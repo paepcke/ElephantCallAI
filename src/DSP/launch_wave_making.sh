@@ -14,7 +14,7 @@
 # destination directory.
 
 #*********
-echo "Infiles at start: $@ "
+#echo "Infiles at start: $@ "
 #*********
 
 
@@ -73,7 +73,7 @@ done
 infiles=$@
 
 #*********
-echo "Infiles: '$infiles'"
+#echo "Infiles: '$infiles'"
 #*********
 
 # Don't spawn more workers than
@@ -132,7 +132,7 @@ cmd="$cmd --threshold_db=-30 --low_freq=20 --high_freq=40 --freq_cap=30 "
 cmd="$cmd --num_workers=$NUM_WORKERS --this_worker ::: $WORKER_RANKS ::: $infiles"
 
 #**********
-echo "Cmd: $cmd"
+#echo "Cmd: $cmd"
 #exit
 #**********
 
