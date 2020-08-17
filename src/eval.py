@@ -784,6 +784,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
+        model_id = '17'
         predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -843,6 +844,9 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
         Params:
         in_seconds - signifies that predictions are already converted to seconds
     """
+    dummy_low_freq = 5
+    dummy_high_freq = 100
+    dummy_file_path = '/tmp'
     for data in dataset:
         spectrogram = data[0]
         labels = data[1]
@@ -871,9 +875,10 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
                     pred_start, pred_end, length = spect_call_to_time(prediction)
                 # Convert to hours and minutes as well
                 Hs = math.floor(pred_start / 3600.)
+                file_path = os.path.join(dummy_file_path, data_id+'.wav')
 
-                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t\t\t\t{}\t{}\t{}\t{}\t\t\t\t\t\t{}\n'.format(i, pred_start, pred_end, pred_start,data_id+'.wav', site, Hs, "AI"))
-
+                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t\t\t\t\t\t{}\n'.format(i, pred_start, pred_end, dummy_low_freq, dummy_high_freq, file_path, pred_start, data_id+'.wav', site, Hs, "AI"))
+                i += 1
 
 
 def get_spectrogram_paths(test_files_path, spectrogram_path):
