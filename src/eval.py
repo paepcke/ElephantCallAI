@@ -846,7 +846,6 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
     """
     dummy_low_freq = 5
     dummy_high_freq = 100
-    dummy_file_path = '/tmp'
     for data in dataset:
         spectrogram = data[0]
         labels = data[1]
@@ -856,6 +855,13 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
         tags = tags[-1].split('_')
         data_id = tags[0] + '_' + tags[1]
         print ("Outputing Results for:", data_id)
+
+        # Read the gt file to extract the "begin path" data_field
+        gt_file = csv.DictReader(open(gt_call_path,'rt'), delimiter='\t')
+        for row in gt_file:
+            # Use the file offset to determine the start of the call
+            begin_path = str(row['Begin Path'])
+            break
 
         # Save preditions
         with open(save_path + '/' + data_id + '.txt', 'w') as f:
@@ -875,9 +881,8 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
                     pred_start, pred_end, length = spect_call_to_time(prediction)
                 # Convert to hours and minutes as well
                 Hs = math.floor(pred_start / 3600.)
-                file_path = os.path.join(dummy_file_path, data_id+'.wav')
 
-                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t\t\t\t\t\t{}\n'.format(i, pred_start, pred_end, dummy_low_freq, dummy_high_freq, file_path, pred_start, data_id+'.wav', site, Hs, "AI"))
+                f.write('{}\tSpectrogram 1\t1\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t\t\t\t\t\t{}\n'.format(i, pred_start, pred_end, dummy_low_freq, dummy_high_freq, begin_path, pred_start, data_id+'.wav', site, Hs, "AI"))
                 i += 1
 
 
