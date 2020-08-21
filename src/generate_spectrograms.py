@@ -130,10 +130,10 @@ def process_spectogram(audio_file, label_file, spectrogram_info, data_id):
         return None, None
 
     # Generate the spectrogram
-    spectrogram_info['samplerate'] == samplerate
-    spectrogram = generate_whole_spectogram(raw_audio, spectrogram_info, data_id)
+    spectrogram_info['samplerate'] = samplerate
+    spectrogram = generate_spectogram(raw_audio, spectrogram_info, data_id)
     print (spectrogram.shape)
-    labels = generate_labels(label_file, spectrogram_info, spectrogram.shape[1])
+    labels = generate_labels(label_file, spectrogram_info, spectrogram.shape[0])
 
     return spectrogram, labels
 

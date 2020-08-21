@@ -538,7 +538,7 @@ class ElephantDatasetFull(data.Dataset):
         label_path = self.labels[index]
         gt_call_path = self.gt_calls[index]
 
-        spectrogram = np.load(spectrogram_path).transpose()
+        spectrogram = np.load(spectrogram_path)
         label = np.load(label_path)
 
         spectrogram = self.transform(spectrogram)

@@ -509,7 +509,7 @@ if __name__ == '__main__':
             window_size = args.window
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
-            full_24_hr_spectogram, labels = process_spectogram(currentDir + '/' + audio_file, label_path, spectrogram_info, "-1")
+            full_24_hr_spectogram, labels = generate_spectrograms.process_spectogram(currentDir + '/' + audio_file, label_path, spectrogram_info, "-1")
             
             # Check to make sure there was not a file failure
             if full_24_hr_spectogram is None:
