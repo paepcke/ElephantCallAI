@@ -680,15 +680,28 @@ if __name__ == '__main__':
     with open(out_dir + '/files.txt', 'w') as f:
         for i in range(len(file_pairs)):
             file = file_pairs[i]
+            # A bit ad-hoc, but check if the file was readible!
+            try:
+                _, _ = wavfile.read(file[3] + '/' + file[0])
+            except:
+                print ("Skipping this file")
+                continue
+
+            print ("Outputing test file", file[2])
             # write the id of each file pair (wav/txt)
             # along with which time period it came from
             # e.g. jan/id
+            '''
             dirs = file[3].split('/')
             time_tag = dirs[-1]
 
             path = time_tag + '/' + file[2]
             if i != len(file_pairs) - 1:
                 path += '\n'
+            '''
+            data_id = file[2]
+            if i != len(file_pairs) - 1:
+                data_id += '\n'
 
-            f.write(path)
+            f.write(data_id)
 

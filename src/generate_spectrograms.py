@@ -25,8 +25,8 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
-parser.add_argument('--samplerate', dest='samplerate', type=int, default=8000,
-    help='samplerate of the audio file')
+#parser.add_argument('--samplerate', dest='samplerate', type=int, default=8000,
+#    help='samplerate of the audio file')
 
 np.random.seed(8)
 
@@ -68,7 +68,7 @@ def generate_labels(labels, spectrogram_info, len_labels):
     return labelMatrix
 
 
-def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000):
+def generate_spectogram(raw_audio, spectrogram_info, id, chunk_size=1000):
     """
         For a given complete audio file generate the corresponding
         spectrogram in chunks. Namley, generate 1000 window block
@@ -77,20 +77,12 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
         to deal with memory issues and efficiency involved with doing
         the complete DFT at once
     """
-    try:
-        samplerate, raw_audio = wavfile.read(audio_file)
-        if (samplerate < 4000):
-            print ("Sample Rate Unexpectadly low!", samplerate)
-        print ("File size", raw_audio.shape)
-    except:
-        print("FILE Failed", audio_file)
-        # Let us try this for now to see if it stops the failing
-        return [], [], []
-
+    
     NFFT = spectrogram_info['NFFT']
     hop = spectrogram_info['hop']
     max_freq = spectrogram_info['max_freq']
     pad_to = spectrogram_info['pad_to']
+    samplerate = spectrogram_info['samplerate']
 
     # Generate the spectogram in chunks
     # of 1000 frames.
@@ -125,6 +117,27 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
 
     print("Finished making one 24 hour spectogram")
     return final_spec.T
+
+def process_spectogram(audio_file, label_file, data_id):
+    # In the case an audio file fails
+    try:
+        samplerate, raw_audio = wavfile.read(audio_file)
+        if (samplerate < 4000):
+            print ("Sample Rate Unexpectadly low!", samplerate)
+        print ("File size", raw_audio.shape)
+    except:
+        print("FILE Failed", audio_file)
+        # Let us try this for now to see if it stops the failing
+        return None, None
+
+    # Generate the spectrogram
+    spectrogram_info['samplerate'] == samplerate
+    spectrogram = generate_whole_spectogram(raw_audio, spectrogram_info, data_id)
+    print (spectrogram.shape)
+    labels = generate_labels(label_file, spectrogram_info, spectrogram.shape[1])
+
+    return spectrogram, labels
+
 
 def copy_csv_file(file_path, out_path):
     '''
@@ -195,21 +208,21 @@ if __name__ == '__main__':
                 label_file = data_pair[1]
                 data_id = data_pair[2]
 
-                spectrogram = generate_whole_spectogram(currentDir + '/' + audio_file, spectrogram_info, data_id)
-                print (spectrogram.shape)
-                labels = generate_labels(currentDir + '/' + label_file, spectrogram_info, spectrogram.shape[1])
+                spectrogram, labels = process_spectogram(currentDir + '/' + audio_file, currentDir + '/' + label_file, data_id)
                 
-                # Save these to spectrogram output folder with
-                # name dictated by the data_id
-                spect_dir = os.path.join(outputDir,file_dir_name)
-                if not os.path.exists(spect_dir):
-                    os.mkdir(spect_dir)
+                # Prevent issues with un-readible wav files
+                if spectrogram is not None:
+                    # Save these to spectrogram output folder with
+                    # name dictated by the data_id
+                    spect_dir = os.path.join(outputDir,file_dir_name)
+                    if not os.path.exists(spect_dir):
+                        os.mkdir(spect_dir)
 
-                # Want to save the corresponding label_file with the spectrogram!!
-                copy_csv_file(currentDir + '/' + label_file, spect_dir + '/' + data_id + "_gt.txt")
-                np.save(spect_dir + '/' + data_id + "_spec.npy", spectrogram)
-                np.save(spect_dir + '/' + data_id + "_label.npy", labels)
-                print ("processed " + data_id)
+                    # Want to save the corresponding label_file with the spectrogram!!
+                    copy_csv_file(currentDir + '/' + label_file, spect_dir + '/' + data_id + "_gt.txt")
+                    np.save(spect_dir + '/' + data_id + "_spec.npy", spectrogram)
+                    np.save(spect_dir + '/' + data_id + "_label.npy", labels)
+                    print ("processed " + data_id)
 
             '''
             pool = multiprocessing.Pool()
