@@ -25,8 +25,7 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
-#parser.add_argument('--samplerate', dest='samplerate', type=int, default=8000,
-#    help='samplerate of the audio file')
+
 
 np.random.seed(8)
 
@@ -118,7 +117,7 @@ def generate_spectogram(raw_audio, spectrogram_info, id, chunk_size=1000):
     print("Finished making one 24 hour spectogram")
     return final_spec.T
 
-def process_spectogram(audio_file, label_file, data_id):
+def process_spectogram(audio_file, label_file, spectrogram_info, data_id):
     # In the case an audio file fails
     try:
         samplerate, raw_audio = wavfile.read(audio_file)
@@ -168,7 +167,6 @@ if __name__ == '__main__':
                         'hop': args.hop,
                         'max_freq': args.max_freq,
                         'window': args.window,
-                        'samplerate': args.samplerate,
                         'pad_to': args.pad_to}
 
     
@@ -208,7 +206,8 @@ if __name__ == '__main__':
                 label_file = data_pair[1]
                 data_id = data_pair[2]
 
-                spectrogram, labels = process_spectogram(currentDir + '/' + audio_file, currentDir + '/' + label_file, data_id)
+                spectrogram, labels = process_spectogram(currentDir + '/' + audio_file, 
+                                        currentDir + '/' + label_file, spectrogram_info, data_id)
                 
                 # Prevent issues with un-readible wav files
                 if spectrogram is not None:

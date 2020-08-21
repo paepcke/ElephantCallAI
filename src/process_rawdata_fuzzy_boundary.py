@@ -495,7 +495,7 @@ if __name__ == '__main__':
     if args.full_24_hr:
         print("Processing all 24 hours and saving chunks from them")
 
-        spectrogram_info['samplerate'] = 8000
+        #spectrogram_info['samplerate'] = 8000
 
         def wrapper_processFull24Hours(directory, args, data_pair):
             """
@@ -509,8 +509,14 @@ if __name__ == '__main__':
             window_size = args.window
             # Catch case where no calls exist so the gt file does not
             label_path = curren_dir + '/' + label_file if label_file is not None else None
-            full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
-            labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[0])
+            full_24_hr_spectogram, labels = process_spectogram(currentDir + '/' + audio_file, label_path, spectrogram_info, "-1")
+            
+            # Check to make sure there was not a file failure
+            if full_24_hr_spectogram is None:
+                return
+
+            #full_24_hr_spectogram = generate_spectrograms.generate_whole_spectogram(curren_dir + '/' + audio_file, spectrogram_info, "-1")
+            #labels = generate_spectrograms.generate_labels(label_path, spectrogram_info, full_24_hr_spectogram.shape[0])
             print("Shapes of full spectrograms and labels")
             print(full_24_hr_spectogram.shape)
             print(labels.shape)
@@ -684,7 +690,7 @@ if __name__ == '__main__':
             try:
                 _, _ = wavfile.read(file[3] + '/' + file[0])
             except:
-                print ("Skipping this file")
+                print ("File Failure", file[2])
                 continue
 
             print ("Outputing test file", file[2])
