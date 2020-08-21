@@ -77,7 +77,16 @@ def generate_whole_spectogram(audio_file, spectrogram_info, id, chunk_size=1000)
         to deal with memory issues and efficiency involved with doing
         the complete DFT at once
     """
-    samplerate, raw_audio = wavfile.read(audio_file)
+    try:
+        samplerate, raw_audio = wavfile.read(audio_file)
+        if (samplerate < 4000):
+            print ("Sample Rate Unexpectadly low!", samplerate)
+        print ("File size", raw_audio.shape)
+    except:
+        print("FILE Failed", audio_file)
+        # Let us try this for now to see if it stops the failing
+        return [], [], []
+
     NFFT = spectrogram_info['NFFT']
     hop = spectrogram_info['hop']
     max_freq = spectrogram_info['max_freq']
