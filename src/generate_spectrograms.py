@@ -11,16 +11,16 @@ import math
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Test_Data_file/', 
-    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
-parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
-     help='The output directory')
+#parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Test_Data_file/', 
+#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+#parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
+#     help='The output directory')
 
 # For use on quatro
-#parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
-#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
-#parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
-     #help='The output directory')
+parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
+    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
+     help='The output directory')
 
 parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms') 
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
@@ -29,6 +29,8 @@ parser.add_argument('--window', type=int, default=256,
 parser.add_argument('--max_f', dest='max_freq', type=int, default=150, help='Deterimes the maximum frequency band')
 parser.add_argument('--pad', dest='pad_to', type=int, default=4096, 
     help='Deterimes the padded window size that we want to give a particular grid spacing (i.e. 1.95hz')
+parser.add_argument('--samplerate', dest='samplerate', type=int, default=8000,
+    help='samplerate of the audio file')
 
 np.random.seed(8)
 
@@ -148,7 +150,7 @@ if __name__ == '__main__':
                         'hop': args.hop,
                         'max_freq': args.max_freq,
                         'window': args.window,
-                        'samplerate': 8000,
+                        'samplerate': args.samplerate,
                         'pad_to': args.pad_to}
 
     # Iterate through all data directories
