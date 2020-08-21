@@ -154,6 +154,9 @@ if __name__ == '__main__':
     label_set = []
     # Iterate through all files with in data directories
     for currentDir in data_dirs:
+        # Get the final name of the directory with the spect files
+        files_dirs = currentDir.split('/')
+        file_dir_name = files_dirs[-2] if files_dirs[-1] == '' else files_dirs[-1]
         for(dirpath, dirnames, filenames) in os.walk(currentDir):
             # Iterate through the files to create data/label 
             # pairs (i.e. (.wav, .txt))
@@ -189,7 +192,7 @@ if __name__ == '__main__':
                 
                 # Save these to spectrogram output folder with
                 # name dictated by the data_id
-                spect_dir = os.path.join(outputDir,dirName)
+                spect_dir = os.path.join(outputDir,file_dir_name)
                 if not os.path.exists(spect_dir):
                     os.mkdir(spect_dir)
 
