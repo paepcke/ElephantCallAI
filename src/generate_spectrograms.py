@@ -11,14 +11,10 @@ import math
 import argparse
 
 parser = argparse.ArgumentParser()
-#parser.add_argument('--data', dest='dataDir', default='../elephant_dataset/New_Data/Test_Data_file/', 
-#    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
-#parser.add_argument('--out', dest='outputDir', default='../elephant_dataset/New_Data/Spectrograms/',
-#     help='The output directory')
 
 # For use on quatro
-parser.add_argument('--data', dest='dataDir', default='/home/data/elephants/rawdata/raw_2018', 
-    type=str, help='The top level directory with the data (e.g. Truth_Logs)')
+parser.add_argument('--data_dirs', dest='data_dirs', nargs='+', type=str,
+    help='Provide the data_dirs with the files that you want to be processed')
 parser.add_argument('--out', dest='outputDir', default='/home/data/elephants/rawdata/Spectrograms/',
      help='The output directory')
 
@@ -144,7 +140,7 @@ def copy_csv_file(file_path, out_path):
 ## Gotta fix this to include files with noooooo elephant calls!
 if __name__ == '__main__':
     args = parser.parse_args()
-    dataDir = args.dataDir
+    data_dirs = args.data_dirs
     outputDir = args.outputDir
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
@@ -153,20 +149,12 @@ if __name__ == '__main__':
                         'samplerate': args.samplerate,
                         'pad_to': args.pad_to}
 
-    # Iterate through all data directories
-    allDirs = [];
-    # Get the directories that contain the data files
-    for (dirpath, dirnames, filenames) in os.walk(dataDir): 
-        allDirs.extend(dirnames);
-        break
-
+    
     feature_set = []
     label_set = []
     # Iterate through all files with in data directories
-    for dirName in allDirs:
-        #Iterate through each dir and get files within
-        currentDir = dataDir + '/' + dirName;
-        for(dirpath, dirnames, filenames) in os.walk(dataDir+'/'+dirName):
+    for currentDir in data_dirs:
+        for(dirpath, dirnames, filenames) in os.walk(currentDir):
             # Iterate through the files to create data/label 
             # pairs (i.e. (.wav, .txt))
             data_pairs = {}
