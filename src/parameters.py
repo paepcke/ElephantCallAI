@@ -45,7 +45,7 @@ MODEL_ID = 17
 PRE_TRAIN = False
 
 # This now represents whether to use noab or bai
-DATASET = 'noab'
+DATASET = 'bai'
 #DATASET = 'Activate'
 #DATASET = 'MFCC_Call'
 
