@@ -114,8 +114,13 @@ def hierarchical_model_1_path():
 
         model_name = model_name[:-1] + ']_'
 
-    model_name += 'CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
-    # Add if we are using shifting windows
+    # Fix this later, but fow now do this for cross versions!
+    if parameters.HIERARCHICAL_REPEATS_POS > 1 or HIERARCHICAL_REPEATS_NEG > 1:
+        model_name += "PosRepeats-" + str(parameters.HIERARCHICAL_REPEATS_POS) + "_NegRepeats-" + str(parameters.HIERARCHICAL_REPEATS_NEG)
+    else:
+        model_name += 'CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
+
+    # Add if we are using shifting windows # Should get rid of this!
     if parameters.HIERARCHICAL_SHIFT_WINDOWS:
         model_name += '_OversizeCalls'
 

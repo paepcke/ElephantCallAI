@@ -231,7 +231,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     train_loader.dataset.set_neg_features(adversarial_train_files)
     test_loader.dataset.set_neg_features(adversarial_test_files)
     # Create repeated dataset with fixed indeces
-    if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or HIERARCHICAL_REPEATS_NEG > 1::
+    if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or HIERARCHICAL_REPEATS_NEG > 1:
         # Include Twice as many repeats for the positive examples!
         train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS_POS, parameters.HIERARCHICAL_REPEATS_NEG)
         train_loader.dataset.create_fixed_windows()
@@ -379,9 +379,7 @@ def main():
     # Check if a different dataset is being used for Model_1
     model_1_train_data_path = model_0_train_data_path
     model_1_test_data_path = model_0_test_data_path
-    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same"
-        or parameters.HIERARCHICAL_REPEATS_POS > 1 
-        or HIERARCHICAL_REPEATS_NEG > 1:
+    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same" or parameters.HIERARCHICAL_REPEATS_POS > 1  or HIERARCHICAL_REPEATS_NEG > 1:
 
         # SHould prob just have neg samples x1 since doesnt matter!!
         # For now set call repeats to 1, but get shifting windows so we later can do call repeats!
