@@ -111,7 +111,8 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
         # Get the data_file locations for each chunk
         data_files = np.array(batch[2])
 
-        logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+        # ONLY Squeeze the last dim!
+        logits = model(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
 
         # Now for each chunk we want to see whether it should be flagged as 
         # a true false positive. For now do "approx" by counting number pos samples
@@ -204,8 +205,8 @@ def visualize_adversarial(adversarial_train_files, train_loader, model_0, model_
             labels = labels.to(parameters.device)
 
             # Forward pass
-            logits_0 = model_0(inputs).squeeze() # Shape - (batch_size, seq_len)
-            logits_1 = model_1(inputs).squeeze() # Shape - (batch_size, seq_len)
+            logits_0 = model_0(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
+            logits_1 = model_1(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
 
             # Visualize the individual example
             for i in range(len(inputs)):
