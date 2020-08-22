@@ -38,6 +38,7 @@ parser.add_argument('--visualize', action='store_true',
 # Model Paths
 parser.add_argument('--models_path', type=str,
     help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
+# Note this pre-loads model_0
 parser.add_argument('--model_0', type=str,
     help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')
 
@@ -230,9 +231,9 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     train_loader.dataset.set_neg_features(adversarial_train_files)
     test_loader.dataset.set_neg_features(adversarial_test_files)
     # Create repeated dataset with fixed indeces
-    if parameters.HIERARCHICAL_REPEATS > 1:
+    if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or HIERARCHICAL_REPEATS_NEG > 1::
         # Include Twice as many repeats for the positive examples!
-        train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS * 2, parameters.HIERARCHICAL_REPEATS)
+        train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS_POS, parameters.HIERARCHICAL_REPEATS_NEG)
         train_loader.dataset.create_fixed_windows()
 
     dloaders = {'train':train_loader, 'valid':test_loader}
@@ -347,14 +348,26 @@ def main():
         full_train_path = parameters.LOCAL_FULL_TRAIN
         full_test_path = parameters.LOCAL_FULL_TEST
     else:
-        train_data_path = parameters.REMOTE_TRAIN_FILES
-        test_data_path = parameters.REMOTE_TEST_FILES
-        full_train_path = parameters.REMOTE_FULL_TRAIN
-        full_test_path = parameters.REMOTE_FULL_TEST
+        if parameters.DATASET.lower() == "noab":
+            train_data_path = parameters.REMOTE_TRAIN_FILES
+            test_data_path = parameters.REMOTE_TEST_FILES
+            full_train_path = parameters.REMOTE_FULL_TRAIN
+            full_test_path = parameters.REMOTE_FULL_TEST
+        else:
+            train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
+            test_data_path = parameters.REMOTE_BAI_TEST_FILES
+            full_train_path = parameters.REMOTE_FULL_TRAIN_BAI
+            full_test_path = parameters.REMOTE_FULL_TEST_BAI
+
 
     # Get oversized calls if shifting windows or repeating for model 2
+    # We should try to remove both of these
     if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
-            full_train_path += '_OversizeCalls'
+        full_train_path += '_OversizeCalls'
+
+    # For model 2 we need to have oversized calls to generate the randomly located repeats
+    if parameters.HIERARCHICAL_REPEATS_POS > 1 or HIERARCHICAL_REPEATS_NEG > 1:
+        full_train_path += '_OversizeCalls'
 
     model_0_train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
                                                                     call_repeats=parameters.CALL_REPEATS, 
@@ -366,11 +379,18 @@ def main():
     # Check if a different dataset is being used for Model_1
     model_1_train_data_path = model_0_train_data_path
     model_1_test_data_path = model_0_test_data_path
-    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same":
+    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same"
+        or parameters.HIERARCHICAL_REPEATS_POS > 1 
+        or HIERARCHICAL_REPEATS_NEG > 1:
+
         # SHould prob just have neg samples x1 since doesnt matter!!
         # For now set call repeats to 1, but get shifting windows so we later can do call repeats!
-        shift_windows = parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_SHIFT_WINDOWS
-        call_repeats = 1 if parameters.HIERARCHICAL_REPEATS > 1 else parameters.HIERARCHICAL_REPEATS
+        #shift_windows = parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_SHIFT_WINDOWS
+        # For now should make shift windows just be true! Because it does not make a lot of sense to do 
+        # repeats without shifting windows since we can only repeat the pos examples
+        shift_windows = True
+        # Set this to 1 because we take care of this later!!!!
+        call_repeats = 1
         model_1_train_data_path, _ = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
                                                         call_repeats=call_repeats,
                                                         shift_windows=shift_windows)

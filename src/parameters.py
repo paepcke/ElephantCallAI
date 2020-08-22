@@ -33,8 +33,12 @@ HIERARCHICAL_PRE_TRAIN = False
 # Specify the number of repeats for ONLY the 
 # positive examples for model_1. 
 # 'same' - use the same dataloader from model_0
-HIERARCHICAL_REPEATS = 1
-HIERARCHICAL_SHIFT_WINDOWS = False
+HIERARCHICAL_REPEATS = 1 # This should be deprecated!!!!!!
+# Controls how much we scale the repeats differently!
+# Note always select shift windows with this!!!!!
+HIERARCHICAL_REPEATS_POS = 1
+HIERARCHICAL_REPEATS_NEG = 1
+HIERARCHICAL_SHIFT_WINDOWS = False # May deprecate this!
 
 # Model 18 = entire window classification
 MODEL_ID = 17
@@ -88,6 +92,8 @@ REMOTE_BAI_TRAIN_FILES = '/home/data/elephants/processed_data/Train_bai/'
 REMOTE_BAI_TEST_FILES = '/home/data/elephants/processed_data/Test_bai/'
 REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs'
 REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs'
+REMOTE_FULL_TRAIN_BAI = 'home/data/elephants/processed_data/Train_bai/Full_24_hrs'
+REMOTE_FULL_TEST_BAI = 'home/data/elephants/processed_data/Test_bai/Full_24_hrs'
 
 
 #Local
