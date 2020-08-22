@@ -46,6 +46,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         labels = labels.to(parameters.device)
 
         # Forward pass
+        # ONLY Squeeze the last dim!
         logits = model(inputs).squeeze()
         # Are we zeroing out the hidden state in the model???
         # Include boundary positions if necessary
@@ -134,7 +135,8 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
             labels = labels.to(parameters.device)
 
             # Forward pass
-            logits = model(inputs).squeeze() # Shape - (batch_size, seq_len)
+            # ONLY Squeeze the last dim!
+            logits = model(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
             # Are we zeroing out the hidden state in the model???
 
             if include_boundaries:
