@@ -92,8 +92,8 @@ REMOTE_BAI_TRAIN_FILES = '/home/data/elephants/processed_data/Train_bai/'
 REMOTE_BAI_TEST_FILES = '/home/data/elephants/processed_data/Test_bai/'
 REMOTE_FULL_TRAIN = '/home/data/elephants/processed_data/Train_nouab/Full_24_hrs'
 REMOTE_FULL_TEST = '/home/data/elephants/processed_data/Test_nouab/Full_24_hrs'
-REMOTE_FULL_TRAIN_BAI = 'home/data/elephants/processed_data/Train_bai/Full_24_hrs'
-REMOTE_FULL_TEST_BAI = 'home/data/elephants/processed_data/Test_bai/Full_24_hrs'
+REMOTE_FULL_TRAIN_BAI = '/home/data/elephants/processed_data/Train_bai/Full_24_hrs'
+REMOTE_FULL_TEST_BAI = '/home/data/elephants/processed_data/Test_bai/Full_24_hrs'
 
 
 #Local

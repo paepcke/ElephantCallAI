@@ -231,7 +231,8 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     train_loader.dataset.set_neg_features(adversarial_train_files)
     test_loader.dataset.set_neg_features(adversarial_test_files)
     # Create repeated dataset with fixed indeces
-    if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or parameters.HIERARCHICAL_REPEATS_NEG > 1:
+    #if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or parameters.HIERARCHICAL_REPEATS_NEG > 1:
+    if parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
         # Include Twice as many repeats for the positive examples!
         train_loader.dataset.scale_features(parameters.HIERARCHICAL_REPEATS_POS, parameters.HIERARCHICAL_REPEATS_NEG)
         train_loader.dataset.create_fixed_windows()
@@ -275,7 +276,8 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     # calculate the loss! Use the HIERARCH_SHIFT flag along to decide if the Heirarchical model will use
     # randomly shifted windows. Note, we flag that this is the full dataset to make sure that during 
     # adversarial discovery we alwas sample the midlle of oversized windows
-    shift_windows = parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1
+    #shift_windows = parameters.HIERARCHICAL_SHIFT_WINDOWS # or parameters.HIERARCHICAL_REPEATS > 1
+    shift_windows = parameters.HIERARCHICAL_REPEATS_POS > 1 or parameters.HIERARCHICAL_REPEATS_NEG > 1
     full_train_loader = get_loader_fuzzy(full_train_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
                                         include_boundaries=False, shift_windows=shift_windows,
@@ -361,8 +363,8 @@ def main():
 
 
     # Get oversized calls if shifting windows or repeating for model 2
-    # We should try to remove both of these
-    if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+    # We should try to remove both of these This is an issue too!
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS: # or parameters.HIERARCHICAL_REPEATS > 1:
         full_train_path += '_OversizeCalls'
 
     # For model 2 we need to have oversized calls to generate the randomly located repeats
@@ -379,8 +381,9 @@ def main():
     # Check if a different dataset is being used for Model_1
     model_1_train_data_path = model_0_train_data_path
     model_1_test_data_path = model_0_test_data_path
-    if str(parameters.HIERARCHICAL_REPEATS).lower() != "same" or parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
-
+    # Remove this same thing!
+    #if str(parameters.HIERARCHICAL_REPEATS).lower() != "same" or parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
+    if parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
         # SHould prob just have neg samples x1 since doesnt matter!!
         # For now set call repeats to 1, but get shifting windows so we later can do call repeats!
         #shift_windows = parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_SHIFT_WINDOWS
@@ -445,7 +448,8 @@ def main():
     elif args.model1:
         # Read in the adversarial files
         train_adversarial_file = "model_0-False_Pos_Train.txt"
-        if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+        #if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+        if parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
             train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
 
         adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
@@ -474,7 +478,8 @@ def main():
 
         # Read in the adversarial files
         train_adversarial_file = "model_0-False_Pos_Train.txt"
-        if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+        #if parameters.HIERARCHICAL_SHIFT_WINDOWS or parameters.HIERARCHICAL_REPEATS > 1:
+        if parameters.HIERARCHICAL_REPEATS_POS > 1  or parameters.HIERARCHICAL_REPEATS_NEG > 1:
             train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
 
         adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
