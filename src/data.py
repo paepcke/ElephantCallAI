@@ -200,12 +200,29 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.intialize_data(init_pos=True, init_neg=True)
 
     def scale_features(self, pos_factor, neg_factor):
-        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), pos_factor * len(self.pos_features)))
-        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), neg_factor * len(self.neg_features)))
-        self.pos_features *= pos_factor
-        self.pos_labels *= pos_factor
-        self.neg_features *= neg_factor
-        self.neg_labels *= neg_factor
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), int(pos_factor * len(self.pos_features))))
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), int(neg_factor * len(self.neg_features))))
+        # Add in a feature to undersample as well!
+        # Could consider also giving hardness to these to help with selection.
+        # Let us do random for now
+        if pos_factor < 1:
+            indeces = np.arange(len(self.pos_features))
+            pos_inds = np.random.choice(indeces, int(indeces.shape[0] * pos_factor))
+            self.pos_features = list(np.array(self.pos_features)[pos_inds])
+            self.pos_labels = list(np.array(self.pos_labels)[pos_inds])
+        else:
+            self.pos_features *= pos_factor
+            self.pos_labels *= pos_factor
+
+        if neg_factor < 1:
+            indeces = np.arange(len(self.neg_features))
+            neg_inds = np.random.choice(indeces, int(indeces.shape[0] * neg_factor))
+            self.neg_features = list(np.array(self.neg_features)[neg_inds])
+            self.neg_labels = list(np.array(self.neg_labels)[neg_inds])
+        else:
+            self.neg_features *= neg_factor
+            self.neg_labels *= neg_factor
+
         # Re-form the feature and data set
         self.features = self.pos_features + self.neg_features
         self.labels = self.pos_labels + self.neg_labels
