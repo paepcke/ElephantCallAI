@@ -666,6 +666,10 @@ def visualize_elephant_call_metric(dataset, results):
         tags = gt_call_path.split('/')
         tags = tags[-1].split('_')
         data_id = tags[0] + '_' + tags[1]
+        if data_id not in results:
+            print ("No results for:", data_id) 
+            continue
+            
         print ("Testing Metric Results for:", data_id)
 
         # Include times
