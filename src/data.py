@@ -159,12 +159,21 @@ class ElephantDatasetFuzzy(data.Dataset):
         # windows during hierarchical training
         self.fixed_indeces = None
 
-        #self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
-        #self.initialize_labels()
+        self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
+        self.initialize_labels()
 
-        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        self.intialize_data(init_pos=True, init_neg=True)
+        # Shuffle the features and labels! 
+        for i in range(0):
+            print ("Shuffing the data for the {}th time".format(i))
+            rand_shuffle = np.random.permutation(len(self.features))
+            self.features = list(np.array(self.features)[rand_shuffle])
+            self.labels = list(np.array(self.labels)[rand_shuffle])
+            if self.include_boundaries:
+                self.boundary_masks = list(np.array(self.boundary_masks)[rand_shuffle])
+
+        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        #self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
@@ -181,6 +190,7 @@ class ElephantDatasetFuzzy(data.Dataset):
             self.labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
             if self.include_boundaries:
                 self.boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
 
     def set_pos_features(self, pos_features):
         print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
@@ -255,10 +265,10 @@ class ElephantDatasetFuzzy(data.Dataset):
             self.pos_boundary_masks = []
             for feature_path in self.pos_features:
                 feature_parts = feature_path.split("features")
-                # Just out of curiosity
                 self.pos_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
                 if self.include_boundaries:
                     self.pos_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
+
 
         # Initialize the negative examples
         if init_neg:
@@ -266,7 +276,6 @@ class ElephantDatasetFuzzy(data.Dataset):
             self.neg_boundary_masks = []
             for feature_path in self.neg_features:
                 feature_parts = feature_path.split("features")
-                # Just out of curiosity
                 self.neg_labels.append(glob.glob(feature_parts[0] + "labels" + feature_parts[1])[0])
                 if self.include_boundaries:
                     self.neg_boundary_masks.append(glob.glob(feature_parts[0] + "boundary-masks" + feature_parts[1])[0])
@@ -276,15 +285,6 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.labels = self.pos_labels + self.neg_labels
         if self.include_boundaries:
             self.boundary_masks = self.pos_boundary_masks + self.neg_boundary_masks
-
-        # Shuffle the features and labels! 
-        for i in range(2):
-            print ("Shuffing the data for the {}th time".format(i))
-            rand_shuffle = np.random.permutation(len(self.features))
-            self.features = list(np.array(self.features)[rand_shuffle])
-            self.labels = list(np.array(self.labels)[rand_shuffle])
-            if self.include_boundaries:
-                self.boundary_masks = list(np.array(self.boundary_masks)[rand_shuffle])
 
         print ("Len Pos Features:", len(self.pos_features))
         print ("Len Neg Features:", len(self.neg_features))

@@ -669,13 +669,13 @@ def visualize_elephant_call_metric(dataset, results):
         if data_id not in results:
             print ("No results for:", data_id) 
             continue
-            
+
         print ("Testing Metric Results for:", data_id)
 
         # Include times
         times = convert_frames_to_time(labels.shape[0])
 
-       print ("Testing False Negative Results")        
+        print ("Testing False Negative Results")        
         visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], 
                                results[data_id]['predictions'], labels, label="False Negative", times=times)
 
