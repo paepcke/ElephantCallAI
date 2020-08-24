@@ -277,12 +277,14 @@ class ElephantDatasetFuzzy(data.Dataset):
         if self.include_boundaries:
             self.boundary_masks = self.pos_boundary_masks + self.neg_boundary_masks
 
-        # Let us try having multiple duplicate copies of data when 
-        # using the shift windows setting
-        # Figure this out later!
-        #if self.shift_windows:
-        #    self.features *= 5 # Try for now!
-        #    self.labels *= 5
+        # Shuffle the features and labels! 
+        for i in range(2):
+            print ("Shuffing the data for the {}th time".format(i))
+            rand_shuffle = np.random.permutation(len(self.features))
+            self.features = list(np.array(self.features)[rand_shuffle])
+            self.labels = list(np.array(self.labels)[rand_shuffle])
+            if self.include_boundaries:
+                self.boundary_masks = list(np.array(self.boundary_masks)[rand_shuffle])
 
         print ("Len Pos Features:", len(self.pos_features))
         print ("Len Neg Features:", len(self.neg_features))
