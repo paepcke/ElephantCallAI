@@ -184,11 +184,11 @@ def visualize_predictions(calls, spectrogram, prediction_labels_binary, predicti
         print (spectrogram.shape)
         # Only include times if provided
         if times is not None:
-            times = times[window_start:window_end]
+            window_time = times[window_start:window_end]
 
         visualize(spectrogram[window_start: window_end], outputs=prediction_labels_smoothed[window_start:window_end], 
             labels=gt_labels[window_start: window_end], binary_preds=prediction_labels_binary[window_start: window_end],
-            title=label, vert_lines=(start - window_start, end - window_start), times=times)
+            title=label, vert_lines=(start - window_start, end - window_start), times=window_time)
 
 
 
