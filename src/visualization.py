@@ -280,9 +280,6 @@ def visualize_predictions(calls, spectrogram, model_predictions, gt_labels, chun
 
         Down the road maybe we should include the % overlap
     '''
-    # Just to test!
-    spectrogram = spectrogram.T
-
     for call in calls:
         start, end, length = call
         start_s, end_s, _ = spect_call_to_time(call)
