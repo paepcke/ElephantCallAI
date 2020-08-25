@@ -278,8 +278,6 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             if not os.path.isdir(model_0_path):
                 os.mkdir(model_0_path)
 
-            print (model_0_path)
-
             np.save(os.path.join(model_0_path, data_id + '.npy'), model_0_predictions)
             np.save(os.path.join(path, data_id + '.npy'), hierarchical_predictions)
         else:
@@ -729,7 +727,7 @@ def visualize_elephant_call_metric(dataset, results, hierarchical_model=True):
         model_predictions = []
         # Add model_0 predictions for the hierarchical models
         if hierarchical_model:
-            model_predictions.append(results[data_id]['model_predictions'])
+            model_predictions.append(results[data_id]['model_0_predictions'])
         # Add main model's prediction probabilities
         model_predictions.append(results[data_id]['predictions'])
         # Add main model's binary predictions
