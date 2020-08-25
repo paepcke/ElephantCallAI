@@ -877,11 +877,11 @@ def test_elephant_call_metric(dataset, results):
 
         print ("Testing True Positive Results - Num =",len(results[data_id]['true_pos']))
         visualize_predictions(results[data_id]['true_pos'], spectrogram, model_predictions,
-                                labels, label="False Positive", times=times)
+                                labels, label="True Positive", times=times)
 
         print ("Testing True Positive Recall Results - Num =",len(results[data_id]['true_pos_recall']))        
         visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, model_predictions,
-                                labels, label="False Positive", times=times)
+                                labels, label="True Positive Recall", times=times)
 
 def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
     """
@@ -1043,7 +1043,7 @@ def main(args):
              sliding_window=True, chunk_size=256, jump=128)         # Add in these arguments
     elif args.full_stats:
         # Now we have to decide what to do with these stats
-        results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path)
+        results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.THRESHOLD)
 
         if args.visualize: # Visualize the metric results
             test_elephant_call_metric(full_dataset, results)
@@ -1071,7 +1071,7 @@ def main(args):
     elif args.pr_curve > 0:
         precision_recall_curve_pred_threshold(full_dataset, model_id, args.predictions_path, args.pr_curve, args.overlaps)
     elif args.save_calls:
-        predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path)
+        predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.THRESHOLD)
         # Save for now to a folder determined by the model id
         save_path = args.call_predictions_path + '/' + model_id
         if not os.path.isdir(save_path):
