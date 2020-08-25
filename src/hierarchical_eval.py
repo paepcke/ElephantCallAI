@@ -222,6 +222,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
     predictions = sigmoid(predictions)
 
     if hierarchical_model is not None:
+        hierarchical_predictions = sigmoid(hierarchical_predictions)
         return hierarchical_predictions, predictions
 
     return predictions
@@ -276,6 +277,8 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             model_0_path = os.path.join(path, "Model_0")
             if not os.path.isdir(model_0_path):
                 os.mkdir(model_0_path)
+
+            print (model_0_path)
 
             np.save(os.path.join(model_0_path, data_id + '.npy'), model_0_predictions)
             np.save(os.path.join(path, data_id + '.npy'), hierarchical_predictions)
