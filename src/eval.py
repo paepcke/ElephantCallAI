@@ -696,7 +696,6 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
-        model_id = "17"
         predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)

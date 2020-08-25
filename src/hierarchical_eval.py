@@ -538,7 +538,7 @@ def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
     return binary_preds, predictions
 
 def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
-            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False, hierarchical_model=False):
+            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False, hierarchical_model=True):
     """
 
         After saving predictions for the test set of full spectrograms, we
@@ -703,7 +703,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
        
     return results
 
-def visualize_elephant_call_metric(dataset, results, hierarchical_model=False):
+def visualize_elephant_call_metric(dataset, results, hierarchical_model=True):
     for data in dataset:
         spectrogram = data[0]
         labels = data[1]
