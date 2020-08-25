@@ -858,7 +858,7 @@ def main(args):
              sliding_window=True, chunk_size=256, jump=128, hierarchical_model=model_1)         # Add in these arguments
     elif args.full_stats:
         # Now we have to decide what to do with these stats
-        results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.threshold)
+        results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.THRESHOLD)
 
         if args.visualize: # Visualize the metric results
             visualize_elephant_call_metric(full_dataset, results)
@@ -884,7 +884,7 @@ def main(args):
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
     elif args.save_calls:
-        predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.threshold)
+        predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, pred_threshold=parameters.THRESHOLD)
         # Save for now to a folder determined by the model id
         save_path = args.call_predictions_path + '/' + model_id
         if not os.path.isdir(save_path):
