@@ -696,6 +696,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
+        model_id = "17"
         predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -804,6 +805,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
        
     return results
 
+'''
 def test_elephant_call_metric(dataset, results):
     for data in dataset:
         spectrogram = data[0]
@@ -817,7 +819,7 @@ def test_elephant_call_metric(dataset, results):
         if data_id not in results:
             print ("No results for:", data_id) 
             continue
-            
+
         print ("Testing Metric Results for:", data_id)
 
         # Include times
@@ -839,6 +841,48 @@ def test_elephant_call_metric(dataset, results):
         print ("Testing True Positive Recall Results")        
         visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, results[data_id]['binary_preds'], 
                                 results[data_id]['predictions'], labels, label="True Positive Recall", times=times)
+'''
+def test_elephant_call_metric(dataset, results):
+    for data in dataset:
+        spectrogram = data[0]
+        labels = data[1]
+        gt_call_path = data[2]
+
+        # Get the spec id
+        tags = gt_call_path.split('/')
+        tags = tags[-1].split('_')
+        data_id = tags[0] + '_' + tags[1]
+        if data_id not in results:
+            print ("No results for:", data_id) 
+            continue
+
+        print ("Testing Metric Results for:", data_id)
+
+        # Include times
+        times = convert_frames_to_time(labels.shape[0])
+
+        # Get all of the model predictions that we are passing to visualize
+        model_predictions = []
+        # Add main model's prediction probabilities
+        model_predictions.append(results[data_id]['predictions'])
+        # Add main model's binary predictions
+        model_predictions.append(results[data_id]['binary_preds'])
+
+        print ("Testing False Negative Results - Num =", len(results[data_id]['false_neg']))        
+        visualize_predictions(results[data_id]['false_neg'], spectrogram, model_predictions,
+                                labels, label="False Negative", times=times)
+
+        print ("Testing False Positive Results - Num =",len(results[data_id]['false_pos']))  
+        visualize_predictions(results[data_id]['false_pos'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
+
+        print ("Testing True Positive Results - Num =",len(results[data_id]['true_pos']))
+        visualize_predictions(results[data_id]['true_pos'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
+
+        print ("Testing True Positive Recall Results - Num =",len(results[data_id]['true_pos_recall']))        
+        visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
 
 def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
     """
