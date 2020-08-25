@@ -725,37 +725,37 @@ if __name__ == '__main__':
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      description="Train from a set of spectrogram snippets."
                                      )
-# 
-#     parser.add_argument('-l', '--logfile',
-#                         help='fully qualified log file name to which info and error messages \n' +\
-#                              'are directed. Default: stdout.',
-#                         default=None);
-#     parser.add_argument('-b', '--batchsize',
-#                         type=int,
-#                         help='how many sample to submit to training machinery together; default: 1',
-#                         default=1)
-#     parser.add_argument('-e', '--epochs',
-#                         type=int,
-#                         help=f'how many epochs to run; default: Defaults.NUM_EPOCHS',
-#                         default=Defaults.NUM_EPOCHS)
-#     parser.add_argument('snippet_db_path',
-#                         type=str,
-#                         help='path to sqlite db file holding info about each snippet')
-#     parser.add_argument('files_and_dirs',
-#                         type=str,
-#                         nargs='+',
-#                         help='Repeatable: directories/files containing .pickle spectrogram dataframes, '
-#                              'and corresponding .txt label files')
-# 
+ 
+    parser.add_argument('-l', '--logfile',
+                        help='fully qualified log file name to which info and error messages \n' +\
+                             'are directed. Default: stdout.',
+                        default=None);
+    parser.add_argument('-b', '--batchsize',
+                        type=int,
+                        help='how many sample to submit to training machinery together; default: 1',
+                        default=1)
+    parser.add_argument('-e', '--epochs',
+                        type=int,
+                        help=f'how many epochs to run; default: Defaults.NUM_EPOCHS',
+                        default=Defaults.NUM_EPOCHS)
+    parser.add_argument('snippet_db_path',
+                        type=str,
+                        help='path to sqlite db file holding info about each snippet')
+    parser.add_argument('files_and_dirs',
+                        type=str,
+                        nargs='+',
+                        help='Repeatable: directories/files containing .pickle spectrogram dataframes, '
+                             'and corresponding .txt label files')
+ 
     args = parser.parse_args();
     
     #***********
-    args.snippet_db_path = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training//tiny_chop_info.sqlite'
-    args.files_and_dirs  = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training/Threshold_-30_MinFreq_20_MaxFreq_40_FreqCap_30_snippets_0'
-    #args.batchsize=2
-    args.batchsize=16
-    args.epochs=2
-    args.logfile =None
+#     args.snippet_db_path = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training//tiny_chop_info.sqlite'
+#     args.files_and_dirs  = '/Users/paepcke/EclipseWorkspacesNew/ElephantCallAI/Spectrograms/Training/Threshold_-30_MinFreq_20_MaxFreq_40_FreqCap_30_snippets_0'
+#     #args.batchsize=2
+#     args.batchsize=16
+#     args.epochs=2
+#     args.logfile =None
     #***********
     
     if not os.path.exists(args.snippet_db_path):
