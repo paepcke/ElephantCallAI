@@ -114,10 +114,22 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
         using a sliding window. Slide the window by one spectrogram frame
         and pass each window through the given model. Compute the average
         over overlapping window predictions to get the final prediction.
+        Allow for having a hierarchical model! If using a hierarchical model
+        also save the model_0 predictions!
+
+        Return:
+        With Hierarchical Model - hierarchical predictions, model_0 predictions
+        Solo Model - predictions
     """
     # Get the number of frames in the full audio clip
     predictions = np.zeros(spectrogram.shape[0])
+    if hierarchical_model is not None:
+        hierarchical_predictions = np.zeros(spectrogram.shape[0])
+
+    # Keeps track of the number of predictions made for a given
+    # slice for final averaging!
     overlap_counts = np.zeros(spectrogram.shape[0])
+    
 
     # This is a bit janky but we will manually transform
     # each spectrogram chunk
@@ -151,13 +163,17 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
             chunk_preds = torch.sigmoid(compressed_out)
             binary_preds = torch.where(chunk_preds > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
             pred_counts = torch.sum(binary_preds)
-            # Run second model
+            # Check if we need to run the second model
+            hierarchical_compressed_out = compressed_out
             if pred_counts.item() > hierarchy_threshold:
-                #print ("Doing hierarchy! With number predicted:", pred_counts.item())
-                outputs = hierarchical_model(spect_slice)
-                compressed_out = outputs.view(-1, 1).squeeze()
+                hierarchical_outputs = hierarchical_model(spect_slice)
+                hierarchical_compressed_out = hierarchical_outputs.view(-1, 1).squeeze()
+
+            # Save the hierarchical model's output
+            hierarchical_predictions[spect_idx: spect_idx + chunk_size] += hierarchical_compressed_out.cpu().detach().numpy()
 
         overlap_counts[spect_idx: spect_idx + chunk_size] += 1
+        # Save the model_0's output!
         predictions[spect_idx: spect_idx + chunk_size] += compressed_out.cpu().detach().numpy()
 
         spect_idx += jump
@@ -182,21 +198,31 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
             chunk_preds = torch.sigmoid(compressed_out)
             binary_preds = torch.where(chunk_preds > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
             pred_counts = torch.sum(binary_preds)
-            # Run second model
+            # Check if we need to run the second model
+            hierarchical_compressed_out = compressed_out
             if pred_counts.item() > hierarchy_threshold:
-                outputs = hierarchical_model(spect_slice)
-                compressed_out = outputs.view(-1, 1).squeeze()[:predictions[spect_idx: ].shape[0]]
+                hierarchical_outputs = hierarchical_model(spect_slice)
+                hierarchical_compressed_out = hierarchical_outputs.view(-1, 1).squeeze()[:predictions[spect_idx: ].shape[0]]
+
+            # Save the hierarchical model's output
+            hierarchical_predictions[spect_idx: ] += hierarchical_compressed_out.cpu().detach().numpy()
 
 
         overlap_counts[spect_idx: ] += 1
+        # Save the model_0's output!
         predictions[spect_idx: ] += compressed_out.cpu().detach().numpy()
 
 
     # Average the predictions on overlapping frames
     predictions = predictions / overlap_counts
+    if hierarchical_model is not None:
+        hierarchical_predictions = hierarchical_predictions / overlap_counts
 
     # Get squashed [0, 1] predictions
     predictions = sigmoid(predictions)
+
+    if hierarchical_model is not None:
+        return hierarchical_predictions, predictions
 
     return predictions
 
@@ -228,6 +254,8 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             # May want to play around with the threhold for which we use the second model!
             # For the true predicitions we may also want to actually see if there is a contiguous segment
             # long enough!! Let us try!
+            # Note if using a hierarchical model this a tuple for the form
+            # predictions = (heirarchical predictions, predictions)
             predictions = predict_spec_sliding_window(spectrogram, model, 
                                         chunk_size=chunk_size, jump=jump, 
                                         hierarchical_model=hierarchical_model, 
@@ -241,8 +269,19 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
         path = os.path.join(predictions_path,model_id)
         if not os.path.isdir(path):
             os.mkdir(path)
-        # The data id associates predictions with a particular spectrogram
-        np.save(os.path.join(path, data_id  + '.npy'), predictions)
+
+        if hierarchical_model is not None:
+            hierarchical_predictions, model_0_predictions = predictions
+            # Create a folder for the model 0 predictions
+            model_0_path = os.path.join(path, "Model_0")
+            if not os.path.isdir(model_0_path):
+                os.mkdir(model_0_path)
+
+            np.save(os.path.join(model_0_path, data_id + '.npy'), model_0_predictions)
+            np.save(os.path.join(path, data_id + '.npy'), hierarchical_predictions)
+        else:
+            # The data id associates predictions with a particular spectrogram
+            np.save(os.path.join(path, data_id  + '.npy'), predictions)
 
 def test_overlap(s1, e1, s2, e2, threshold=0.1, is_truth=False):
     """
@@ -499,7 +538,7 @@ def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
     return binary_preds, predictions
 
 def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
-            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False):
+            in_seconds=False, use_call_bounds=False, min_call_lengh=15, visualize=False, hierarchical_model=False):
     """
 
         After saving predictions for the test set of full spectrograms, we
@@ -601,6 +640,14 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
                             'binary_preds': processed_preds,
                             'accuracy': accuracy
                             }
+
+        # If doing hierarchical modeling, save the model_0 predictions 
+        # specifically for visualization!
+        if hierarchical_model:
+            model_0_predictions = np.load(os.path.join(predictions_path, model_id, 'Model_0', data_id + '.npy'))
+            _, model_0_smoothed_predictions = get_binary_predictions(model_0_predictions, threshold=pred_threshold, smooth=smooth)
+            results[data_id]['model_0_predictions'] = model_0_smoothed_predictions
+
         # Update summary stats
         results['summary']['true_pos'] += len(true_pos)
         results['summary']['false_pos'] += len(false_pos)
@@ -656,7 +703,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
        
     return results
 
-def visualize_elephant_call_metric(dataset, results):
+def visualize_elephant_call_metric(dataset, results, hierarchical_model=False):
     for data in dataset:
         spectrogram = data[0]
         labels = data[1]
@@ -675,22 +722,31 @@ def visualize_elephant_call_metric(dataset, results):
         # Include times
         times = convert_frames_to_time(labels.shape[0])
 
-        print ("Testing False Negative Results")        
-        visualize_predictions(results[data_id]['false_neg'], spectrogram, results[data_id]['binary_preds'], 
-                               results[data_id]['predictions'], labels, label="False Negative", times=times)
+        # Get all of the model predictions that we are passing to visualize
+        model_predictions = []
+        # Add model_0 predictions for the hierarchical models
+        if hierarchical_model:
+            model_predictions.append(results[data_id]['model_predictions'])
+        # Add main model's prediction probabilities
+        model_predictions.append(results[data_id]['predictions'])
+        # Add main model's binary predictions
+        model_predictions.append(results[data_id]['binary_preds'])
 
-        print ("Testing False Positive Results")  
-        print (len(results[data_id]['false_pos']))      
-        visualize_predictions(results[data_id]['false_pos'], spectrogram, results[data_id]['binary_preds'], 
-                                results[data_id]['predictions'], labels, label="False Positive", times=times)
+        print ("Testing False Negative Results - Num =", len(results[data_id]['false_neg']))        
+        visualize_predictions(results[data_id]['false_neg'], spectrogram, model_predictions,
+                                labels, label="False Negative", times=times)
 
-        print ("Testing True Positive Predictions Results")        
-        visualize_predictions(results[data_id]['true_pos'], spectrogram, results[data_id]['binary_preds'], 
-                                results[data_id]['predictions'], labels, label="True Positive Predictions", times=times)
+        print ("Testing False Positive Results - Num =",len(results[data_id]['false_pos']))  
+        visualize_predictions(results[data_id]['false_pos'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
 
-        print ("Testing True Positive Recall Results")        
-        visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, results[data_id]['binary_preds'], 
-                                results[data_id]['predictions'], labels, label="True Positive Recall", times=times)
+        print ("Testing True Positive Results - Num =",len(results[data_id]['true_pos']))
+        visualize_predictions(results[data_id]['true_pos'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
+
+        print ("Testing True Positive Recall Results - Num =",len(results[data_id]['true_pos_recall']))        
+        visualize_predictions(results[data_id]['true_pos_recall'], spectrogram, model_predictions,
+                                labels, label="False Positive", times=times)
 
 def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
     """

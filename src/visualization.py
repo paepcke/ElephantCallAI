@@ -19,7 +19,7 @@ parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
 
-
+'''
 def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries=None, title=None, vert_lines=None, times=None):
     """
     Visualizes the spectogram and associated predictions/labels. 
@@ -130,6 +130,75 @@ def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries
         ax1.set_title(title)
 
     plt.show()
+'''
+
+def visualize(features, model_predictions, ground_truth, title=None, vert_lines=None, times=None):
+    """
+        Provides a visualization of a given spectrogram slice and corresponding
+        model predictions for that time slice. The bottom plot will always represent
+        the ground truth label predictions. The plots then in-between can represent
+        either binary vs. smoothed model predictions or different model predictions
+        such as model_0 vs. model_1 in the hierarchical model.
+
+        Inputs:
+        featuers - The spectrogram window
+        model_predictions - a list of model predictions of different types for the given window
+        ground_truth - the labels corresponding to the GT call
+        vert_lines - vertical lines representing what we want to highlight
+        times - the time in seconds that correspond with the spectrogram window
+    """
+    fig, axes = plt.subplots(2 + len(model_predictions), 1)
+
+    new_features = features.T
+    min_dbfs = new_features.flatten().mean()
+    max_dbfs = new_features.flatten().mean()
+    min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
+    max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
+
+    if times is not None:
+        # Adjust the x and y axis ticks to have time on the x axis and freq on the y axis (Note we have freq up to 150)!
+        axes[0].imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
+                interpolation='none', origin="lower", aspect="auto", extent=[times[0], times[times.shape[0] - 1], 0, 150])
+    else:
+        axes[0].imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
+                interpolation='none', origin="lower", aspect="auto")
+
+    # Show the predictions / GT labels
+    for i in range(1, len(model_predictions) + 2):
+        # Get the needed variables
+        ax = axes[i]
+        data = model_predictions[i - 1] if i < len(model_predictions) + 1 else ground_truth
+        # Do some plotting
+        if times is not None:
+            ax.plot(times, data)
+        else:
+            ax.plot(np.arange(data.shape[0]), data)
+
+        ax.set_ylim([0,1])
+        # Toss them all in for now
+        ax.axhline(y=0.5, color='r', linestyle='-')
+        # Include vertical lines if we want to show what
+        # call we are focusing on
+        if vert_lines is not None:
+            if times is not None:
+                ax.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
+                ax.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
+            else:
+                ax.axvline(x=vert_lines[0], color='r', linestyle=':')
+                ax.axvline(x=vert_lines[1], color='r', linestyle=':')
+
+    # Make the plot appear in a specified location on the screen
+    if plt.get_backend() == "TkAgg":
+        mngr = plt.get_current_fig_manager()
+        geom = mngr.window.geometry()  
+        mngr.window.wm_geometry("+400+150")
+
+    if title is not None:
+        axes[0].set_title(title)
+
+    plt.show()
+
+
 
 def spect_frame_to_time(frame, NFFT=4096, hop=800, samplerate=8000):
     """
@@ -156,8 +225,9 @@ def spect_call_to_time(call, NFFT=4096, hop=800):
 
     return (begin_s, end_s, length_s)
 
+"""
 def visualize_predictions(calls, spectrogram, prediction_labels_binary, prediction_labels_smoothed, 
-                                gt_labels, chunk_size=256, label='True_Pos', times=None):
+                                gt_labels, model_0_predictions=None, chunk_size=256, label='True_Pos', times=None):
     '''
         Visualize the predicted labels and gt labels for the calls provided.
         This is used to visualize the results of predictions on for example
@@ -186,10 +256,57 @@ def visualize_predictions(calls, spectrogram, prediction_labels_binary, predicti
         if times is not None:
             window_time = times[window_start:window_end]
 
+        # Only include model_0 predictions for hierarchical model
+        if model_0_predictions is not None:
+            model_0_window = model_0_predictions[window_start: window_end]
+
         visualize(spectrogram[window_start: window_end], outputs=prediction_labels_smoothed[window_start:window_end], 
             labels=gt_labels[window_start: window_end], binary_preds=prediction_labels_binary[window_start: window_end],
-            title=label, vert_lines=(start - window_start, end - window_start), times=window_time)
+            model_0_predictions=model_0_window, title=label, 
+            vert_lines=(start - window_start, end - window_start), times=window_time)
+"""
 
+def visualize_predictions(calls, spectrogram, model_predictions, gt_labels, chunk_size=256, label='True_Pos', times=None):
+    '''
+        Visualize the predicted labels and gt labels for the calls provided.
+        This is used to visualize the results of predictions on for example
+        the full spectrogram. 
+
+        Parameters:
+        - calls: Assumed to be list of tuples of (start, end, len) where start
+        and end are for now in spect frames
+        - label: gives what the calls represent (i.e. true_pos, false pos, false_neg) 
+
+
+        Down the road maybe we should include the % overlap
+    '''
+    # Just to test!
+    spectrogram = spectrogram.T
+
+    for call in calls:
+        start, end, length = call
+        start_s, end_s, _ = spect_call_to_time(call)
+        print ("Visualizing Call Prediction ({}, {})".format(start_s, end_s))
+
+        # Let us position the call in the middle
+        # Then visualize
+        padding = (chunk_size - length) // 2
+        window_start = max(start - padding, 0)
+        window_end = min(end + padding, spectrogram.shape[0])
+        print (spectrogram.shape)
+        # Only include times if provided
+        if times is not None:
+            window_time = times[window_start:window_end]
+
+        # Get just the correct time windows!
+        model_prediction_windows = []
+        for i in range(len(model_predictions)):
+            model_prediction_windows.append(model_predictions[i][window_start: window_end])
+
+        visualize(spectrogram[window_start: window_end], model_prediction_windows, gt_labels[window_start: window_end],
+                    title=label, vert_lines=(start - window_start, end - window_start), times=window_time)
+
+        
 
 
 def visualize_wav(wav, labels, spectrogram_info):
