@@ -55,7 +55,6 @@ class SpectrogramTrainer(object):
     #-------------------
     
     def __init__(self,
-                 dirs_and_files,
                  sqlite_db_path,
                  batch_size=Defaults.BATCH_SIZE,
                  decision_threshold=Defaults.THRESHOLD,
@@ -68,7 +67,7 @@ class SpectrogramTrainer(object):
         self.cuda   = torch.device('cuda')
         self.cpu    = torch.device('cpu')
 
-        dataset  = SpectrogramDataset(dirs_and_files,
+        dataset  = SpectrogramDataset(
                                       sqlite_db_path=sqlite_db_path,
                                       recurse=True
                                       )
@@ -741,11 +740,6 @@ if __name__ == '__main__':
     parser.add_argument('snippet_db_path',
                         type=str,
                         help='path to sqlite db file holding info about each snippet')
-    parser.add_argument('files_and_dirs',
-                        type=str,
-                        nargs='+',
-                        help='Repeatable: directories/files containing .pickle spectrogram dataframes, '
-                             'and corresponding .txt label files')
  
     args = parser.parse_args();
     
@@ -762,7 +756,7 @@ if __name__ == '__main__':
         print(f"Snippet information db path {args.snippet_db_path} not found")
         sys.exit(1)
 
-    SpectrogramTrainer(args.files_and_dirs,
+    SpectrogramTrainer(
                        args.snippet_db_path,
                        batch_size=args.batchsize,
                        logfile=args.logfile
