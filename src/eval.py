@@ -99,105 +99,6 @@ def loadModel(model_path):
     tokens = model_path.split('/')
     model_id = tokens[-2]
     return model, model_id
- 
-
-def visual_full_recall(spectrogram, predictions, labels, binary_preds, chunk_size=256):
-    """
-        Step through the ground truth labels and visualize
-        the models predictions around these calls
-    """
-    search = 0
-    while True:
-        begin = search
-        # Look for the start of a predicted calls
-        while begin < spectrogram.shape[0] and labels[begin] == 0:
-            begin += 1
-
-        if begin >= spectrogram.shape[0]:
-            break
-
-        end = begin + 1
-        # Look for the end of the call
-        while end < spectrogram.shape[0] and labels[end] == 1:
-            end += 1
-
-        call_length = end - begin
-
-        if (call_length > chunk_size):
-            visualize(spectrogram[begin: end], predictions[begin: end] ,labels[begin:end])
-        else:
-            # Let us position the call in the middle
-            padding = (chunk_size - call_length) // 2
-            window_start = max(begin - padding, 0)
-            window_end = min(end + padding, spectrogram.shape[0])
-            visualize(spectrogram[window_start: window_end], predictions[window_start: window_end], 
-                labels[window_start: window_end], binary_preds[window_start: window_end], vert_lines=(begin - window_start, end - window_start))
-
-        search = end + 1
-
-
-def pcr(dloader, model, visualize=False):
-    """
-        Generate Precision Recall Plot as well as print the F1 score for 
-        each binary class
-    """
-    predVals = np.ones(1)
-    labelVals = np.ones(1)
-    
-    for inputs, labels in dloader:
-        inputs = inputs.float()
-        labels = labels.float()
-        #print (inputs.shape)
-
-        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-
-        # Forward pass
-        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
-        # Try to visualize
-        if visualize:
-            visual_time_series(inputs, outputs, labels)
-        # Compress to 
-        # Shape - (batch_size * seq_length)
-        # Compute the sigmoid over our outputs
-        compressed_out = outputs.view(-1, 1)
-        compressed_out = compressed_out.squeeze()
-        sig = nn.Sigmoid()
-        predictions = sig(compressed_out)
-        compressed_labels = labels.view(-1, 1)
-        compressed_labels = compressed_labels.squeeze()
-
-        predVals = np.concatenate((predVals, predictions.detach().numpy()))
-        labelVals = np.concatenate((labelVals, compressed_labels.detach().numpy()))
-        
-    predVals = predVals[1:]
-    labelVals = labelVals[1:]
-
-    precision, recall, thresholds = precision_recall_curve(labelVals, predVals)
-    plt.plot(precision,recall)
-    plt.show()
-
-    # Compute F1-score
-    # Make predictions based on threshold
-    binary_preds = np.where(predVals > THRESHOLD, 1, 0)
-    f1 = f1_score(labelVals, binary_preds, labels=[0, 1], average=None)  
-    print ("F1 score label 0 (no call): ", f1[0])
-    print ("F1 score label 1 (call): ", f1[1])
-
-    precision, recall, fbeta, _ = precision_recall_fscore_support(labelVals, binary_preds, labels=[0,1], average=None)
-    print ("Precision label 0 (no call): ", precision[0])
-    print ("Precision label 1 (call): ", precision[1])
-    print ("Recall label 0 (no call): ", recall[0])
-    print ("Recall label 1 (call): ", recall[1])
-
-    # Calculate Accuracy
-    correct = (binary_preds == labelVals).sum()
-    accuracy = float(correct) / binary_preds.shape[0]
-    #np.save('precision_Rnn.npy',precision)
-    #np.save('recall_Rnn.npy',recall)
-
-    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(binary_preds, labelVals)))
-    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, binary_preds)))
-    print("Those two should be different overall. Problem if they're the same (?)")
 
 
 
@@ -966,8 +867,8 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
         recalls = [1]
         for threshold in thresholds:
             print ("threshold:", threshold)
-            results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, overlap_threshold=overlap, smooth=True, 
-                    in_seconds=False, use_call_bounds=False, min_call_length=min_call_length, visualize=False)
+            results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, 
+                            overlap_threshold=overlap, min_call_length=min_call_length)
 
             TP_truth = results['summary']['true_pos_recall']
             FN = results['summary']['false_neg']
@@ -1048,7 +949,8 @@ def main(args):
         print("Average accuracy:", results['summary']['accuracy'])
     elif args.pr_curve > 0:
         precision_recall_curve_pred_threshold(full_dataset, model_id, args.predictions_path, 
-                                                args.pr_curve, args.overlaps, min_call_length=parameters.MIN_CALL_LENGTH)
+                                                args.pr_curve, args.overlaps, 
+                                                min_call_length=parameters.MIN_CALL_LENGTH)
     elif args.save_calls:
         predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, 
                         pred_threshold=parameters.EVAL_THRESHOLD, min_call_length=parameters.MIN_CALL_LENGTH)
@@ -1208,6 +1110,104 @@ def predict_full_audio_sliding_window(raw_audio, model, spectrogram_info):
 ################################################################
 ######################### OLD CODE #############################
 ################################################################
+def visual_full_recall(spectrogram, predictions, labels, binary_preds, chunk_size=256):
+    """
+        Step through the ground truth labels and visualize
+        the models predictions around these calls
+    """
+    search = 0
+    while True:
+        begin = search
+        # Look for the start of a predicted calls
+        while begin < spectrogram.shape[0] and labels[begin] == 0:
+            begin += 1
+
+        if begin >= spectrogram.shape[0]:
+            break
+
+        end = begin + 1
+        # Look for the end of the call
+        while end < spectrogram.shape[0] and labels[end] == 1:
+            end += 1
+
+        call_length = end - begin
+
+        if (call_length > chunk_size):
+            visualize(spectrogram[begin: end], predictions[begin: end] ,labels[begin:end])
+        else:
+            # Let us position the call in the middle
+            padding = (chunk_size - call_length) // 2
+            window_start = max(begin - padding, 0)
+            window_end = min(end + padding, spectrogram.shape[0])
+            visualize(spectrogram[window_start: window_end], predictions[window_start: window_end], 
+                labels[window_start: window_end], binary_preds[window_start: window_end], vert_lines=(begin - window_start, end - window_start))
+
+        search = end + 1
+
+
+def pcr(dloader, model, visualize=False):
+    """
+        Generate Precision Recall Plot as well as print the F1 score for 
+        each binary class
+    """
+    predVals = np.ones(1)
+    labelVals = np.ones(1)
+    
+    for inputs, labels in dloader:
+        inputs = inputs.float()
+        labels = labels.float()
+        #print (inputs.shape)
+
+        inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
+
+        # Forward pass
+        outputs = model(inputs) # Shape - (batch_size, seq_len, 1)
+        # Try to visualize
+        if visualize:
+            visual_time_series(inputs, outputs, labels)
+        # Compress to 
+        # Shape - (batch_size * seq_length)
+        # Compute the sigmoid over our outputs
+        compressed_out = outputs.view(-1, 1)
+        compressed_out = compressed_out.squeeze()
+        sig = nn.Sigmoid()
+        predictions = sig(compressed_out)
+        compressed_labels = labels.view(-1, 1)
+        compressed_labels = compressed_labels.squeeze()
+
+        predVals = np.concatenate((predVals, predictions.detach().numpy()))
+        labelVals = np.concatenate((labelVals, compressed_labels.detach().numpy()))
+        
+    predVals = predVals[1:]
+    labelVals = labelVals[1:]
+
+    precision, recall, thresholds = precision_recall_curve(labelVals, predVals)
+    plt.plot(precision,recall)
+    plt.show()
+
+    # Compute F1-score
+    # Make predictions based on threshold
+    binary_preds = np.where(predVals > THRESHOLD, 1, 0)
+    f1 = f1_score(labelVals, binary_preds, labels=[0, 1], average=None)  
+    print ("F1 score label 0 (no call): ", f1[0])
+    print ("F1 score label 1 (call): ", f1[1])
+
+    precision, recall, fbeta, _ = precision_recall_fscore_support(labelVals, binary_preds, labels=[0,1], average=None)
+    print ("Precision label 0 (no call): ", precision[0])
+    print ("Precision label 1 (call): ", precision[1])
+    print ("Recall label 0 (no call): ", recall[0])
+    print ("Recall label 1 (call): ", recall[1])
+
+    # Calculate Accuracy
+    correct = (binary_preds == labelVals).sum()
+    accuracy = float(correct) / binary_preds.shape[0]
+    #np.save('precision_Rnn.npy',precision)
+    #np.save('recall_Rnn.npy',recall)
+
+    print("Trigger word detection recall was {:4f}".format(trigger_word_accuracy(binary_preds, labelVals)))
+    print("Trigger word detection precision was {:4f}".format(trigger_word_accuracy(labelVals, binary_preds)))
+    print("Those two should be different overall. Problem if they're the same (?)")
+
 def visual_full_test(spectrogram, predictions, labels, chunk_size=256):
     # get num chunks
     num_chunks = int(spectrogram.shape[0] / chunk_size)
