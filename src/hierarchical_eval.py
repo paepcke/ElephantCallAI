@@ -31,9 +31,14 @@ parser.add_argument('--full_stats', action='store_true',
     help = 'Compute statistics on the full test spectrograms')
 parser.add_argument('--save_calls', action='store_true',
     help = 'Save model predictions to a CSV file')
+parser.add_argument('--pr_curve', type=int, default=0,
+    help='If != 0 then generate a pr_curve with that many sampled threshold points')
+parser.add_argument('--overlaps', type=float, nargs='+', default=[.1], 
+    help='A list of overlaps that we want to consider for the PR tradeoff curve')
 
 #parser.add_argument('--pred_calls', action='store_true', 
 #    help = 'Generate the predicted (start, end) calls for test spectrograms')
+
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
@@ -671,6 +676,51 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
 
     return results
 
+def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_points, overlaps, min_call_length=10):
+    """
+        Produce a set of PR Curves based on the % overlap needed for a
+        correct prediction. For each PR curve we vary the prediction 
+        threshold used to determine if a time slice contains an elephant call or not
+        (i.e. the threshold for binarizing the sigmoid output) as a 
+        linear scale with num_points sampled.
+    """
+    thresholds = np.linspace(0, 100, num_points + 1) / 100.
+    # Note that we don't want to include threshold = 1 since we get divide by zero
+    # and the threshold = 0 since then precision is messed up, in that it should be around 0
+    thresholds = thresholds[1:-1]
+
+    for overlap in overlaps:
+        precisions = [0]
+        recalls = [1]
+        for threshold in thresholds:
+            print ("threshold:", threshold)
+            results = eval_full_spectrograms(dataset, model_id, pred_path, pred_threshold=threshold, 
+                            overlap_threshold=overlap, min_call_length=min_call_length)
+
+            TP_truth = results['summary']['true_pos_recall']
+            FN = results['summary']['false_neg']
+            TP_test = results['summary']['true_pos']
+            FP = results['summary']['false_pos']
+
+            recall = TP_truth / (TP_truth + FN)
+            precision = 0 if TP_test + FP == 0 else TP_test / (TP_test + FP) # For edge case where no calls are identified
+
+            precisions.append(precision)
+            recalls.append(recall)
+
+        # append what would happen if threshold = 1, precision = 1 and recall = 0
+        precisions.append(1.)
+        recalls.append(0)
+        print (precisions)
+        print (recalls)
+
+        plt.plot(recalls, precisions, 'bo-', label='Overlap = ' + str(overlap))
+
+    plt.legend()
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.savefig("../Figures/PR_Curve_" + str(model_id))
+
 def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold=0.5, smooth=True, 
             in_seconds=False, min_call_length=10, visualize=False):
     """
@@ -899,6 +949,10 @@ def main(args):
         print("False positve rate (FP / hr):", false_pos_per_hour)
         print("Segmentation f1-score:", results['summary']['f_score'])
         print("Average accuracy:", results['summary']['accuracy'])
+    elif args.pr_curve > 0:
+        precision_recall_curve_pred_threshold(full_dataset, model_id, args.predictions_path, 
+                                                args.pr_curve, args.overlaps, 
+                                                min_call_length=parameters.MIN_CALL_LENGTH)
     elif args.save_calls:
         predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, 
                     min_call_length=parameters.MIN_CALL_LENGTH, pred_threshold=parameters.EVAL_THRESHOLD)
