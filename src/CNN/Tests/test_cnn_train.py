@@ -14,8 +14,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from CNN.train import SpectrogramTrainer, TrainResult
 
 
-TEST_ALL = True
-#TEST_ALL = False
+#********TEST_ALL = True
+TEST_ALL = False
 
 class TestCNNTrain(unittest.TestCase):
 
@@ -56,6 +56,9 @@ class TestCNNTrain(unittest.TestCase):
                                   ''')
         for update_query in update_queries:
             db.execute(update_query)
+            
+        db.commit()
+        db.close()
 
     #------------------------------------
     # setUp
@@ -121,7 +124,7 @@ class TestCNNTrain(unittest.TestCase):
     # test1EpochBatchSize1Train
     #-------------------
 
-    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    #*****@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def test1EpochBatchSize1Train(self):
         
         trainer = SpectrogramTrainer(
@@ -129,6 +132,8 @@ class TestCNNTrain(unittest.TestCase):
                         self.snippet_db_path,
                         batch_size = 1)
 
+        trainer.set_seed(42)
+        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             res_obj_tensors = trainer.train(num_epochs=1)
