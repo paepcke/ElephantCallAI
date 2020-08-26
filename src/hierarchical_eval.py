@@ -472,7 +472,7 @@ def process_ground_truth(label_path, in_seconds=False, samplerate=8000, NFFT=409
     return calls
 
 
-def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerate=8000., NFFT=4096., hop=800.): # Was 3208, 641
+def find_elephant_calls(binary_preds, min_call_length=10, in_seconds=False, samplerate=8000., NFFT=4096., hop=800.): # Was 3208, 641
     """
         Given a binary predictions vector, we now want
         to step through and locate all of the elephant
@@ -482,8 +482,8 @@ def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerat
         we convert to the true start and end time of the call
         from begin time 0.
 
-        If min_length != 0, then we only keep calls of
-        a given length. Note that min_length is in FRAMES!!
+        If min_call_length != 0, then we only keep calls of
+        a given length. Note that min_call_length is in FRAMES!!
 
         Note: some reference frame lengths.
         - 20 frames = 2.4 seconds 
@@ -510,7 +510,7 @@ def find_elephant_calls(binary_preds, min_length=10, in_seconds=False, samplerat
         call_length = end - begin
 
         # Found a predicted call!
-        if (call_length >= min_length):
+        if (call_length >= min_call_length):
             if not in_seconds:
                 # Note we subtract -1 to get the last frame 
                 # that has the actual call
@@ -610,7 +610,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         # Figure out better way to try different combinations of this
         # Note that processed_preds zeros out predictions that are not long
         # enough to be an elephant call
-        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_length, in_seconds=in_seconds)
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_call_length=min_call_length, in_seconds=in_seconds)
         print ("Num predicted calls", len(predicted_calls))
 
         # Use the calls as defined in the orginal hand labeled file.
@@ -623,7 +623,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
             print ("Using spectrogram labeling to generate GT calls")
             # We should never compute this in seconds
             # Also let us keep all the calls, i.e. set min_length = 0
-            gt_calls, _ = find_elephant_calls(labels, min_length=0)
+            gt_calls, _ = find_elephant_calls(labels, min_call_length=0)
 
         print ("Number of ground truth calls", len(gt_calls))
 
