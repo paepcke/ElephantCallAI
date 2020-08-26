@@ -124,6 +124,10 @@ def hierarchical_model_1_path():
     if parameters.HIERARCHICAL_SHIFT_WINDOWS:
         model_name += '_OversizeCalls'
 
+    # For now, if FALSE_POSITIVE_THRESHOLD != 15 include it
+    if parameters.FALSE_POSITIVE_THRESHOLD != 15:
+        model_name += '_FalsePosThreshold-' + str(parameters.FALSE_POSITIVE_THRESHOLD)
+
     return model_name
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):

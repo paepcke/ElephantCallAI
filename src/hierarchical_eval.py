@@ -42,8 +42,10 @@ parser.add_argument('--overlaps', type=float, nargs='+', default=[.1],
 parser.add_argument('--visualize', action='store_true',
     help='Visualize full spectrogram results')
 
-parser.add_argument('--models', type=str,
-    help = 'Path to the hierarchical models to test on') 
+parser.add_argument('--model_0', type=str,
+    help='Path to Model_0')
+parser.add_argument('--model_1', type=str,
+    help='Path to Model_1')
 
 
 '''
@@ -896,12 +898,8 @@ def main(args):
 
     """
     # Load Model_0 and Model_1 of the hierarchical models
-    hierarchical_model_path = args.models
-    model_0_path = os.path.join(hierarchical_model_path, "Model_0/model.pt")
-    # Get the model_1 name
-    model_1_name = hierarchical_model_1_path()
-    model_1_name += "/model.pt"
-    model_1_path = os.path.join(hierarchical_model_path, model_1_name)
+    model_0_path = args.model_0
+    model_1_path = args.model_1
 
     # Want the model id to match that of the second model! Then 
     model_0, _ = loadModel(model_0_path)
