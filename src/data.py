@@ -159,21 +159,23 @@ class ElephantDatasetFuzzy(data.Dataset):
         # windows during hierarchical training
         self.fixed_indeces = None
 
+        '''
         self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
         self.initialize_labels()
+        '''
+
+        self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
+        self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
+        self.intialize_data(init_pos=True, init_neg=True)
 
         # Shuffle the features and labels! 
-        for i in range(0):
+        for i in range(4):
             print ("Shuffing the data for the {}th time".format(i))
             rand_shuffle = np.random.permutation(len(self.features))
             self.features = list(np.array(self.features)[rand_shuffle])
             self.labels = list(np.array(self.labels)[rand_shuffle])
             if self.include_boundaries:
                 self.boundary_masks = list(np.array(self.boundary_masks)[rand_shuffle])
-
-        #self.pos_features = glob.glob(data_path + "/" + "*_features_*", recursive=True)
-        #self.neg_features = glob.glob(data_path + "/" + "*_neg-features_*", recursive=True)
-        #self.intialize_data(init_pos=True, init_neg=True)
 
         assert len(self.features) == len(self.labels)
         if self.include_boundaries:
