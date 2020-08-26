@@ -74,7 +74,7 @@ def loadModel(model_path, is_hierarchical=True):
 
     # Let us also save_predictions based on some of the slide length 
     # when sliding the window for model predictions
-    if jump != 128:
+    if parameters.PREDICTION_SLIDE_LENGTH != 128:
         model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH)
 
     return model, model_id
