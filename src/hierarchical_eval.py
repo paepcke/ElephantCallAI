@@ -72,6 +72,11 @@ def loadModel(model_path, is_hierarchical=True):
     else:
         model_id = tokens[-2]
 
+    # Let us also save_predictions based on some of the slide length 
+    # when sliding the window for model predictions
+    if jump != 128:
+        model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH)
+
     return model, model_id
 
 def convert_frames_to_time(num_frames, NFFT=4096, hop=800, samplerate=8000):
@@ -272,11 +277,6 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             # Just leave out for now!
             predictions = predict_spec_full(spectrogram, model)
 
-        # Let us also save_predictions based on some of the slide length 
-        # when sliding the window for model predictions
-        # For now to allow for backward compatability do this which is bit hacky
-        if jump != 128:
-            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH)
         # Save preditions
         # Save for now to a folder determined by the model id
         path = os.path.join(predictions_path,model_id)
@@ -586,6 +586,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
                             'f_score': 0,
                             'accuracy': 0
                             }
+
     # Used to track the number of total calls for averaging
     # aggregated statistics
     num_preds = 0
@@ -600,10 +601,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         tags = tags[-1].split('_')
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
-        
-        # For now to allow for backward compatability do this which is bit hacky
-        if parameters.PREDICTION_SLIDE_LENGTH != 128:
-            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH) 
+         
         predictions = np.load(os.path.join(predictions_path, model_id, data_id + '.npy'))
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -745,9 +743,6 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
-        # For now to allow for backward compatability do this which is bit hacky
-        if parameters.PREDICTION_SLIDE_LENGTH != 128:
-            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH) 
         predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -937,7 +932,9 @@ def main(args):
         total_duration = 24. * len(full_test_spect_paths['specs'])
         false_pos_per_hour = FP / total_duration
 
-        print ("Summary results")
+        print ("++=================++")
+        print ("++ Summary results ++")
+        print ("++=================++")
         print ("Hyper-Parameters")
         print ("Threshold:", parameters.EVAL_THRESHOLD)
         print ("Minimun Call Length", parameters.MIN_CALL_LENGTH)
