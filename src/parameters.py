@@ -1,21 +1,87 @@
 import torch
 
+################################################
+#### Trainining Hyper-Parameters + Settings ####
+################################################
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-THRESHOLD = 0.5
-VERBOSE = False
-
 NUM_EPOCHS = 1000
 EVAL_PERIOD = 1
-
-ADVERSARIAL_LOOPS = 10
+BATCH_SIZE = 32 
 TRAIN_STOP_ITERATIONS = 30
-# Which metric to track for early stopping
-# and saving the best model
-# Options:
-# 1) acc = accuracy
-# 2) fscore
+THRESHOLD = 0.5 # Note this is also used for evaluation!!
+VERBOSE = False
+'''
+    Which metric to track for early stopping
+    and saving the best model
+    Options:
+    1) acc = accuracy
+    2) fscore
+'''
 TRAIN_MODEL_SAVE_CRITERIA = 'acc'
 
+##########################
+#### Eval Parameters #####
+##########################
+''' Note This Should Match FALSE_POSITIVE_THRESHOLD '''
+MIN_CALL_LENGTH = 15
+EVAL_THRESHOLD = 0.5
+
+''' Hop/stride length of model window when predicting over full spectrogram '''
+PREDICTION_SLIDE_LENGTH = 64
+
+##############################
+#### Model_0 / Solo Model ####
+##############################
+MODEL_ID = 17
+PRE_TRAIN = False
+
+################################
+#### Dataset Specifications ####
+################################
+''' This now represents whether to use noab or bai '''
+DATASET = 'noab'
+
+''' Data Augmentation / Undersampling values '''
+NEG_SAMPLES = 1
+TEST_NEG_SAMPLES = 1
+CALL_REPEATS = 1
+NORM = "norm"
+SCALE = True # Log scale the spectrograms
+SHIFT_WINDOWS = False
+
+#######################################
+#### Hierarchical Model Parameters ####
+#######################################
+''' Threshold for a window to be considered a false positive'''
+FALSE_POSITIVE_THRESHOLD = 15 
+
+''' Specify 'same' to keep training Model_0 '''
+HIERARCHICAL_MODEL = 17
+HIERARCHICAL_PRE_TRAIN = False
+
+''' Deptricated!!! '''
+HIERARCHICAL_REPEATS = 1 # This should be deprecated!!!!!!
+''' Repeats for Pos and Neg (False-Pos) examples seperately! '''
+HIERARCHICAL_REPEATS_POS = 1
+HIERARCHICAL_REPEATS_NEG = 1
+
+''' Whether window shifting as data-aug is used in training '''
+HIERARCHICAL_SHIFT_WINDOWS = False 
+
+
+################################
+#### Loss function criteria ####
+################################
+LOSS = "CE"
+CHUNK_WEIGHTING = "count"
+FOCAL_WEIGHT_INIT = 0.01 
+FOCAL_GAMMA = 2
+FOCAL_ALPHA = 0.75
+
+###############################################
+#### Adversarial Inner Outer Loop Training ####
+###############################################
+ADVERSARIAL_LOOPS = 10
 # Determines number of adversarial samples to discover.
 # This is a number (0, 1] that calculates how
 # many adversarial samples to find based on the size of the
@@ -26,42 +92,9 @@ ADVERSARIAL_SAMPLES = 0.5
 # an adversarial false positive
 ADVERSARIAL_THRESHOLD = 0
 
-FALSE_NEGATIVE_THRESHOLD = 15 # Test this!
-# Specify 'same' to keep training Model_0
-HIERARCHICAL_MODEL = 17
-HIERARCHICAL_PRE_TRAIN = False
-# Specify the number of repeats for ONLY the 
-# positive examples for model_1. 
-# 'same' - use the same dataloader from model_0
-HIERARCHICAL_REPEATS = 1 # This should be deprecated!!!!!!
-# Controls how much we scale the repeats differently!
-# Note always select shift windows with this!!!!!
-HIERARCHICAL_REPEATS_POS = 1
-HIERARCHICAL_REPEATS_NEG = 1
-HIERARCHICAL_SHIFT_WINDOWS = False # May deprecate this!
-
-# Model 18 = entire window classification
-MODEL_ID = 17
-PRE_TRAIN = False
-
-# This now represents whether to use noab or bai
-DATASET = 'bai'
-#DATASET = 'Activate'
-#DATASET = 'MFCC_Call'
-
-LOSS = "CE"
-CHUNK_WEIGHTING = "count"
-FOCAL_WEIGHT_INIT = 0.01 
-FOCAL_GAMMA = 2
-FOCAL_ALPHA = 0.75
-
-NEG_SAMPLES = 1
-TEST_NEG_SAMPLES = 1
-CALL_REPEATS = 1
-NORM = "norm"
-SCALE = True
-SHIFT_WINDOWS = False
-
+#######################################
+#### Boundary 'Fudging' Parameters ####
+#######################################
 # Flags for how to deal with boundaries!!
 # If > 0 then use boundaries else no boundaries
 BOUNDARY_FUDGE_FACTOR = 0
@@ -74,12 +107,14 @@ BOUNDARY_LOSS = 'EQUAL'
 # How to weight the boundary slices in [0, 1]
 BOUNDARY_WEIGHT = 0.5
 
+##########################
+#### Random Seed Info ####
+########################## 
 MODEL_SEED = 8
-# Make these two bellow the same!
+# Make these two below the same!
 DATASET_SEED = 8
 DATA_LOADER_SEED = 8
 
-BATCH_SIZE = 32 # Was 32
 
 LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
 LOCAL_TEST_FILES = '../elephant_dataset/Test/'
