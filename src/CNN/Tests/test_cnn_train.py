@@ -5,6 +5,7 @@ Created on Aug 15, 2020
 '''
 import os
 import unittest
+import sqlite3
 
 from CNN.train import SpectrogramTrainer, TrainResult
 
@@ -16,6 +17,41 @@ class TestCNNTrain(unittest.TestCase):
 
     snippet_dir = os.path.join(os.path.dirname(__file__), 'TestSnippets')
     snippet_db_path = os.path.join(os.path.dirname(__file__), 'tiny_chop_info.sqlite')
+    
+    
+    #------------------------------------
+    # setUpClass 
+    #-------------------
+    
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Make all the snippet file name paths
+        # in tiny_chop_info.sqlite local to the
+        # machine where this test is running:
+
+        db = sqlite3.connect(cls.snippet_db_path)
+        db.row_factory = sqlite3.Row
+        rows = db.execute('''
+                    	  SELECT sample_id, snippet_filename
+                    	    FROM Samples;
+                          ''')
+        update_queries = []
+        
+        # Create one update query for each 
+        # snippet filename. Each update ensures
+        # that the fn points to the current machine's
+        # test snippet:
+        for row_dict in rows:
+            snippet_nm = os.path.basename(row_dict['snippet_filename'])
+            local_nm   = os.path.join(cls.snippet_dir, snippet_nm)
+            update_queries.append(f'''
+                                  UPDATE Samples
+                                     SET snippet_filename = '{local_nm}'
+                                   WHERE sample_id = {row_dict['sample_id']};
+                                  ''')
+        for update_query in update_queries:
+            db.execute(update_query)
 
     #------------------------------------
     # setUp
