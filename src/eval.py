@@ -624,7 +624,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
             print ("Using spectrogram labeling to generate GT calls")
             # We should never compute this in seconds
             # Also let us keep all the calls, i.e. set min_length = 0
-            gt_calls, _ = find_elephant_calls(labels, min_length=0)
+            gt_calls, _ = find_elephant_calls(labels, min_call_length=0)
 
         print ("Number of ground truth calls", len(gt_calls))
 
