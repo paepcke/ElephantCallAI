@@ -3,10 +3,13 @@ Created on Aug 15, 2020
 
 @author: paepcke
 '''
-import os
+import os,sys
 import sqlite3
 import unittest
 import warnings
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from CNN.train import SpectrogramTrainer, TrainResult
 
@@ -129,7 +132,6 @@ class TestCNNTrain(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             res_obj_tensors = trainer.train(num_epochs=1)
-            self.deprecationWarningSuppression()
 
         res_obj = TrainResult()
         
@@ -160,11 +162,6 @@ class TestCNNTrain(unittest.TestCase):
         
 # -------------- Utilities --------------
 
-    def deprecationWarningSuppression(self):
-        '''
-        Disable deprecation warnings
-        '''
-        warnings.warn("deprecated", DeprecationWarning)
 
 # ------------------ Main -----------------
 
