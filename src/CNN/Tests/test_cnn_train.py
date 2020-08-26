@@ -4,8 +4,9 @@ Created on Aug 15, 2020
 @author: paepcke
 '''
 import os
-import unittest
 import sqlite3
+import unittest
+import warnings
 
 from CNN.train import SpectrogramTrainer, TrainResult
 
@@ -125,7 +126,10 @@ class TestCNNTrain(unittest.TestCase):
                         self.snippet_db_path,
                         batch_size = 1)
 
-        res_obj_tensors = trainer.train(num_epochs=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res_obj_tensors = trainer.train(num_epochs=1)
+            self.deprecationWarningSuppression()
 
         res_obj = TrainResult()
         
@@ -153,6 +157,14 @@ class TestCNNTrain(unittest.TestCase):
 
         self.assertTrue(res_obj == true_res_obj_A or
                         res_obj == true_res_obj_B)
+        
+# -------------- Utilities --------------
+
+    def deprecationWarningSuppression(self):
+        '''
+        Disable deprecation warnings
+        '''
+        warnings.warn("deprecated", DeprecationWarning)
 
 # ------------------ Main -----------------
 
