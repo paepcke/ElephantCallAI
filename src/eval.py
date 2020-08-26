@@ -899,6 +899,8 @@ def main(args):
     """
     
     model, model_id = loadModel(args.model)
+    print ("Using Model with ID:", model_id)
+
     # Put in eval mode!
     model.eval()
     print (model_id)
@@ -936,8 +938,10 @@ def main(args):
         print ("++ Summary results ++")
         print ("++=================++")
         print ("Hyper-Parameters")
+        print ("Using Model with ID:", model_id)
         print ("Threshold:", parameters.EVAL_THRESHOLD)
         print ("Minimun Call Length", parameters.MIN_CALL_LENGTH)
+        print ("Window Slide Step", parameters.PREDICTION_SLIDE_LENGTH)
         print("Call precision:", precision)
         print("Call recall:", recall)
         print("f1 score calls:", f1_call)
