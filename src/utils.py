@@ -159,7 +159,7 @@ def num_correct(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)
-        binary_preds = pred > parameters.THRESHOLD
+        binary_preds = pred > parameters.THRESHOLD # This should likely be 0
         # Cast to proper type!
         binary_preds = binary_preds.float()
         num_correct = (binary_preds == labels).sum().item()

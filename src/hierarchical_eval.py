@@ -229,7 +229,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
 
 
 def generate_predictions_full_spectrograms(dataset, model, model_id, predictions_path, 
-    sliding_window=True, chunk_size=256, jump=128, hierarchical_model=None):
+    sliding_window=True, chunk_size=256, jump=128, hierarchical_model=None, hierarchy_threshold=15):
     """
         For each full test spectrogram, run a trained model to get the model
         prediction and save these predictions to the predictions folder. Namely,
@@ -260,11 +260,16 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
             predictions = predict_spec_sliding_window(spectrogram, model, 
                                         chunk_size=chunk_size, jump=jump, 
                                         hierarchical_model=hierarchical_model, 
-                                        hierarchy_threshold=parameters.FALSE_POSITIVE_THRESHOLD)
+                                        hierarchy_threshold=hierarchy_threshold)
         else:
             # Just leave out for now!
             predictions = predict_spec_full(spectrogram, model)
 
+        # Let us also save_predictions based on some of the slide length 
+        # when sliding the window for model predictions
+        # For now to allow for backward compatability do this which is bit hacky
+        if jump != 128:
+            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH)
         # Save preditions
         # Save for now to a folder determined by the model id
         path = os.path.join(predictions_path,model_id)
@@ -539,7 +544,7 @@ def get_binary_predictions(predictions, threshold=0.5, smooth=True, sigma=1):
     return binary_preds, predictions
 
 def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0.5, overlap_threshold=0.1, smooth=True, 
-            in_seconds=False, use_call_bounds=False, min_call_lengh=10, visualize=False, hierarchical_model=True):
+            in_seconds=False, use_call_bounds=False, min_call_length=10, visualize=False, hierarchical_model=True):
     """
 
         After saving predictions for the test set of full spectrograms, we
@@ -589,6 +594,9 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
+        # For now to allow for backward compatability do this which is bit hacky
+        if parameters.PREDICTION_SLIDE_LENGTH != 128:
+            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH) 
         predictions = np.load(os.path.join(predictions_path, model_id, data_id + '.npy'))
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -597,7 +605,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
         # Figure out better way to try different combinations of this
         # Note that processed_preds zeros out predictions that are not long
         # enough to be an elephant call
-        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_lengh, in_seconds=in_seconds)
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_length, in_seconds=in_seconds)
         print ("Num predicted calls", len(predicted_calls))
 
         # Use the calls as defined in the orginal hand labeled file.
@@ -664,7 +672,7 @@ def eval_full_spectrograms(dataset, model_id, predictions_path, pred_threshold=0
     return results
 
 def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold=0.5, smooth=True, 
-            in_seconds=False, min_call_lengh=10, visualize=False):
+            in_seconds=False, min_call_length=10, visualize=False):
     """
         Extract model predictions as calls of the form (start, end, length) 
         and save each call for with its given audio file
@@ -685,6 +693,9 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
         data_id = tags[0] + '_' + tags[1]
         print ("Generating Prediction for:", data_id)
         
+        # For now to allow for backward compatability do this which is bit hacky
+        if parameters.PREDICTION_SLIDE_LENGTH != 128:
+            model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH) 
         predictions = np.load(predictions_path + '/' + model_id + "/" + data_id + '.npy')
 
         binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
@@ -692,7 +703,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
         # Process the predictions to get predicted elephant calls
         # Note that processed_preds zeros out predictions that are not long
         # enough to be an elephant call
-        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_lengh, in_seconds=in_seconds)
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_length, in_seconds=in_seconds)
         print ("Num predicted calls", len(predicted_calls))
 
         # Visualize the predictions around the gt calls
@@ -855,11 +866,12 @@ def main(args):
 
     if args.make_full_preds:
         generate_predictions_full_spectrograms(full_dataset, model_0, model_id, args.predictions_path,
-             sliding_window=True, chunk_size=256, jump=64, hierarchical_model=model_1)         # Add in these arguments
+             sliding_window=True, chunk_size=parameters.CHUNK_SIZE, jump=parameters.PREDICTION_SLIDE_LENGTH, 
+             hierarchical_model=model_1, hierarchy_threshold=parameters.FALSE_POSITIVE_THRESHOLD)   
     elif args.full_stats:
         # Now we have to decide what to do with these stats
         results = eval_full_spectrograms(full_dataset, model_id, args.predictions_path, 
-                        min_call_len=parameters.FALSE_POSITIVE_THRESHOLD ,pred_threshold=parameters.THRESHOLD)
+                        min_call_length=parameters.MIN_CALL_LENGTH ,pred_threshold=parameters.EVAL_THRESHOLD)
 
         if args.visualize: # Visualize the metric results
             visualize_elephant_call_metric(full_dataset, results)
@@ -878,6 +890,9 @@ def main(args):
         false_pos_per_hour = FP / total_duration
 
         print ("Summary results")
+        print ("Hyper-Parameters")
+        print ("Threshold:", parameters.EVAL_THRESHOLD)
+        print ("Minimun Call Length", parameters.MIN_CALL_LENGTH)
         print("Call precision:", precision)
         print("Call recall:", recall)
         print("f1 score calls:", f1_call)
@@ -886,7 +901,7 @@ def main(args):
         print("Average accuracy:", results['summary']['accuracy'])
     elif args.save_calls:
         predictions = extract_call_predictions(full_dataset, model_id, args.predictions_path, 
-                    min_call_lengh=parameters.FALSE_POSITIVE_THRESHOLD, pred_threshold=parameters.THRESHOLD)
+                    min_call_length=parameters.MIN_CALL_LENGTH, pred_threshold=parameters.EVAL_THRESHOLD)
         # Save for now to a folder determined by the model id
         save_path = args.call_predictions_path + '/' + model_id
         if not os.path.isdir(save_path):
