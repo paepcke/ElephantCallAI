@@ -346,7 +346,7 @@ class PrecRecComputer(object):
         the percentage overlaps for each. A complete example,
         verified in unittests:
         
-        daud = \                                                   Index in Ele   Absolute Overlap
+        daud =                                                    Index in Ele   Absolute Overlap
         np.array([[ 5, 10],      # +     covers exactly                  0             4            
                   [40, 46],      # +     covers beyond borders           2             2
                   [47, 49],      # -                                                    
@@ -355,7 +355,7 @@ class PrecRecComputer(object):
                   [77, 80],      # +     use ele burst twice             5             3
                   [90, 95]       # -     more in aud than in labels      
                   ])
-        dele = \                                                   Index in Aud    Absolute Overlap
+        dele =                                                     Index in Aud    Absolute Overlap
         np.array([[ 5, 10],                                              0             4
                  [10, 11],       # abutting intervals                    -
                  [42, 45],                                               1             2
@@ -523,7 +523,7 @@ class PrecRecComputer(object):
         
         # Generate indices of the first instance of
         # each elephant burst that is matched. Ref above:
-        # [0,3]:\
+        # [0,3]:
         (matches_ele, first_uniq_indices) = np.unique(matches_ele, return_index=True, axis=0)
         # For both ele and aud matches, keep only these uniques:
         
