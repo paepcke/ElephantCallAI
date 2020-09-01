@@ -27,6 +27,7 @@ setup(
                         'scipy>=1.5.2',
                         'soundfile',
                         'tensorboard>=2.3.0',
+                        'GPUtil>=1.4.0',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']

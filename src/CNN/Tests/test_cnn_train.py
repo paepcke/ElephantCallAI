@@ -11,11 +11,11 @@ import warnings
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from CNN.train import SpectrogramTrainer, TrainResult
+from spectrogram_train_parallel import SpectrogramTrainer, TrainResult
 
 
-#********TEST_ALL = True
-TEST_ALL = False
+TEST_ALL = True
+#TEST_ALL = False
 
 class TestCNNTrain(unittest.TestCase):
 
@@ -83,16 +83,15 @@ class TestCNNTrain(unittest.TestCase):
     def testTrainEpoch(self):
 
         trainer = SpectrogramTrainer(
-                        self.snippet_dir,
                         self.snippet_db_path,
-                        batch_size = 16)
-        
-        # Make all runs of equal input return the same results:
-        trainer.set_seed(42)
+                        batch_size=16,
+                        seed=42
+                        )
         
         # Start a new k-fold cross_validation run for
         # each epoch:
-        trainer.dataloader.kfold_stratified(shuffle=False)
+        trainer.dataloader.kfold_stratified(shuffle=False,
+                                            random_state=42)
 
         res_dict_tensors = trainer.train_epoch()
         # Losses are too eratic for testing equality:
@@ -101,20 +100,21 @@ class TestCNNTrain(unittest.TestCase):
         res_dict = {key: res_dict_tensors[key].item() 
                         for key in res_dict_tensors.keys()}
         
-        # For testing equality, round the result:
+        # For testing equality, round the results for fscore and prec:
         res_dict['train_epoch_fscore'] = round(res_dict['train_epoch_fscore'], 4)
+        res_dict['train_epoch_precision'] = round(res_dict['train_epoch_precision'], 3)
          
-        true_res_dict_A = {'train_epoch_acc': 0.5000,
-                           'train_epoch_fscore': 0.6667,
-                           'train_epoch_precision': 0.5,
-                           'train_epoch_recall': 1.
+        true_res_dict_A = {'train_epoch_acc': 0.4375,
+                           'train_epoch_fscore': 0.6087,
+                           'train_epoch_precision': 0.467,
+                           'train_epoch_recall': 0.875
+                           }
+        true_res_dict_B = {'train_epoch_acc': 0.5,
+                           'train_epoch_fscore': 0.0,
+                           'train_epoch_precision': 1.0,
+                           'train_epoch_recall': 0.0
                            }
         
-        true_res_dict_B = {'train_epoch_acc': 0.5000,
-                           'train_epoch_fscore': 0.,
-                           'train_epoch_precision': 1.,
-                           'train_epoch_recall': 0.
-                          }
         try:
             self.assertDictEqual(res_dict, true_res_dict_A)
         except AssertionError:
@@ -124,16 +124,15 @@ class TestCNNTrain(unittest.TestCase):
     # test1EpochBatchSize1Train
     #-------------------
 
-    #*****@unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
+    @unittest.skipIf(TEST_ALL != True, 'skipping temporarily')
     def test1EpochBatchSize1Train(self):
         
         trainer = SpectrogramTrainer(
-                        self.snippet_dir,
                         self.snippet_db_path,
-                        batch_size = 1)
+                        batch_size=1,
+                        seed=42
+                        )
 
-        trainer.set_seed(42)
-        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             res_obj_tensors = trainer.train(num_epochs=1)
