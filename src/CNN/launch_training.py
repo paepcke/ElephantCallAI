@@ -2,7 +2,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 from argparse import ArgumentParser, REMAINDER
+import argparse
 import json
+from json.decoder import JSONDecodeError
 import os
 import re
 import socket
@@ -10,7 +12,6 @@ import subprocess
 import sys
 
 import GPUtil
-from json.decoder import JSONDecodeError
 
 
 r"""
@@ -230,13 +231,43 @@ def parse_world_layout_config(other_gpu_config_file):
 #------------------------------------
 # parse_args 
 #-------------------
-
+class BlankLinesHelpFormatter (argparse.HelpFormatter):
+    
+    def _split_lines(self, text, width):
+        if text.find('\n') == -1:
+            lines = super()._split_lines(text, width)
+        else:
+            lines = text.split('\n')
+        split_lines = []
+        for line in lines:
+            while True:
+                try:
+                    nl_pos = line.index('\n')
+                    one_line = line[:nl_pos]
+                    split_lines.append(one_line)
+                    line = line[nl_pos+1:]
+                except ValueError:
+                    # No more NLs:
+                    split_lines.append(line)
+                    break
+        return split_lines
+    
 def parse_args():
     """
     Helper function parsing the command line options
     @retval ArgumentParser
     """
-    parser = ArgumentParser(description="PyTorch distributed training launch "
+    
+    curr_dir = os.path.dirname(__file__)
+    training_script = os.path.join(curr_dir, 'spectrogram_train_parallel.py')
+    
+    # Get the help string from spectrogram_train_parallel.py:
+    proc = subprocess.run([training_script, '-h'], capture_output=True)
+    # Decode needed b/c proc.stdout is byte string:
+    script_help = proc.stdout.decode('utf8')
+    
+    parser = ArgumentParser(formatter_class=BlankLinesHelpFormatter,
+                            description="PyTorch distributed training launch "
                                         "helper utility that will spawn up "
                                         "multiple distributed processes")
 
@@ -284,12 +315,11 @@ def parse_args():
                         default=False
                         )
 
-    # Positional
-    parser.add_argument("training_script", type=str,
-                        help="The full path to the single GPU training "
-                             "program/script to be launched in parallel, "
-                             "followed by all the arguments for the "
-                             "training script")
+    parser.add_argument("--training_script", type=str,
+                        default=training_script,
+                        help=f"Default {os.path.basename(training_script)}: Add training script arguments after the above: \n"
+                             f"\n{script_help}"
+                        )
 
     # Rest of args are for the training program:
     parser.add_argument('training_script_args', nargs=REMAINDER)
