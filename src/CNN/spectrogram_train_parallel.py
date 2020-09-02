@@ -228,7 +228,11 @@ class SpectrogramTrainer(object):
         self.model = Resnet18Grayscale(num_classes=1)
         # Move to GPU if available:
         self.to_best_device(self.model)
-        
+
+        #**********
+        print(f"self.model.device(): {self.model.device()}")
+        #**********
+
         # Hyper parameter for chosen model
         model_hypers = HyperParameters['resnet18']
         
@@ -250,6 +254,9 @@ class SpectrogramTrainer(object):
         
         # Scheduler:
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer)
+        
+        # Initialize running statistics:
+        self.tallies = self.zero_tallies()
 
     #------------------------------------
     # to_best_device 
@@ -379,12 +386,20 @@ class SpectrogramTrainer(object):
     # zero_tallies 
     #-------------------
     
-    def zero_tallies(self):
+    def zero_tallies(self, curr_tallies=None):
         '''
         Returns a dict with the running 
         tallies that are maintained in both
-        train_epoch and eval_epoch.
+        train_epoch and eval_epoch. If curr_tallies
+        is provided, it is the dict of running values
+        from the previous epoch. In that case, the 
+        new tallies is zeroed for all entries, but
+        the 'running_loss' is carried over from
+        the old tallies.
         
+        @param curr_tallies: if given, the tallies from
+            a current epoch
+        @type curr_tallies: {str : float}
         @return: dict with float zeros
         @rtype: {str : float}
         '''
@@ -399,7 +414,10 @@ class SpectrogramTrainer(object):
                    'running_tp_fn' : 0.0,
                    # For focal loss purposes
                    'running_true_non_zero' : 0.0
-            }
+                   }
+        if curr_tallies is not None:
+            # Carry over the accumulated loss:
+            tallies['running_loss'] = curr_tallies['running_loss']
         return tallies
 
     #------------------------------------
@@ -493,7 +511,7 @@ class SpectrogramTrainer(object):
         time_start = time.time()
 
         # Get a zeroed out set of running tallies:
-        tallies = self.zero_tallies()
+        self.tallies = self.zero_tallies(curr_tallies=self.tallies)
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         for idx, (spectros_tns, labels_tns) in enumerate(self.dataloader):
@@ -501,7 +519,7 @@ class SpectrogramTrainer(object):
             self.optimizer.zero_grad()
             if (idx % 250 == 0) and Defaults.VERBOSE:
                 self.log.info (f"Batch number {idx} of {len(self.dataloader)}")
-                self.log.info (f"Total correct predictions {tallies['running_corrects']}, Total true positives {tallies['running_tp']}")
+                self.log.info (f"Total correct predictions {self.tallies['running_corrects']}, Total true positives {self.tallies['running_tp']}")
     
             # Put input and labels to where the
             # model is:
@@ -527,24 +545,24 @@ class SpectrogramTrainer(object):
             labels_tns.to('cpu')
             pred_prob_tns.to('cpu')
 
-            tallies = self.tally_result(labels_tns, pred_prob_tns, loss, tallies) 
+            self.tallies = self.tally_result(labels_tns, pred_prob_tns, loss, self.tallies) 
 
-            train_epoch_loss = tallies['running_loss'] / (idx + 1)
-            train_epoch_acc = float(tallies['running_corrects']) / tallies['running_samples']
+            train_epoch_loss = self.tallies['running_loss'] / (idx + 1)
+            train_epoch_acc = float(self.tallies['running_corrects']) / self.tallies['running_samples']
         
             # If denom is zero: no positive sample was
             # fed into the training, and the classifier
             # correctly identified none as positive:
             
-            train_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] \
-                if tallies['running_tp_fp'] > 0 else torch.tensor(1.)
+            train_epoch_precision = self.tallies['running_tp'] / self.tallies['running_tp_fp'] \
+                if self.tallies['running_tp_fp'] > 0 else torch.tensor(1.)
             
             # If denom is zero: no positive samples 
             # were encountered, and the classifier did not
             # claim that any samples were positive:
             
-            train_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn'] \
-                if tallies['running_tp_fn'] > 0 else torch.tensor(1.)
+            train_epoch_recall = self.tallies['running_tp'] / self.tallies['running_tp_fn'] \
+                if self.tallies['running_tp_fn'] > 0 else torch.tensor(1.)
             
             if train_epoch_precision + train_epoch_recall > 0:
                 train_epoch_fscore = (2 * train_epoch_precision * train_epoch_recall) / (train_epoch_precision + train_epoch_recall)
@@ -569,7 +587,7 @@ class SpectrogramTrainer(object):
         
         time_start = time.time()
         # Get a zeroed out set of running tallies:
-        tallies = self.zero_tallies()
+        self.tallies = self.zero_tallies(curr_tallies=self.tallies)
     
         self.log.info (f"Num batches: {len(self.dataloader)}")
         with torch.no_grad():
@@ -579,7 +597,7 @@ class SpectrogramTrainer(object):
                 self.optimizer.zero_grad()
                 if (idx % 250 == 0) and Defaults.VERBOSE:
                     self.log.info (f"Batch number {idx} of {len(self.dataloader)}")
-                    self.log.info (f"Total correct predictions {tallies['running_tp']}, Total true positives {tallies['running_tp']}")
+                    self.log.info (f"Total correct predictions {self.tallies['running_tp']}, Total true positives {self.tallies['running_tp']}")
         
                 # Put input and labels to where the
                 # model is:
@@ -603,16 +621,16 @@ class SpectrogramTrainer(object):
                 labels_tns.to('cpu')
                 pred_prob_tns.to('cpu')
 
-                tallies = self.tally_result(labels_tns, pred_prob_tns, loss, tallies) 
+                self.tallies = self.tally_result(labels_tns, pred_prob_tns, loss, self.tallies) 
 
-        valid_epoch_loss = tallies['running_loss'] / (idx + 1)
-        valid_epoch_acc = float(tallies['running_corrects']) / tallies['running_samples']
+        valid_epoch_loss = self.tallies['running_loss'] / (idx + 1)
+        valid_epoch_acc = float(self.tallies['running_corrects']) / self.tallies['running_samples']
         #valid_epoch_fscore = running_fscore / (idx + 1)
     
         # If this is zero issue a warning
-        valid_epoch_precision = tallies['running_tp'] / tallies['running_tp_fp'] \
-            if tallies['running_tp_fp'] > 0 else torch.tensor(1.)
-        valid_epoch_recall = tallies['running_tp'] / tallies['running_tp_fn']
+        valid_epoch_precision = self.tallies['running_tp'] / self.tallies['running_tp_fp'] \
+            if self.tallies['running_tp_fp'] > 0 else torch.tensor(1.)
+        valid_epoch_recall = self.tallies['running_tp'] / self.tallies['running_tp_fn']
         if valid_epoch_precision + valid_epoch_recall > 0:
             valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
         else:
@@ -629,11 +647,22 @@ class SpectrogramTrainer(object):
 
     def train(self,
               num_epochs=Defaults.NUM_EPOCHS, 
-              starting_epoch=0, 
-              resume=False,
+              checkpoint_path='',
               include_boundaries=False): 
-               
-        
+
+        # Resume training?
+        if len(checkpoint_path) > 0:
+            checkpoint = self.load_model_checkpoint(checkpoint_path, 
+                                                    self.model,
+                                                    self.optimizer
+                                                    )
+            self.model = checkpoint['model']
+            self.optimizer = checkpoint['optimizer']
+            self.starting_epoch = checkpoint['epoch']
+            self.tallies = checkpoint['tallies']
+        else:
+            starting_epoch = 0
+
         train_start_time = time.time()
         res_obj = TrainResult()
         
@@ -745,6 +774,19 @@ class SpectrogramTrainer(object):
     
         except KeyboardInterrupt:
             self.log.info("Early stopping due to keyboard intervention")
+            do_save = input("Save partially trained model (Y/n): ")
+            if do_save in ('y','Y','yes','Yes', ''):
+                dest_path = input("Destination path: ")
+                dest_dir  = os.path.dirname(dest_path)
+                if not os.path.exists(dest_dir):
+                    os.makedirs(dest_dir)
+                self.save_model(dest_path,
+                                self.model,
+                                self.optimizer,
+                                epoch-1 if epoch > 0 else 0,
+                                train_epoch_results['train_epoch_loss']
+                                )
+            sys.exit()
     
         msg = (f"\nBest val Acc    {res_obj.best_valid_acc.item():.4f}\n"
                f"Best val fscore    {res_obj.best_valid_fscore.item():.4f}\n"
@@ -857,6 +899,74 @@ class SpectrogramTrainer(object):
         np.random.seed(seed)
         os.environ['PYTHONHASHSEED'] = str(seed)
         random.seed = seed
+        
+    #------------------------------------
+    # save_model_checkpoint 
+    #-------------------
+    
+    def save_model_checkpoint(self, dest_path, model, optimizer, epoch, loss, tallies):
+        '''
+        Save the entire current state of training.
+        Re-instate that checkpoint in a new session
+        by using self.load_model_checkpoint()
+        
+        @param dest_path: where to save the pickled model.
+            Use .pth or .tar extension
+        @type dest_path: str
+        @param model: the model instance to save
+        @type model: torch model class
+        @param optimizer: the optimizer instance to save
+        @type optimizer: torch optimizer class
+        @param epoch: the last finished epoch 
+        @type epoch: int
+        @param loss: current loss measure
+        @type loss: float
+        @param tallies: dict of running totals (recall/precision, etc.)
+        @type tallies: {str : {int/float}}
+        '''
+        
+        to_save = {'epoch' : epoch,
+                   'model_state_dict' : model.state_dict(),
+                   'optimizer_state_dict' : optimizer.state_dict(),
+                   'loss' : loss,
+                   'tallies' : tallies
+                   }
+        torch.save(to_save, dest_path)
+        
+    #------------------------------------
+    # load_model_checkpoint 
+    #-------------------
+    
+    def load_model_checkpoint(self, src_path, fresh_model, fresh_optimizer):
+        '''
+        Restore a model previously saved using
+        save_model_checkpoint() such that training 
+        can resume.
+        
+        @param src_path: path where the checkpoint is stored
+        @type src_path: str
+        @param fresh_model: a new, uninitialized instance of the model used
+        @type fresh_model: torch model
+        @param fresh_optimizer: a new, uninitialized instance of the optimizer used
+        @type fresh_optimizer: torch optimizer
+        @return: dict with the initialized model, 
+            optimizer, last completed epoch, most recent
+            loss measure, and dict of statistics tallies (precision/recall, etc.) 
+        @rtype {str : *}
+        '''
+
+        checkpoint = torch.load(src_path)
+        fresh_model.load_state_dict(checkpoint['model_state_dict'])
+        fresh_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        new_state = {'model' : fresh_model,
+                     'optimizer' : fresh_optimizer, 
+                     'epoch' : checkpoint['epoch'],
+                     'loss'  : checkpoint['loss'],
+                     'tallies' : checkpoint['tallies']
+                     }
+        return new_state
+
+
     
 # ---------------------- Resnet18Grayscale ---------------
 
@@ -1011,6 +1121,9 @@ if __name__ == '__main__':
                         help="Used only by launch.py script! Indicate that script started via launch_training.py",
                         default=False
                         )
+    parser.add_argument('-r', '--resume',
+                        help='fully qualified file name to a previously saved checkpoint; if not provided, start training from scratch',
+                        default='');
     parser.add_argument('snippet_db_path',
                         type=str,
                         help='path to sqlite db file holding info about each snippet')
@@ -1035,4 +1148,4 @@ if __name__ == '__main__':
                        batch_size=args.batchsize,
                        started_from_launch=args.started_from_launch,
                        logfile=args.logfile
-                       ).train(args.epochs)
+                       ).train(args.epochs,checkpoint_path=args.resume)

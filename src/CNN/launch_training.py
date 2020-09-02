@@ -326,7 +326,10 @@ def parse_args():
 
     # Rest of args are for the training program:
     parser.add_argument('training_script_args', nargs=REMAINDER)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if type(args.training_script) == list:
+            args.training_script = args.training_script[0]
+    return args
 
 #------------------------------------
 # main
