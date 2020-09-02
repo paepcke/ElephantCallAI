@@ -77,15 +77,24 @@ class SpectrogramTrainer(object):
     
     def __init__(self,
                  sqlite_db_path,
-                 batch_size=Defaults.BATCH_SIZE,
-                 decision_threshold=Defaults.THRESHOLD,
+                 batch_size=None,
+                 decision_threshold=None,
                  started_from_launch=False,
                  testing_cuda_on_cpu=False,
                  logfile=None,
                  seed=None
                  ):
 
-        self.batch_size = batch_size
+        if batch_size is None:
+            self.batch_size = Defaults.BATCH_SIZE
+        else:
+            self.batch_size = batch_size
+        
+        if decision_threshold is None:
+            decision_threshold = Defaults.THRESHOLD
+        else:
+            decision_threshold = decision_threshold
+            
         if seed is not None:
             self.set_seed(seed)
 
@@ -132,12 +141,14 @@ class SpectrogramTrainer(object):
 
         if logfile is None:
             default_logfile_name = os.path.join(os.path.dirname(__file__), 
-                                                'bert_train.log' if self.local_rank is None 
-                                                else f'bert_train_{self.local_rank}.log'
+                                                'spectro_train.log' if self.local_rank is None 
+                                                else f'spectro_train_{self.local_rank}.log'
                                                 )
             self.log = LoggingService(logfile=default_logfile_name)
+            print(f"Logging to {default_logfile_name}...")
         elif logfile == 'stdout':
             self.log = LoggingService()
+            print(f"Logging to stdout...")
         else:
             # Logfile name provided by caller. Still
             # need to disambiguate between multiple processes,
@@ -146,6 +157,7 @@ class SpectrogramTrainer(object):
                 (logfile_root, ext) = os.path.splitext(logfile)
                 logfile = f"{logfile_root}_{self.local_rank}{ext}"
             self.log = LoggingService(logfile=logfile)
+            print(f"Logging to {logfile}...")
         
         # The following call also sets self.gpu_obj
         # to a GPUtil.GPU instance, so we can check
@@ -201,15 +213,15 @@ class SpectrogramTrainer(object):
             # CPU bound, single machine:
 
             self.dataloader = SpectrogramDataloader(dataset, 
-                                                    batch_size=batch_size)
+                                                    batch_size=self.batch_size)
         else:
             # GPUSs used, single or multiple machines:
             
-            self.train_dataloader = MultiprocessingDataloader(dataset,
-                                                              self.world_size,
-                                                              self.node_rank, 
-                                                              batch_size=self.batch_size
-                                                              )
+            self.dataloader = MultiprocessingDataloader(dataset,
+                                                        self.world_size,
+                                                        self.node_rank, 
+                                                        batch_size=self.batch_size
+                                                        )
 
         # Make a one-channel model with probability
         # decision boundary found in the parameters file:
@@ -987,6 +999,11 @@ if __name__ == '__main__':
                         type=int,
                         help=f'how many epochs to run; default: {Defaults.NUM_EPOCHS}',
                         default=Defaults.NUM_EPOCHS)
+    parser.add_argument('--started_from_launch',
+                        action='store_true',
+                        help="Used only by launch.py script! Indicate that script started via launch_training.py",
+                        default=False
+                        )
     parser.add_argument('snippet_db_path',
                         type=str,
                         help='path to sqlite db file holding info about each snippet')
@@ -1009,5 +1026,6 @@ if __name__ == '__main__':
     SpectrogramTrainer(
                        args.snippet_db_path,
                        batch_size=args.batchsize,
+                       started_from_launch=args.started_from_launch,
                        logfile=args.logfile
                        ).train(args.epochs)
