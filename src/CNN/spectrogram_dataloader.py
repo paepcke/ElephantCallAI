@@ -205,6 +205,17 @@ class SpectrogramDataloader(DataLoader):
         self.dataset.switch_to_split(split_id)
 
     #------------------------------------
+    # num_samples
+    #-------------------
+    
+    def num_samples(self):
+        '''
+        Return total number of samples in underlying
+        dataset.
+        '''
+        return len(self.dataset)
+
+    #------------------------------------
     # __len__ 
     #-------------------
 

@@ -642,14 +642,21 @@ class SpectrogramTrainer(object):
         previous_validation_accuracies = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
         previous_validation_fscores = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
         previous_validation_losses = deque(maxlen=Defaults.TRAIN_STOP_ITERATIONS)
-    
+
         try:
             for epoch in range(starting_epoch, num_epochs):
                 
                 # Start a new k-fold cross_validation run for
                 # each epoch:
                 self.dataloader.kfold_stratified(shuffle=True)
-                
+
+                self.log.info(f"Number of training samples: {self.dataloader.num_samples()}")
+                self.log.info(f"Batch size: {self.batch_size}")
+                self.log.info(f"Batches in training set: {len(self.dataloader)}")
+                self.dataloader.switch_to_split('validate')
+                self.log.info(f"Batches in validation set: {len(self.dataloader)}")
+                self.dataloader.switch_to_split('train')
+
                 self.log.info (f'Epoch [{epoch + 1}/{num_epochs}]')
     
                 train_epoch_results = self.train_epoch(include_boundaries)
