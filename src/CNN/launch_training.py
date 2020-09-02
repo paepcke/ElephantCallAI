@@ -314,8 +314,11 @@ def parse_args():
                         help=f"do not print status and other info messages",
                         default=False
                         )
-
-    parser.add_argument("--training_script", type=str,
+    # Allow training script to run everywhere
+    # to be defaulted even though it is positional
+    # (the '?'). 
+    parser.add_argument("training_script", type=str,
+                        nargs=1,
                         default=training_script,
                         help=f"Default {os.path.basename(training_script)}: Add training script arguments after the above: \n"
                              f"\n{script_help}"
@@ -331,6 +334,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+    
+    #*********
+    print("CLI Arguments:")
+    for key in vars(args):
+        print(f"{key}: {getattr(args, key)}")
+    #*********
 
     # world size is number of processes, which is
     # equal to number of GPUs used on all machines with
