@@ -164,6 +164,9 @@ class SpectrogramTrainer(object):
                                                 else f'spectro_train_{self.local_rank}.log'
                                                 )
             self.log = LoggingService(logfile=default_logfile_name)
+            # In case there already was a logging instance,
+            # ensure this new logging file is set:
+            self.log.log_file(default_logfile_name)
             print(f"Logging to {default_logfile_name}...")
         elif logfile == 'stdout':
             self.log = LoggingService()
@@ -176,6 +179,10 @@ class SpectrogramTrainer(object):
                 (logfile_root, ext) = os.path.splitext(logfile)
                 logfile = f"{logfile_root}_{self.local_rank}{ext}"
             self.log = LoggingService(logfile=logfile)
+            # In case there already was a logging instance,
+            # ensure this new logging file is set:
+            self.log.log_file(logfile)
+            
             print(f"Logging to {logfile}...")
         
         # The following call also sets self.gpu_obj
