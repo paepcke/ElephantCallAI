@@ -5,8 +5,6 @@ import aifc
 from scipy import signal
 from torch.utils import data
 from torchvision import transforms
-from scipy.misc import imresize
-import pandas as pd
 import os
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.preprocessing import StandardScaler, MinMaxScaler

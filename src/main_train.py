@@ -28,7 +28,7 @@ from collections import deque
 from models import get_model
 from loss import get_loss
 from train import train
-from utils import create_save_path
+from utils import create_save_path, create_dataset_path
 
 parser = argparse.ArgumentParser()
 
@@ -62,28 +62,17 @@ def main():
             train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
             test_data_path = parameters.REMOTE_BAI_TEST_FILES
 
-    train_data_path += 'Neg_Samples_x' + str(parameters.NEG_SAMPLES) + "_Seed_" + str(parameters.DATASET_SEED) + \
-                        "_CallRepeats_" + str(parameters.CALL_REPEATS)
-    # Probably make call repeats and neg samples default to 1 for test data!!!!
-    test_data_path += "Neg_Samples_x" + str(parameters.TEST_NEG_SAMPLES) + "_Seed_" + str(parameters.DATASET_SEED) + \
-                    "_CallRepeats_" + str(1)
     
-    # Include boundary uncertainty in training
-    include_boundaries = False
-    if parameters.LOSS.upper() == "BOUNDARY":
-        include_boundaries = True
-        train_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
-        test_data_path += "_FudgeFact_" + str(parameters.BOUNDARY_FUDGE_FACTOR) + "_Individual-Boarders_" + str(parameters.INDIVIDUAL_BOUNDARIES)
-
-    shift_windows = False
-    if parameters.SHIFT_WINDOWS:
-        shift_windows = True
-        train_data_path += '_OversizeCalls'
+    train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
+                                                                    call_repeats=parameters.CALL_REPEATS, 
+                                                                    shift_windows=parameters.SHIFT_WINDOWS)
+    test_data_path, _ = create_dataset_path(test_data_path, neg_samples=parameters.TEST_NEG_SAMPLES, 
+                                                                call_repeats=1)
     
     
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 
-                                        include_boundaries=include_boundaries, shift_windows=shift_windows)
+                                        include_boundaries=include_boundaries, shift_windows=parameters.SHIFT_WINDOWS)
     test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
 
