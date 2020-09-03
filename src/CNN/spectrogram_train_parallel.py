@@ -1195,7 +1195,7 @@ if __name__ == '__main__':
                         help="Used only by launch.py script! Indicate that script started via launch_training.py",
                         default=False
                         )
-    parser.add_argument('-r', '--resum'e,
+    parser.add_argument('-r', '--resume',
                         help='fully qualified file name to a previously saved checkpoint; if not provided, start training from scratch',
                         default='');
     parser.add_argument('snippet_db_path',
