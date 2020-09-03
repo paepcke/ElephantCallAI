@@ -32,7 +32,8 @@ PREDICTION_SLIDE_LENGTH = 64
 ##############################
 #### Model_0 / Solo Model ####
 ##############################
-MODEL_ID = 17
+''' 28 = window size 512 '''
+MODEL_ID = 28
 PRE_TRAIN = False
 
 ################################
@@ -48,6 +49,7 @@ CALL_REPEATS = 1
 NORM = "norm"
 SCALE = True # Log scale the spectrograms
 SHIFT_WINDOWS = False
+CHUNK_SIZE = 512
 
 #######################################
 #### Hierarchical Model Parameters ####
@@ -136,7 +138,6 @@ REMOTE_FULL_TEST_BAI = '/home/data/elephants/processed_data/Test_bai/Full_24_hrs
 LOCAL_SAVE_PATH = '../models/'
 REMOTE_SAVE_PATH = '/home/data/elephants/models/'
 
-CHUNK_SIZE = 256
 INPUT_SIZE = 77
 OUTPUT_SIZE = 1
 
@@ -313,6 +314,12 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         'compress_factors': [1, 2, 2, 2],
         'num_filters': [32, 64, 64, 128]
-        }
+        },
+28: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
 }
 

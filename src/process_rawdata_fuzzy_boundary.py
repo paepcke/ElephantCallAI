@@ -603,6 +603,9 @@ if __name__ == '__main__':
     
     if args.oversize:
         out_dir += '_OversizeCalls'
+
+    if args.window != 256:
+        out_dir += '_WindowSize-' + str(args.window)
     
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)

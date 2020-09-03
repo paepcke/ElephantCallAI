@@ -94,6 +94,8 @@ def get_model(model_id):
         return Model27(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT,
                     compress_factors=parameters.HYPERPARAMETERS[27]['compress_factors'], 
                     num_filters=parameters.HYPERPARAMETERS[27]['num_filters'])
+    elif model_id == 28:
+        return Model28(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -1574,4 +1576,32 @@ class Model27(nn.Module):
         logits = self.out(linear_out)
 
         return logits
+
+"""
+ResNet-18 for window size of 512!
+"""
+class Model28(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model28, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 512),
+           nn.ReLU(inplace=True),
+           nn.Linear(512, 512)) # This is hard coded to the size of the training windows
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        return out
+
 

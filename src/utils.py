@@ -73,6 +73,9 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     save_path += "TestNegFactor-x" + str(parameters.TEST_NEG_SAMPLES) + "_"
     save_path += "Loss-" + parameters.LOSS + "_"
 
+    if parameters.CHUNK_SIZE != 256:
+        save_path += "WindowSize-" + str(parameters.CHUNK_SIZE) + "_"
+
     if parameters.LOSS.upper() == "FOCAL":
         save_path += "Alpha-" + str(parameters.FOCAL_ALPHA) + "_"
         save_path += "Gamma-" + str(parameters.FOCAL_GAMMA) + "_"
@@ -141,6 +144,9 @@ def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=
 
     if shift_windows:
         init_path += '_OversizeCalls'
+
+    if parameters.CHUNK_SIZE != 256:
+        init_path += '_WindowSize-' + str(parameters.CHUNK_SIZE)
 
     return init_path, include_boundaries
 
