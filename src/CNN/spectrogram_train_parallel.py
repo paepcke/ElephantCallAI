@@ -166,7 +166,7 @@ class SpectrogramTrainer(object):
             self.log = LoggingService(logfile=default_logfile_name)
             # In case there already was a logging instance,
             # ensure this new logging file is set:
-            self.log.log_file(default_logfile_name)
+            self.log.log_file = default_logfile_name
             print(f"Logging to {default_logfile_name}...")
         elif logfile == 'stdout':
             self.log = LoggingService()
@@ -181,7 +181,7 @@ class SpectrogramTrainer(object):
             self.log = LoggingService(logfile=logfile)
             # In case there already was a logging instance,
             # ensure this new logging file is set:
-            self.log.log_file(logfile)
+            self.log.log_file = logfile
             
             print(f"Logging to {logfile}...")
         
