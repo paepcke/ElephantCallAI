@@ -473,8 +473,10 @@ def main():
                                  args.training_script_args
         cmd.extend(args_for_train_scripts)
 
-        #process = subprocess.Popen(cmd, env=current_env)
-        newstdin = os.fdopen(os.dup(sys.stdin.fileno()))        
+        # Copy stdin, and give the copy to the subprocess.
+        # This enables the subprocess to ask user whether
+        # to save training state in case of a cnt-C:
+        newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
         process = subprocess.run(cmd, stdin=newstdin, env=current_env)
         processes.append(process)
     
@@ -485,10 +487,7 @@ def main():
         else:
             print(f"Awaiting {world_layout['localhost']} processes to finish...")     
     for process in processes:
-        try:
-            process.wait()
-        except KeyboardInterrupt:
-            sys.exit(1)
+        process.wait()
         if process.returncode != 0:
             raise subprocess.CalledProcessError(returncode=process.returncode,
                                                 cmd=cmd)

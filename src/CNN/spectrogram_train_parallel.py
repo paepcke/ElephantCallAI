@@ -23,6 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.models.resnet import ResNet, BasicBlock
 import GPUtil
 
+import signal
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -49,6 +51,10 @@ class TrainError(Exception):
     # Error in the train/validate loop
     pass
 
+class InterruptTraining(Exception):
+    # Used to handle cnt-C
+    pass
+
 # ------------------------ SpectrogramTrainer --------
 
 class SpectrogramTrainer(object):
@@ -66,6 +72,10 @@ class SpectrogramTrainer(object):
     
     STRIDE = 2
     NUM_CHANNELS = 1
+    
+    # Flag for subprocess to offer model saving,
+    # and quitting. Used to handle cnt-C graciously:
+    STOP = False
     
     # Device number for CPU (as opposed to GPUs, which 
     # are numbered as positive ints:
@@ -85,6 +95,15 @@ class SpectrogramTrainer(object):
                  seed=None
                  ):
 
+        # Install signal handler for cnt-C:
+        # It will set the class var STOP,
+        # which we check periodically during
+        # training and evaluation. When seen
+        # to be True, offers training state
+        # save:
+
+        signal.signal(signal.SIGINT, self.request_interrupt_training)
+        
         if batch_size is None:
             self.batch_size = Defaults.BATCH_SIZE
         else:
@@ -528,17 +547,34 @@ class SpectrogramTrainer(object):
             labels_tns   = labels_tns.to(self.model.device())
     
             # Forward pass
-            # The unsqueeze() adds a dimension
-            # for holding the batch_size?
+            
+            # Pending STOP request? Check before
+            # the lengthy operation:
+            if SpectrogramTrainer.STOP:
+                raise InterruptTraining()
+            
             pred_prob_tns = self.model(spectros_tns)
+            
+            # Pending STOP request?
+            if SpectrogramTrainer.STOP:
+                raise InterruptTraining()
             
             # The Binary Cross Entropy function wants 
             # equal datatypes for prediction and targets:
             
             labels_tns = labels_tns.float()
             loss =  self.loss_func(pred_prob_tns, labels_tns)
+            
+            # Pending STOP request?
+            if SpectrogramTrainer.STOP:
+                raise InterruptTraining()
+
             loss.backward()
             self.optimizer.step()
+
+            # Pending STOP request?
+            if SpectrogramTrainer.STOP:
+                raise InterruptTraining()
     
             # Free GPU memory:
             spectros_tns = spectros_tns.to('cpu')
@@ -688,6 +724,12 @@ class SpectrogramTrainer(object):
 
                 self.log.info (f'Epoch [{epoch + 1}/{num_epochs}]')
     
+                # In case user cnt-Cs out during this training
+                # epoch: ensure that epoch loss is set; we rely
+                # on that in the interrupt handling (where
+                # model save is offered):
+
+                train_epoch_results = {'train_epoch_loss' : None}
                 train_epoch_results = self.train_epoch(include_boundaries)
 
                 #Logging
@@ -780,13 +822,14 @@ class SpectrogramTrainer(object):
                 dest_dir  = os.path.dirname(dest_path)
                 if not os.path.exists(dest_dir):
                     os.makedirs(dest_dir)
-                self.save_model(dest_path,
-                                self.model,
-                                self.optimizer,
-                                epoch-1 if epoch > 0 else 0,
-                                train_epoch_results['train_epoch_loss']
-                                )
-            sys.exit()
+                self.save_model_checkpoint(dest_path,
+                                		   self.model,
+                                		   self.optimizer,
+                                		   epoch-1 if epoch > 0 else 0,
+                                		   train_epoch_results['train_epoch_loss'],
+                                           self.tallies
+                                        )
+            sys.exit(0)
     
         msg = (f"\nBest val Acc    {res_obj.best_valid_acc.item():.4f}\n"
                f"Best val fscore    {res_obj.best_valid_fscore.item():.4f}\n"
@@ -800,6 +843,21 @@ class SpectrogramTrainer(object):
         return res_obj
 
     # ------------- Utils -----------
+
+    #------------------------------------
+    # request_interrupt_training
+    #-------------------
+
+    def request_interrupt_training(self):
+        '''
+        Interrupt handler for cnt-C (SIGINT). 
+        Set STOP flag. Training checks that flag
+        periodically, and raises the InterruptTraining
+        exception. That in turn asks user whether to
+        save current training state for later resumption
+        '''
+        self.log.info("Requesting training interruption; waiting for clean point to interrupt...")
+        SpectrogramTrainer.STOP = True
 
     #------------------------------------
     # offer_model_save
