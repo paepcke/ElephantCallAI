@@ -473,7 +473,9 @@ def main():
                                  args.training_script_args
         cmd.extend(args_for_train_scripts)
 
-        process = subprocess.Popen(cmd, env=current_env)
+        #process = subprocess.Popen(cmd, env=current_env)
+        newstdin = os.fdopen(os.dup(sys.stdin.fileno()))        
+        process = subprocess.run(cmd, stdin=newstdin, env=current_env)
         processes.append(process)
     
     if not args.quiet:
@@ -483,7 +485,10 @@ def main():
         else:
             print(f"Awaiting {world_layout['localhost']} processes to finish...")     
     for process in processes:
-        process.wait()
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            sys.exit(1)
         if process.returncode != 0:
             raise subprocess.CalledProcessError(returncode=process.returncode,
                                                 cmd=cmd)

@@ -524,8 +524,8 @@ class SpectrogramTrainer(object):
             # Put input and labels to where the
             # model is:
                  
-            spectros_tns.to(self.model.device())
-            labels_tns.to(self.model.device())
+            spectros_tns = spectros_tns.to(self.model.device())
+            labels_tns   = labels_tns.to(self.model.device())
     
             # Forward pass
             # The unsqueeze() adds a dimension
@@ -541,9 +541,9 @@ class SpectrogramTrainer(object):
             self.optimizer.step()
     
             # Free GPU memory:
-            spectros_tns.to('cpu')
-            labels_tns.to('cpu')
-            pred_prob_tns.to('cpu')
+            spectros_tns = spectros_tns.to('cpu')
+            labels_tns   = labels_tns.to('cpu')
+            pred_prob_tns = pred_prob_tns.to('cpu')
 
             self.tallies = self.tally_result(labels_tns, pred_prob_tns, loss, self.tallies) 
 
@@ -774,7 +774,7 @@ class SpectrogramTrainer(object):
     
         except KeyboardInterrupt:
             self.log.info("Early stopping due to keyboard intervention")
-            do_save = input("Save partially trained model (Y/n): ")
+            do_save = self.offer_model_save()
             if do_save in ('y','Y','yes','Yes', ''):
                 dest_path = input("Destination path: ")
                 dest_dir  = os.path.dirname(dest_path)
@@ -801,6 +801,14 @@ class SpectrogramTrainer(object):
 
     # ------------- Utils -----------
 
+    #------------------------------------
+    # offer_model_save
+    #-------------------
+
+    def offer_model_save(self):
+        do_save = input("Save partially trained model? (Y/n): ")
+        return do_save
+    
     #------------------------------------
     # is_eval_epoch 
     #-------------------
