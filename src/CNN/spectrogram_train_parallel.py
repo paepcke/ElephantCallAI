@@ -282,7 +282,7 @@ class SpectrogramTrainer(object):
     #-------------------
     
     def to_best_device(self, item):
-        if self.device == 'cuda':
+        if self.device == torch.device('cuda'):
             item.to(device=self.cuda)
         else:
             item.to(device=self.cpu)
@@ -555,6 +555,11 @@ class SpectrogramTrainer(object):
             
             pred_prob_tns = self.model(spectros_tns)
             
+            # Free GPU memory:
+            spectros_tns = spectros_tns.to('cpu')
+            labels_tns   = labels_tns.to('cpu')
+            pred_prob_tns = pred_prob_tns.to('cpu')
+        
             # Pending STOP request?
             if SpectrogramTrainer.STOP:
                 raise InterruptTraining()
@@ -576,11 +581,6 @@ class SpectrogramTrainer(object):
             if SpectrogramTrainer.STOP:
                 raise InterruptTraining()
     
-            # Free GPU memory:
-            spectros_tns = spectros_tns.to('cpu')
-            labels_tns   = labels_tns.to('cpu')
-            pred_prob_tns = pred_prob_tns.to('cpu')
-
             self.tallies = self.tally_result(labels_tns, pred_prob_tns, loss, self.tallies) 
 
             train_epoch_loss = self.tallies['running_loss'] / (idx + 1)
@@ -642,10 +642,17 @@ class SpectrogramTrainer(object):
                 labels_tns.to(self.model.device())
         
                 # Forward pass
-                # The unsqueeze() adds a dimension
-                # for holding the batch_size?
+                
+                # Pending STOP request?
+                if SpectrogramTrainer.STOP:
+                    raise InterruptTraining()
+                
                 pred_prob_tns = self.model(spectros_tns)
                 
+                # Pending STOP request?
+                if SpectrogramTrainer.STOP:
+                    raise InterruptTraining()
+
                 # The Binary Cross Entropy function wants 
                 # equal datatypes for prediction and targets:
                 
@@ -688,13 +695,14 @@ class SpectrogramTrainer(object):
 
         # Resume training?
         if len(checkpoint_path) > 0:
+            self.log.info(f"Resuming training from {checkpoint_path}:")
             checkpoint = self.load_model_checkpoint(checkpoint_path, 
                                                     self.model,
                                                     self.optimizer
                                                     )
             self.model = checkpoint['model']
             self.optimizer = checkpoint['optimizer']
-            self.starting_epoch = checkpoint['epoch']
+            starting_epoch = checkpoint['epoch']
             self.tallies = checkpoint['tallies']
         else:
             starting_epoch = 0
@@ -814,7 +822,7 @@ class SpectrogramTrainer(object):
     
                 self.log.info(f'Finished Epoch [{epoch + 1}/{num_epochs}] - Total Time: {(time.time()-train_start_time)/60}')
     
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, InterruptTraining):
             self.log.info("Early stopping due to keyboard intervention")
             do_save = self.offer_model_save()
             if do_save in ('y','Y','yes','Yes', ''):
@@ -848,7 +856,7 @@ class SpectrogramTrainer(object):
     # request_interrupt_training
     #-------------------
 
-    def request_interrupt_training(self):
+    def request_interrupt_training(self, signum, stacktrace):
         '''
         Interrupt handler for cnt-C (SIGINT). 
         Set STOP flag. Training checks that flag
@@ -1187,7 +1195,7 @@ if __name__ == '__main__':
                         help="Used only by launch.py script! Indicate that script started via launch_training.py",
                         default=False
                         )
-    parser.add_argument('-r', '--resume',
+    parser.add_argument('-r', '--resum'e,
                         help='fully qualified file name to a previously saved checkpoint; if not provided, start training from scratch',
                         default='');
     parser.add_argument('snippet_db_path',

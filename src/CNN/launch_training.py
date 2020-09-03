@@ -6,10 +6,11 @@ import argparse
 import json
 from json.decoder import JSONDecodeError
 import os
+import sys
 import re
 import socket
 import subprocess
-import sys
+import signal
 
 import GPUtil
 
@@ -477,7 +478,7 @@ def main():
         # This enables the subprocess to ask user whether
         # to save training state in case of a cnt-C:
         newstdin = os.fdopen(os.dup(sys.stdin.fileno()))
-        process = subprocess.run(cmd, stdin=newstdin, env=current_env)
+        process = subprocess.Popen(cmd, stdin=newstdin, env=current_env)
         processes.append(process)
     
     if not args.quiet:
@@ -485,7 +486,10 @@ def main():
         if node_rank == 0:
             print(f"Awaiting {sum(world_layout.values())} processes to finish...")
         else:
-            print(f"Awaiting {world_layout['localhost']} processes to finish...")     
+            print(f"Awaiting {world_layout['localhost']} processes to finish...")
+    
+    # Let subprocesses deal with cnt-C (keyboard interrupt):
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     for process in processes:
         process.wait()
         if process.returncode != 0:
