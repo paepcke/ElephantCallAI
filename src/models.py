@@ -807,6 +807,9 @@ class Model17(nn.Module):
         if loss.lower() == "focal":
             print("USING FOCAL LOSS INITIALIZATION")
             print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            # Initialize the final bias layer so that initially we predict
+            # everything very negative --> sig(neg) << 0.5. Thus we inflate
+            # the weighting for all pos. samples.
             self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
 
 

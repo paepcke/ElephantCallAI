@@ -51,24 +51,42 @@ parser.add_argument('--pre_train', type=str,
 def main():
     args = parser.parse_args()
 
+    use_focal = False
+    if parameters.LOSS.lower() == "focal" or parameters.LOSS.lower() == "focal_chunk":
+        use_focal = True
+
     if args.local_files:
-        train_data_path = parameters.LOCAL_TRAIN_FILES
-        test_data_path = parameters.LOCAL_TEST_FILES
+        if use_focal:
+            train_data_path = parameters.LOCAL_FULL_TRAIN
+            test_data_path = parameters.LOCAL_FULL_TEST
+        else:
+            train_data_path = parameters.LOCAL_TRAIN_FILES
+            test_data_path = parameters.LOCAL_TEST_FILES
     else:
         if parameters.DATASET.lower() == "noab":
-            train_data_path = parameters.REMOTE_TRAIN_FILES
-            test_data_path = parameters.REMOTE_TEST_FILES
+            if use_focal:
+                train_data_path = parameters.REMOTE_FULL_TRAIN
+                test_data_path = parameters.REMOTE_FULL_TEST
+            else:
+                train_data_path = parameters.REMOTE_TRAIN_FILES
+                test_data_path = parameters.REMOTE_TEST_FILES
         else:
-            train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
-            test_data_path = parameters.REMOTE_BAI_TEST_FILES
+            if use_focal:
+                train_data_path = parameters.REMOTE_FULL_TRAIN_BAI
+                test_data_path = parameters.REMOTE_FULL_TEST_BAI
+            else:
+                train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
+                test_data_path = parameters.REMOTE_BAI_TEST_FILES
 
     
-    train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
-                                                                    call_repeats=parameters.CALL_REPEATS, 
-                                                                    shift_windows=parameters.SHIFT_WINDOWS)
-    test_data_path, _ = create_dataset_path(test_data_path, neg_samples=parameters.TEST_NEG_SAMPLES, 
+    if use_focal:
+        include_boundaries = False
+    else:
+        train_data_path, include_boundaries = create_dataset_path(train_data_path, neg_samples=parameters.NEG_SAMPLES, 
+                                                                        call_repeats=parameters.CALL_REPEATS, 
+                                                                        shift_windows=parameters.SHIFT_WINDOWS)
+        test_data_path, _ = create_dataset_path(test_data_path, neg_samples=parameters.TEST_NEG_SAMPLES, 
                                                                 call_repeats=1)
-    
     
     train_loader = get_loader_fuzzy(train_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, 

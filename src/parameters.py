@@ -33,7 +33,7 @@ PREDICTION_SLIDE_LENGTH = 64
 #### Model_0 / Solo Model ####
 ##############################
 ''' 28 = window size 512 '''
-MODEL_ID = 28
+MODEL_ID = 17
 PRE_TRAIN = False
 
 ################################
@@ -74,11 +74,11 @@ HIERARCHICAL_SHIFT_WINDOWS = False
 ################################
 #### Loss function criteria ####
 ################################
-LOSS = "CE"
-CHUNK_WEIGHTING = "count"
+LOSS = "focal_chunk"
+CHUNK_WEIGHTING = "avg"
 FOCAL_WEIGHT_INIT = 0.01 
 FOCAL_GAMMA = 2
-FOCAL_ALPHA = 0.75
+FOCAL_ALPHA = 0.25
 
 ###############################################
 #### Adversarial Inner Outer Loop Training ####
