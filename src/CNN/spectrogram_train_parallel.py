@@ -10,7 +10,7 @@ Jonathan and Nikita's Code.
 import argparse
 from collections import deque
 import sys, os
-import time
+from datetime import datetime
 
 import numpy as np
 import random        # Just so we can fix seed for testing
@@ -270,6 +270,9 @@ class SpectrogramTrainer(object):
         
         # Default dest dir: ./runs
         self.writer = SummaryWriter(log_dir=None)
+        tb_dir = os.path.join(os.path.dirname(__file__), './runs')
+        
+        self.log.info(f"Tensorboard info will be at {tb_dir}")
 
         # Optimizer:
         self.optimizer = optim.SGD(self.model.parameters(), 
@@ -534,7 +537,7 @@ class SpectrogramTrainer(object):
         self.model.train(True)
         self.dataloader.switch_to_split('train')
         
-        time_start = time.time()
+        time_start = datetime.now()
 
         # Get a zeroed out set of running tallies:
         self.tallies = self.zero_tallies(curr_tallies=self.tallies)
@@ -612,7 +615,7 @@ class SpectrogramTrainer(object):
             else:
                 train_epoch_fscore = torch.tensor(0.)
         
-        self.log.info(f"Epoch train time: {(time.time() - time_start) / 60}")
+        self.log.info(f"Epoch train time: {str(datetime.now() - time_start)}")
         return {'train_epoch_acc': train_epoch_acc, 'train_epoch_fscore': train_epoch_fscore, 
                 'train_epoch_loss': train_epoch_loss, 'train_epoch_precision':train_epoch_precision, 
                 'train_epoch_recall': train_epoch_recall} 
@@ -628,7 +631,7 @@ class SpectrogramTrainer(object):
         self.model.eval()
         self.dataloader.switch_to_split('validate')
         
-        time_start = time.time()
+        time_start = datetime.now()
         # Get a zeroed out set of running tallies:
         self.tallies = self.zero_tallies(curr_tallies=self.tallies)
     
@@ -645,8 +648,8 @@ class SpectrogramTrainer(object):
                 # Put input and labels to where the
                 # model is:
                      
-                spectros_tns.to(self.model.device())
-                labels_tns.to(self.model.device())
+                spectros_tns = spectros_tns.to(self.model.device())
+                labels_tns   = labels_tns.to(self.model.device())
         
                 # Forward pass
                 
@@ -667,9 +670,9 @@ class SpectrogramTrainer(object):
                 loss =  self.loss_func(pred_prob_tns, labels_tns)
                 
                 # Free GPU memory:
-                spectros_tns.to('cpu')
-                labels_tns.to('cpu')
-                pred_prob_tns.to('cpu')
+                spectros_tns = spectros_tns.to('cpu')
+                labels_tns   = labels_tns.to('cpu')
+                pred_prob_tns = pred_prob_tns.to('cpu')
 
                 self.tallies = self.tally_result(labels_tns, pred_prob_tns, loss, self.tallies) 
 
@@ -677,7 +680,6 @@ class SpectrogramTrainer(object):
         valid_epoch_acc = float(self.tallies['running_corrects']) / self.tallies['running_samples']
         #valid_epoch_fscore = running_fscore / (idx + 1)
     
-        # If this is zero issue a warning
         valid_epoch_precision = self.tallies['running_tp'] / self.tallies['running_tp_fp'] \
             if self.tallies['running_tp_fp'] > 0 else torch.tensor(1.)
         valid_epoch_recall = self.tallies['running_tp'] / self.tallies['running_tp_fn']
@@ -686,9 +688,11 @@ class SpectrogramTrainer(object):
         else:
             valid_epoch_fscore = torch.tensor(0.)
         
-        self.log.info(f"Epoch validation time: {(time.time() - time_start) / 60}")
-        return {'valid_epoch_acc': valid_epoch_acc, 'valid_epoch_fscore': valid_epoch_fscore, 
-                'valid_epoch_loss': valid_epoch_loss, 'valid_epoch_precision':valid_epoch_precision, 
+        self.log.info(f"Epoch validation time: {str(datetime.now() - time_start)}")
+        return {'valid_epoch_acc': valid_epoch_acc, 
+                'valid_epoch_fscore': valid_epoch_fscore, 
+                'valid_epoch_loss': valid_epoch_loss, 
+                'valid_epoch_precision':valid_epoch_precision, 
                 'valid_epoch_recall': valid_epoch_recall}
 
     #------------------------------------
@@ -714,7 +718,7 @@ class SpectrogramTrainer(object):
         else:
             starting_epoch = 0
 
-        train_start_time = time.time()
+        train_start_time = datetime.now()
         res_obj = TrainResult()
         
     
@@ -765,7 +769,7 @@ class SpectrogramTrainer(object):
                 self.writer.add_scalar('learning_rate', self.get_lr(self.scheduler), epoch)
     
                 if self.is_eval_epoch(epoch):
-                    
+
                     val_epoch_results = self.eval_epoch(include_boundaries) 
 
                     # Update the schedular
@@ -827,7 +831,7 @@ class SpectrogramTrainer(object):
                                           f"and less than best val f-score {res_obj.best_valid_fscore}")
                             break
     
-                self.log.info(f'Finished Epoch [{epoch + 1}/{num_epochs}] - Total Time: {(time.time()-train_start_time)/60}')
+                self.log.info(f'Finished Epoch [{epoch + 1}/{num_epochs}] - Total Time: {str(datetime.now()-train_start_time)}')
     
         except (KeyboardInterrupt, InterruptTraining):
             self.log.info("Early stopping due to keyboard intervention")

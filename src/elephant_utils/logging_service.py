@@ -76,7 +76,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
                  msg_identifier=None,
                  rotating_logs=True,
                  log_size=1000000,
-                 max_num_logs=500):
+                 max_num_logs=500,
+                 logger_name=None):
 
         '''
         Create a shared logging service.
@@ -102,6 +103,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         @param max_num_logs: max number of log files before 
             rotating.
         @type max_num_logs: int
+        @param logger_name: name by which this logger will be known.
+        @type logger_name: str
         '''
 
         self._logging_level = logging_level
@@ -111,7 +114,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
                            msg_identifier=msg_identifier,
                            rotating_logs=rotating_logs,
                            log_size=log_size,
-                           max_num_logs=max_num_logs)
+                           max_num_logs=max_num_logs,
+                           logger_name=logger_name)
         
         
     #-------------------------
@@ -150,7 +154,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
                                      LoggingService.msg_identifier, 
                                      LoggingService.rotating_logs, 
                                      LoggingService.log_size, 
-                                     LoggingService.max_num_logs
+                                     LoggingService.max_num_logs,
+                                     logger_name=self.logger.name
                                      )
 
     #-------------------------
@@ -172,7 +177,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
                       msg_identifier=None,
                       rotating_logs=True,
                       log_size=1000000,
-                      max_num_logs=500
+                      max_num_logs=500,
+                      logger_name=None
                       ):
         '''
         Set up the standard Python logger.
@@ -190,7 +196,6 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         # Save parms in case someone changes the
         # logfile on this logger later:
 
-        cls.log_file = logFile
         cls.msg_identifier = msg_identifier
         cls.rotating_logs  = rotating_logs
         cls.log_size       = log_size
@@ -198,7 +203,8 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         
         # Make the name of the logger be the name
         # of this file, without the .py extension:
-        (logger_name, _ext) = os.path.splitext(os.path.basename(__file__))
+        if logger_name is None:
+            (logger_name, _ext) = os.path.splitext(os.path.basename(__file__))
         LoggingService.logger = logging.getLogger(logger_name)
 
         # Create file handler if requested:

@@ -28,6 +28,7 @@ setup(
                         'soundfile',
                         'tensorboard>=2.3.0',
                         'GPUtil>=1.4.0',
+                        'logging-singleton>=0.0.3',
                         ],
 
     #dependency_links = ['https://github.com/DmitryUlyanov/Multicore-TSNE/tarball/master#egg=package-1.0']
