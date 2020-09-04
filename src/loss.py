@@ -79,8 +79,6 @@ class FocalLoss(nn.Module):
         # Get the actual values of pt = e ^ (log(pt)) from bce loss where we have -log(pt)
         pt = torch.exp(-bce_loss)
 
-        #print (pt[targets==1])
-        #print(targets)
         # Value of alpha for class 1 and 1 - alpha for class 0
         alpha = torch.tensor([1 - self.alpha, self.alpha]).to(parameters.device)
         # Select the appropriate alpha based on label y
@@ -131,7 +129,7 @@ class ChunkFocalLoss(nn.Module):
         """
         bce_loss = self.bce(inputs, targets)
         # Small hack for now!
-        bce_loss = bce_loss.view(self.batch_size, -1)
+        #bce_loss = bce_loss.view(self.batch_size, -1)
 
         pts = torch.exp(-bce_loss)
 
@@ -142,7 +140,7 @@ class ChunkFocalLoss(nn.Module):
         # Calculate chunk based loss
         # Should we do mean or not here?
         # chunk_loss = [batch_size, 1] ??
-        #chunk_loss = torch.mean(bce_loss, dim=1) # Why did I change to sum rather than mean???
+        #chunk_loss = torch.mean(bce_loss, dim=1) # Why did I change to sum rather than mean??? Maybe because was low signal?
         chunk_loss = torch.sum(bce_loss, dim=1)
         # Re-weight through focal loss scheme!
         # focal_loss = [batch_size, 1]
