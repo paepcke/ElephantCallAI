@@ -137,8 +137,21 @@ class LoggingService(metaclass=MetaLoggingSingleton):
     
     @log_file.setter
     def log_file(self, new_file):
-        #***** Should change the file. But no time for this now
+        
         self._log_file = new_file
+        # Remove the old logging handler.
+        # Doesn't throw error if it's not there:
+        LoggingService.logger.removeHandler(LoggingService.logging_handler)
+        # Make a whole new logger with the
+        # proper log file dest. This LoggingService 
+        # instance will still be the same: 
+        LoggingService.setup_logging(self.logging_level, 
+                                     new_file, 
+                                     LoggingService.msg_identifier, 
+                                     LoggingService.rotating_logs, 
+                                     LoggingService.log_size, 
+                                     LoggingService.max_num_logs
+                                     )
 
     #-------------------------
     # handlers 
@@ -173,7 +186,16 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         @param logFile: optional file path where to send log entries
         @type logFile: str
         '''
+        
+        # Save parms in case someone changes the
+        # logfile on this logger later:
 
+        cls.log_file = logFile
+        cls.msg_identifier = msg_identifier
+        cls.rotating_logs  = rotating_logs
+        cls.log_size       = log_size
+        cls.max_num_logs   = max_num_logs
+        
         # Make the name of the logger be the name
         # of this file, without the .py extension:
         (logger_name, _ext) = os.path.splitext(os.path.basename(__file__))
@@ -200,9 +222,9 @@ class LoggingService(metaclass=MetaLoggingSingleton):
         # Create formatter
         #formatter = logging.Formatter("%(name)s: %(asctime)s;%(levelname)s: %(message)s")
         if msg_identifier is None:
-            msg_identifier = os.path.basename(sys.argv[0])
+            cls.msg_identifier = os.path.basename(sys.argv[0])
 
-        formatter = logging.Formatter(f"{msg_identifier}({os.getpid()}): %(asctime)s;%(levelname)s: %(message)s")
+        formatter = logging.Formatter(f"{cls.msg_identifier}({os.getpid()}): %(asctime)s;%(levelname)s: %(message)s")
 
         handler.setFormatter(formatter)
         
@@ -211,6 +233,9 @@ class LoggingService(metaclass=MetaLoggingSingleton):
 
         # Add the handler to the logger
         LoggingService.logger.addHandler(handler)
+        # Remember handler obj so we can remove it if 
+        # a new logfile is requested:
+        cls.logging_handler = handler
         LoggingService.logger.setLevel(loggingLevel)
 
     #-------------------------
