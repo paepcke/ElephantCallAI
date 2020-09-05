@@ -29,6 +29,7 @@ Predictions/*
 Images/Jupyter_Visualizations/*
 Call_Predictions/*
 Writeups/*.pptx
+Curriculum_profiling/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

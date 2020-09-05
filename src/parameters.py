@@ -49,7 +49,7 @@ CALL_REPEATS = 1
 NORM = "norm"
 SCALE = True # Log scale the spectrograms
 SHIFT_WINDOWS = False
-CHUNK_SIZE = 512
+CHUNK_SIZE = 256
 
 #######################################
 #### Hierarchical Model Parameters ####
@@ -67,6 +67,9 @@ HIERARCHICAL_REPEATS = 1 # This should be deprecated!!!!!!
 HIERARCHICAL_REPEATS_POS = 1
 HIERARCHICAL_REPEATS_NEG = 1
 
+# If true, append FP examples to given negative samples
+HIERARCHICAL_ADD_FP = False
+
 ''' Whether window shifting as data-aug is used in training '''
 HIERARCHICAL_SHIFT_WINDOWS = False 
 
@@ -74,7 +77,7 @@ HIERARCHICAL_SHIFT_WINDOWS = False
 ################################
 #### Loss function criteria ####
 ################################
-LOSS = "focal_chunk"
+LOSS = "CE"
 CHUNK_WEIGHTING = "avg"
 FOCAL_WEIGHT_INIT = 0.01 
 FOCAL_GAMMA = 2

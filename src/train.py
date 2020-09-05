@@ -32,9 +32,6 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     # For focal loss purposes
     running_true_non_zero = 0
 
-    # TESTING FOCAL!!
-    hist_weights = np.zeros(20)
-
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
@@ -54,14 +51,11 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         logits = model(inputs).squeeze()
         # Include boundary positions if necessary
 
-        # Just for now to profile the focal loss
         if include_boundaries:
             boundary_masks = batch[2]
             loss = loss_func(logits, labels, boundary_masks)
         else:
-            loss, focal_weights = loss_func(logits, labels)
-
-        hist_weights += np.histogram(focal_weights.cpu().detach().numpy(), bins = np.linspace(0, 1, 21))[0]
+            loss = loss_func(logits, labels)
 
         #pdb.set_trace()
         loss.backward()
@@ -98,11 +92,6 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     # Update the schedular
     scheduler.step()
 
-    # Profiling focal loss
-    print ("Histogram of chunk weights")
-    print (hist_weights)
-    print (np.linspace(0, 1, 21))
-
     #Logging
     print ('Train Non-Zero: {}'.format(train_non_zero))
     print('Training loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
@@ -133,9 +122,6 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     # For focal loss purposes
     running_true_non_zero = 0
 
-    # TESTING FOCAL!!
-    hist_weights = np.zeros(20)
-
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
         for idx, batch in enumerate(dataloader):
@@ -158,10 +144,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
                 boundary_masks = batch[2]
                 loss = loss_func(logits, labels, boundary_masks)
             else:
-                loss, focal_weights = loss_func(logits, labels)
-
-            hist_weights += np.histogram(focal_weights.cpu().detach().numpy(), bins = np.linspace(0, 1, 21))[0]
-
+                loss = loss_func(logits, labels)
 
             running_true_non_zero += torch.sum(labels).item()
             running_loss += loss.item()
@@ -189,11 +172,6 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
         valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
     else:
         valid_epoch_fscore = 0
-
-    # Profiling focal loss
-    print ("Histogram of chunk weights")
-    print (hist_weights)
-    print (np.linspace(0, 1, 21))
 
     #Logging
     print ('Val Non-Zero: {}'.format(valid_non_zero))
@@ -291,3 +269,73 @@ def train(dataloaders, model, loss_func, optimizer,
     print ('Best val Loss: {:6f}'.format(best_valid_loss))
 
     return best_model_wts
+
+
+def train_curriculum(model, dataloaders, loss_func, optimizer,
+                                    scheduler, writer, epochs=5, include_boundaries=False):
+    """
+        This will likely evolve! For now just train and return model after "epochs" number 
+        of epochs
+    
+    """
+    
+    train_start_time = time.time()
+
+    dataset_sizes = {'train': len(dataloaders['train'].dataset), 
+                     'valid': len(dataloaders['valid'].dataset)}
+
+    best_valid_acc = 0.0
+    best_valid_fscore = 0.0
+    # Best precision and recall reflect
+    # the best fscore
+    best_valid_precision = 0.0
+    best_valid_recall = 0.0
+    best_valid_loss = float("inf")
+
+    try:
+        for epoch in range(epochs):
+            print ('Epoch [{}/{}]'.format(epoch + 1, epochs))
+
+            train_epoch_results = train_epoch(dataloaders['train'], model, loss_func, optimizer, scheduler, writer, include_boundaries)
+            ## Write train metrics to tensorboard
+            writer.add_scalar('train_epoch_loss', train_epoch_results['train_epoch_loss'], epoch)
+            writer.add_scalar('train_epoch_acc', train_epoch_results['train_epoch_acc'], epoch)
+            writer.add_scalar('train_epoch_fscore', train_epoch_results['train_epoch_fscore'], epoch)
+            writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
+
+            if is_eval_epoch(epoch):
+                val_epoch_results = eval_epoch(dataloaders['valid'], model, loss_func, writer, include_boundaries) 
+                ## Write val metrics to tensorboard
+                writer.add_scalar('valid_epoch_loss', val_epoch_results['valid_epoch_loss'], epoch)
+                writer.add_scalar('valid_epoch_acc', val_epoch_results['valid_epoch_acc'], epoch)
+                writer.add_scalar('valid_epoch_fscore', val_epoch_results['valid_epoch_fscore'], epoch)
+
+
+                if val_epoch_results['valid_epoch_acc'] > best_valid_acc:
+                    best_valid_acc = val_epoch_results['valid_epoch_acc']
+
+                if val_epoch_results['valid_epoch_fscore'] > best_valid_fscore:
+                    best_valid_fscore = val_epoch_results['valid_epoch_fscore']
+                    best_valid_precision = val_epoch_results['valid_epoch_precision']
+                    best_valid_recall = val_epoch_results['valid_epoch_recall']
+                    
+                if val_epoch_results['valid_epoch_loss'] < best_valid_loss:
+                    best_valid_loss = val_epoch_results['valid_epoch_loss'] 
+
+
+            print('Finished Epoch [{}/{}] - Total Time: {}.'.format(epoch + 1, epochs, (time.time()-train_start_time)/60))
+
+    except KeyboardInterrupt:
+        print("Early stopping due to keyboard intervention")
+
+    print('Best val Acc: {:4f}'.format(best_valid_acc))
+    print('Best val F-score: {:4f} with Precision: {:4f} and Recall: {:4f}'.format(best_valid_fscore, best_valid_precision, best_valid_recall))
+    print ('Best val Loss: {:6f}'.format(best_valid_loss))
+
+    model_weights = model.state_dict()
+
+    return model_weights
+
+
+
+
