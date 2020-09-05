@@ -147,10 +147,14 @@ class ChunkFocalLoss(nn.Module):
         focal_loss = chunk_weights * chunk_loss
         #focal_loss = (1 - chunk_weights)**self.gamma * chunk_loss
 
+        # Let us try to profile the focal loss a bit!
+
+
         if self.reduce:
             return torch.mean(focal_loss)
 
-        return focal_loss
+        # Just do this for now!!
+        return focal_loss, chunk_weights
 
 def avg_confidence_weighting(pts, weight):
     """

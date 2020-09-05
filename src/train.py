@@ -31,6 +31,9 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     # For focal loss purposes
     running_true_non_zero = 0
 
+    # TESTING FOCAL!!
+    hist_weights = np.zeros(21)
+
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
@@ -48,13 +51,16 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         # Forward pass
         # ONLY Squeeze the last dim!
         logits = model(inputs).squeeze()
-        # Are we zeroing out the hidden state in the model???
         # Include boundary positions if necessary
+
+        # Just for now to profile the focal loss
         if include_boundaries:
             boundary_masks = batch[2]
             loss = loss_func(logits, labels, boundary_masks)
         else:
-            loss = loss_func(logits, labels)
+            loss, focal_weights = loss_func(logits, labels)
+
+        hist_weights += np.histogram(x, bins = np.linspace(0, 1, 21))[0]
 
         #pdb.set_trace()
         loss.backward()
@@ -90,6 +96,11 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
 
     # Update the schedular
     scheduler.step()
+
+    # Profiling focal loss
+    print ("Histogram of chunk weights")
+    print (hist_weights)
+    print (np.linspace(0, 1, 21))
 
     #Logging
     print ('Train Non-Zero: {}'.format(train_non_zero))
