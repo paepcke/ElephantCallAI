@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score, get_precission_recall_values
 import time
 import parameters
@@ -60,7 +61,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         else:
             loss, focal_weights = loss_func(logits, labels)
 
-        hist_weights += np.histogram(x, bins = np.linspace(0, 1, 21))[0]
+        hist_weights += np.histogram(focal_weights.cpu().detatch().numpy(), bins = np.linspace(0, 1, 21))[0]
 
         #pdb.set_trace()
         loss.backward()
