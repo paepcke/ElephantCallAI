@@ -151,7 +151,7 @@ class ChunkFocalLoss(nn.Module):
 
 
         if self.reduce:
-            return torch.mean(focal_loss)
+            return torch.mean(focal_loss), chunk_weights
 
         # Just do this for now!!
         return focal_loss, chunk_weights

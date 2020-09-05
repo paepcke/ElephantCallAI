@@ -33,7 +33,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     running_true_non_zero = 0
 
     # TESTING FOCAL!!
-    hist_weights = np.zeros(21)
+    hist_weights = np.zeros(20)
 
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
@@ -61,7 +61,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         else:
             loss, focal_weights = loss_func(logits, labels)
 
-        hist_weights += np.histogram(focal_weights.cpu().detatch().numpy(), bins = np.linspace(0, 1, 21))[0]
+        hist_weights += np.histogram(focal_weights.cpu().detach().numpy(), bins = np.linspace(0, 1, 21))[0]
 
         #pdb.set_trace()
         loss.backward()
@@ -133,6 +133,9 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     # For focal loss purposes
     running_true_non_zero = 0
 
+    # TESTING FOCAL!!
+    hist_weights = np.zeros(20)
+
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
         for idx, batch in enumerate(dataloader):
@@ -155,7 +158,9 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
                 boundary_masks = batch[2]
                 loss = loss_func(logits, labels, boundary_masks)
             else:
-                loss = loss_func(logits, labels)
+                loss, focal_weights = loss_func(logits, labels)
+
+            hist_weights += np.histogram(focal_weights.cpu().detach().numpy(), bins = np.linspace(0, 1, 21))[0]
 
 
             running_true_non_zero += torch.sum(labels).item()
@@ -184,6 +189,11 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
         valid_epoch_fscore = (2 * valid_epoch_precision * valid_epoch_recall) / (valid_epoch_precision + valid_epoch_recall)
     else:
         valid_epoch_fscore = 0
+
+    # Profiling focal loss
+    print ("Histogram of chunk weights")
+    print (hist_weights)
+    print (np.linspace(0, 1, 21))
 
     #Logging
     print ('Val Non-Zero: {}'.format(valid_non_zero))
