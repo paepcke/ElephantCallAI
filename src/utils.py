@@ -131,6 +131,9 @@ def hierarchical_model_1_path():
     if parameters.FALSE_POSITIVE_THRESHOLD != 15:
         model_name += '_FalsePosThreshold-' + str(parameters.FALSE_POSITIVE_THRESHOLD)
 
+    if parameters.HIERARCHICAL_ADD_FP:
+        model_name += "_AddingFPs"
+
     return model_name
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):

@@ -229,9 +229,13 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     print ("++===============================++")
     # Update initialize_training to allow for loading back model_0!!
     # Update the negative examples of the training and validation datasets
-    print ("Replacing Negative Features")
-    train_loader.dataset.set_neg_features(adversarial_train_files)
-    test_loader.dataset.set_neg_features(adversarial_test_files)
+    print ("Updating Negative Features")
+    if HIERARCHICAL_ADD_FP:
+        train_loader.dataset.add_neg_features(adversarial_train_files)
+        test_loader.dataset.add_neg_features(adversarial_test_files)
+    else:
+        train_loader.dataset.set_neg_features(adversarial_train_files)
+        test_loader.dataset.set_neg_features(adversarial_test_files)
     # Create repeated dataset with fixed indeces
     #if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or parameters.HIERARCHICAL_REPEATS_NEG > 1:
     if parameters.HIERARCHICAL_REPEATS_POS != 1  or parameters.HIERARCHICAL_REPEATS_NEG != 1:

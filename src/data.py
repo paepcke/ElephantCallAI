@@ -193,6 +193,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.neg_features = neg_features
         self.intialize_data(init_pos=False, init_neg=True)
 
+    def add_neg_features(self, neg_features):
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features) + len(self.neg_features)))
+        self.neg_features += neg_features
+        self.intialize_data(init_pos=False, init_neg=True)
+
     def set_featues(self, pos_features, neg_features):
         print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_features)))
         print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features)))
