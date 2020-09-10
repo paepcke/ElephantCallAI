@@ -8,7 +8,7 @@ NUM_EPOCHS = 1000
 EVAL_PERIOD = 1
 BATCH_SIZE = 32 
 TRAIN_STOP_ITERATIONS = 30
-THRESHOLD = 0.5 # Note this is also used for evaluation!!
+THRESHOLD = 0.5 # Only used in training
 VERBOSE = False
 '''
     Which metric to track for early stopping
@@ -58,7 +58,7 @@ CHUNK_SIZE = 256
 FALSE_POSITIVE_THRESHOLD = 15 
 
 ''' Specify 'same' to keep training Model_0 '''
-HIERARCHICAL_MODEL = 17
+HIERARCHICAL_MODEL = 29
 HIERARCHICAL_PRE_TRAIN = False
 
 ''' Deptricated!!! '''
@@ -69,6 +69,9 @@ HIERARCHICAL_REPEATS_NEG = 1
 
 # If true, append FP examples to given negative samples
 HIERARCHICAL_ADD_FP = False
+
+# Use '2' label for FP model_0 predictions
+EXTRA_LABEL = True
 
 ''' Whether window shifting as data-aug is used in training '''
 HIERARCHICAL_SHIFT_WINDOWS = False 
@@ -319,6 +322,12 @@ HYPERPARAMETERS = {
         'num_filters': [32, 64, 64, 128]
         },
 28: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
+29: {
         'lr': 1e-3,
         'lr_decay_step': 4, 
         'lr_decay': 0.95,

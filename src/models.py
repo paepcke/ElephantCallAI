@@ -96,6 +96,8 @@ def get_model(model_id):
                     num_filters=parameters.HYPERPARAMETERS[27]['num_filters'])
     elif model_id == 28:
         return Model28(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 29:
+        return Model29(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -1605,6 +1607,45 @@ class Model28(nn.Module):
         inputs = inputs.unsqueeze(1)
         inputs = inputs.repeat(1, 3, 1, 1)
         out = self.model(inputs)
+        return out
+
+"""
+ResNet-18 that outputs three classes
+"""
+class Model29(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model29, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        # We output 3 * 256 to give the 3 class prediction per
+        # time slice
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 256 * 3)) # This is hard coded to the size of the training windows
+
+        # Note this is not used right now!
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            # Initialize the final bias layer so that initially we predict
+            # everything very negative --> sig(neg) << 0.5. Thus we inflate
+            # the weighting for all pos. samples.
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        out = self.model(inputs)
+        # Re-shape to include the multi-class dim
+        # This may be a bit sketchy we will see!!!!!!!!
+        out = out.view(-1, 256, 3)
+        # Now stack the segmentation predictions to be
+        # shape - [batch * seq_len, 3]
+        out = out.view(-1, 3)
         return out
 
 
