@@ -4,7 +4,8 @@ import torch.nn.functional as F
 # Not sure if we need this!
 import parameters
 
-def get_loss():
+# Should add whether is hierarchical or not!!
+def get_loss(is_second_stage=False):
     '''
         Create the loss function based on the parameters file
 
@@ -17,8 +18,13 @@ def get_loss():
     # Whether to include boundary uncertainty in the loss
     include_boundaries = False
     if parameters.LOSS.upper() == "CE":
-        loss_func = nn.BCEWithLogitsLoss()
-        print ("Using Binary Cross Entropy Loss")
+        # We are training a multi-class model
+        if is_second_stage and parameters.EXTRA_LABEL:
+            loss_func = nn.CrossEntropyLoss()
+            print ("Using Cross Entropy Loss for MULTI_CLASS")
+        else:
+            loss_func = nn.BCEWithLogitsLoss()
+            print ("Using Binary Cross Entropy Loss")
     elif parameters.LOSS.upper() == "FOCAL":
         loss_func = FocalLoss(alpha=parameters.FOCAL_ALPHA, gamma=parameters.FOCAL_GAMMA)
         print ("Using Focal Loss with parameters alpha: {}, gamma: {}, pi: {}".format(parameters.FOCAL_ALPHA, parameters.FOCAL_GAMMA, parameters.FOCAL_WEIGHT_INIT))

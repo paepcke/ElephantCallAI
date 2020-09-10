@@ -36,8 +36,8 @@ parser.add_argument('--visualize', action='store_true',
     help='Visualize the adversarial examples and Model_0 and Model_1 predictions on them')
 
 # Model Paths
-parser.add_argument('--models_path', type=str,
-    help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0')
+parser.add_argument('--path', type=str,
+    help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0 and other models')
 # Note this pre-loads model_0
 parser.add_argument('--model_0', type=str,
     help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')
@@ -87,12 +87,13 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
         We define a false positive data chunk "loosely" for now as having 
         more than 'min_length' predicted slices (prediction = 1)
     """
-    # Note there may be edge cases where an adversarial example exists right
-    # near an elephant call and is not included in the training dataset because
-    # of the way that the chunks are created for training. i.e. the chunks in 
-    # the training dataset may not have included the adversarial examples, but
-    # when creating chunks for the 24hrs the chunks may be aligned differently
+    # One thing to consider would be instead to rank examples! I.e allowing for 
+    # the case where there may not be enough adversarial examples and then we want
+    # to actually just pick the top X "hardest."
     adversarial_examples = []
+    # Only keep the FP model predictions
+    model_0_FP_predictions = []
+
     # Put in eval mode!!
     model.eval()
     print ("Num batches:", len(dataloader))
@@ -120,17 +121,26 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
         # Pre-compute the number of pos. slices in each chunk
         # Threshold the predictions - May add guassian blur
         binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+
         pred_counts = torch.sum(binary_preds, dim=1).squeeze().cpu().detach().numpy() # Shape - (batch_size)
         # Get ground truth label counts
         gt_counts = torch.sum(labels, dim=1).cpu().detach().numpy() # Shape - (batch_size)
         
-        # We want to look for chunks that have gt_counts = 0
-        # and pred_counts > min_length. Create masks for each
+        # Find FP chunks:
+        # Chunks with gt_counts = 0 and pred_counts > min_length
         gt_empty = (gt_counts == 0)
         predicted_chunks = (pred_counts >= min_length)
 
         epoch_adversarial_examples = list(data_files[gt_empty & predicted_chunks])
         adversarial_examples += epoch_adversarial_examples
+
+        # Add the model predictions for FP chunks
+        # Hopefully this doesn't slow things down a ton!
+        binary_preds = binary_preds.cpu().detach().numpy()
+        fp_preds = binary_preds[gt_empty & predicted_chunks]
+        for i in range(len(epoch_adversarial_examples)):
+            model_0_FP_predictions.append(fp_preds[i])
+
 
         # Visualize every 100 selected examples
         # NEED to figure this out a bit
@@ -148,7 +158,59 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
                     visualize(features, output, label, title=data_file)
 
     print (len(adversarial_examples))
-    return adversarial_examples
+    return adversarial_examples, model_0_FP_predictions
+
+
+def model_0_Elephant_Predictions(dataloader, model, threshold=0.5):
+    """
+        !!!!! WE NEED TO RE-FACTOR THIS TO CONSIDER THE CASE WHEN WE ADD REPEATS AND SUCH TO THE MODEL_1 DATASET!!
+    """
+    elephant_examples = []
+    # Only keep the FP model predictions
+    model_0_predictions = []
+    gt_labels = []
+
+    # Put in eval mode!!
+    model.eval()
+    print ("Num batches:", len(dataloader))
+    for idx, batch in enumerate(dataloader):
+        if idx % 1000 == 0:
+            print("Adversarial search has gotten through {} batches".format(idx))
+
+        inputs = batch[0].clone().float()
+        labels = batch[1].clone().float()
+        inputs = inputs.to(parameters.device)
+        labels = labels.to(parameters.device)
+        # Get the data_file locations for each chunk
+        data_files = np.array(batch[2])
+
+        # ONLY Squeeze the last dim!
+        logits = model(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
+
+        # Now for each chunk we want to see whether it should be flagged as 
+        # a true false positive. For now do "approx" by counting number pos samples
+        predictions = torch.sigmoid(logits)
+        # Pre-compute the number of pos. slices in each chunk
+        # Threshold the predictions - May add guassian blur
+        binary_preds = torch.where(predictions > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+        # Used to tell if this is an elephant call window
+        gt_counts = torch.sum(labels, dim=1).cpu().detach().numpy() # Shape - (batch_size)
+
+        # Model predictions for TP chunks
+        gt_elephant = (gt_counts > 0)
+
+        epoch_true_pos_examples = list(data_files[gt_elephant])
+        elephant_examples += epoch_true_pos_examples
+        # Collect GT and Model_0 preds
+        binary_preds = binary_preds.cpu().detach().numpy()
+        tp_preds = binary_preds[gt_elephant]
+        gt_labeling = labels[gt_elephant].cpu().detach().numpy()
+        for i in range(len(epoch_true_pos_examples)):
+            model_0_predictions.append(tp_preds[i])
+            gt_labels.append(gt_labeling[i])
+
+    return elephant_examples, model_0_predictions, gt_labels
+
 
 
 def initialize_training(model_id, save_path, model_type=0, pre_train_path=None):
@@ -174,7 +236,9 @@ def initialize_training(model_id, save_path, model_type=0, pre_train_path=None):
     writer.add_scalar('batch_size', parameters.BATCH_SIZE)
     writer.add_scalar('weight_decay', parameters.HYPERPARAMETERS[parameters.MODEL_ID]['l2_reg'])
 
-    loss_func, include_boundaries = get_loss()
+    # Include whether we are using the second stage model
+    second_stage = (model_type == 1)
+    loss_func, include_boundaries = get_loss(is_second_stage=second_stage)
 
     # Honestly probably do not need to have hyper-parameters per model, but leave it for now.
     optimizer = torch.optim.Adam(model.parameters(), lr=parameters.HYPERPARAMETERS[parameters.MODEL_ID]['lr'],
@@ -230,13 +294,23 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     # Update initialize_training to allow for loading back model_0!!
     # Update the negative examples of the training and validation datasets
     print ("Updating Negative Features")
-    if HIERARCHICAL_ADD_FP:
+    if parameters.HIERARCHICAL_ADD_FP:
         train_loader.dataset.add_neg_features(adversarial_train_files)
         test_loader.dataset.add_neg_features(adversarial_test_files)
     else:
         train_loader.dataset.set_neg_features(adversarial_train_files)
         test_loader.dataset.set_neg_features(adversarial_test_files)
+
+    # If we are using the extra class data then we need to update the labels
+    # of the trainnig data accordingly
+    if parameters.EXTRA_LABEL:
+        # Given the save path update the labels based on the folders 
+        # in hierarchical
+        train_loader.dataset.update_labels(os.path.join(save_path, 'transformed_model_0_tp_train_preds'), 
+                                            os.path.join(save_path, 'transformed_model_0_fp_train_preds'))
+
     # Create repeated dataset with fixed indeces
+    # WITH THE EXTRA LABELS THIS DOES NOT WORK RIGHT NOW!
     #if parameters.HIERARCHICAL_REPEATS > 1 or parameters.HIERARCHICAL_REPEATS_POS > 1 or parameters.HIERARCHICAL_REPEATS_NEG > 1:
     if parameters.HIERARCHICAL_REPEATS_POS != 1  or parameters.HIERARCHICAL_REPEATS_NEG != 1:
         # Include Twice as many repeats for the positive examples!
@@ -260,7 +334,7 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
                                                                                 second_model_save_path, model_type=1,
                                                                                 pre_train_path=pre_train_path)
     model_1_wts = train(dloaders, model_1, loss_func, optimizer, scheduler, 
-                    writer, parameters.NUM_EPOCHS, include_boundaries=include_boundaries)
+                    writer, parameters.NUM_EPOCHS, include_boundaries=include_boundaries, multi_class=parameters.EXTRA_LABEL)
 
     if model_1_wts:
         model_1.load_state_dict(model_1_wts)
@@ -273,11 +347,88 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     print('Training time: {:10f} minutes'.format((time.time()-start_time)/60))
     writer.close()
 
-def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
+def save_model_0_predictions(save_path, window_files, model_0_predictions, folder_name):
+    """
+        Creates and saves a sub-folder with the given model_0 predictions
+        corresponding to the provided window / feature files
+    """
+    # Save model_0 predictions
+    directory = os.path.join(save_path, folder_name)
+    # Create the directory if does not exist
+    if not os.path.isdir(directory):
+            os.mkdir(directory)
+
+    for i in range(len(window_files)):
+        # Strip off just the label tag
+        window_file = window_files[i].split('/')[-1]
+        # Make the file name reflect it is a label file
+        model_prediction_file = window_file.replace("features", "labels")
+        window_pred = model_0_predictions[i]
+        pred_path = os.path.join(directory, model_prediction_file)
+        np.save(pred_path, window_pred)
+
+def transform_model_0_predictions(model_0_predictions, gt_labels=None):
+    """
+        Adds an extra class '2' label for FP model_0 predictions. 
+        For windows with an elephant call present, we do not count
+        FP predictions that occur do to boarder issues in predicting
+        the actual call (i.e. mis-alignment).
+
+        If gt_labels = None, then this is a negative window and has no elephant calls
+
+    """
+    transformed_preds = []
+    for i in range(len(model_0_predictions)):
+        prediction = model_0_predictions[i]
+        if gt_labels is not None:
+            labels = gt_labels[i]
+        else:
+            labels = np.zeros_like(prediction)
+
+        # Create mask for when the prediction is a 1, but the GT label is 0
+        pred_ones = (prediction == 1)
+        gt_zeros = (labels == 0)
+
+
+        new_pred = labels
+        new_pred[pred_ones & gt_zeros] = 2
+
+        # Correction is not needed if the window is a negative window
+        if gt_labels is None:
+            transformed_preds.append(new_pred)
+            continue
+
+        # For windows with elephant calls, heuristically make
+        # all '2' labels touching '1' labels be '0' (i.e. normal background)
+        # Do a forward and backward pass
+        ranges = [range(new_pred.shape[0]), reversed(range(new_pred.shape[0]))]
+        for direction in ranges:
+            in_call = False
+            for j in direction:
+                # Check if we are entering a call
+                if new_pred[j] == 1:
+                    in_call = True
+                # Exiting call
+                elif new_pred[j] == 0:
+                    in_call = False
+
+                # If we have not exited a call and have hit '2'
+                # predictions zero these out
+                if in_call and new_pred[j] == 2:
+                    new_pred[j] = 0
+
+        transformed_preds.append(new_pred)
+
+    return transformed_preds
+
+
+
+def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader, model_1_test_loader, model_0, save_path):
     """
         Collect the adversarial - false positives based on model_0
         for the train and validation set.
     """
+    # Test our little function
     print ('++================================================++')
     print ("++ Beginning False Positive Adversarial Discovery ++")
     print ('++================================================++')
@@ -294,22 +445,53 @@ def adversarial_discovery(full_train_path, full_test_path, model_0, save_path):
     full_test_loader = get_loader_fuzzy(full_test_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=False)
 
+
     # For now let us try including all of the false negatives!
     train_adversarial_file = "model_0-False_Pos_Train.txt"
     if shift_windows:
         train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
-    adversarial_train_files = adversarial_discovery_helper(full_train_loader, model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
+
+    adversarial_train_files, model_0_fp_train_preds  = adversarial_discovery_helper(full_train_loader,
+                                                             model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
+    # Save the adversarial feature file paths
     adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
     with open(adversarial_train_save_path, 'w') as f:
         for file in adversarial_train_files:
             f.write('{}\n'.format(file))
 
+    # Save model_0 FP train predictions both raw and transformed with additional label
+    print ("Saving model_0 FP predictions on the train data")
+    save_model_0_predictions(save_path, adversarial_train_files, model_0_fp_train_preds, "model_0_fp_train_preds")
+    transformed_model_0_fp_train_preds = transform_model_0_predictions(model_0_fp_train_preds)
+    save_model_0_predictions(save_path, adversarial_train_files, transformed_model_0_fp_train_preds, "transformed_model_0_fp_train_preds")
+
+    # Save model_0 TP train predictions both raw and transformed with additional label
+    print ("Saving model_0 TP predictions on the train data")
+    elephant_train_files, model_0_tp_train_preds, gt_train_labels = model_0_Elephant_Predictions(model_1_train_loader, model_0)
+    save_model_0_predictions(save_path, elephant_train_files, model_0_tp_train_preds, "model_0_tp_train_preds")
+    transformed_model_0_tp_train_preds = transform_model_0_predictions(model_0_tp_train_preds, gt_train_labels)
+    save_model_0_predictions(save_path, elephant_train_files, transformed_model_0_tp_train_preds, "transformed_model_0_tp_train_preds")
+
     test_adversarial_files = "model_0-False_Pos_Test.txt"
-    adversarial_test_files = adversarial_discovery_helper(full_test_loader, model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
+    adversarial_test_files, model_0_fp_test_preds = adversarial_discovery_helper(full_test_loader, 
+                                                             model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
     adversarial_test_save_path = os.path.join(save_path, test_adversarial_files)
     with open(adversarial_test_save_path, 'w') as f:
         for file in adversarial_test_files:
             f.write('{}\n'.format(file))
+
+    # Save model_0 FP test predictions both raw and transformed with additional label
+    print ("Saving model_0 FP predictions on the test data")
+    save_model_0_predictions(save_path, adversarial_test_files, model_0_fp_test_preds, "model_0_fp_test_preds")
+    transformed_model_0_fp_test_preds = transform_model_0_predictions(model_0_fp_test_preds)
+    save_model_0_predictions(save_path, adversarial_test_files, transformed_model_0_fp_test_preds, "transformed_model_0_fp_test_preds")
+
+    # Save model_0 TP train predictions both raw and transformed with additional label
+    print ("Saving model_0 TP predictions on the test data")
+    elephant_test_files, model_0_tp_test_preds, gt_test_labels = model_0_Elephant_Predictions(model_1_test_loader, model_0)
+    save_model_0_predictions(save_path, elephant_test_files, model_0_tp_test_preds, "model_0_tp_test_preds")
+    transformed_model_0_tp_test_preds = transform_model_0_predictions(model_0_tp_test_preds, gt_test_labels)
+    save_model_0_predictions(save_path, elephant_test_files, transformed_model_0_tp_test_preds, "transformed_model_0_tp_test_preds")
 
     return adversarial_train_files, adversarial_test_files
 
@@ -421,10 +603,10 @@ def main():
                                         norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries)
     
 
-    if args.models_path is None:
+    if args.path is None:
         save_path = create_save_path(time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime()), args.save_local, save_prefix='Hierarchical_')
     else:
-        save_path = args.models_path
+        save_path = args.path
 
     # Case 1) Do the entire pipeline! Can break now the pipeline into 3 helper functions!
     if args.full_pipeline:
@@ -441,7 +623,8 @@ def main():
             torch.save(model_0, model_save_path)
 
         # Do the adversarial discovery
-        adversarial_train_files, adversarial_test_files = adversarial_discovery(full_train_path, full_test_path, model_0, save_path)
+        adversarial_train_files, adversarial_test_files = adversarial_discovery(full_train_path, full_test_path, 
+                                                                model_0_train_loader, model_0_test_loader, model_0, save_path)
         # Train and save model 1
         train_model_1(adversarial_train_files, adversarial_test_files, model_1_train_loader, model_1_test_loader, 
                                                 save_path, args.pre_train_1)
@@ -451,7 +634,7 @@ def main():
         # Load model_0
         model_0_path = os.path.join(save_path, "Model_0/model.pt")
         model_0 = torch.load(model_0_path, map_location=parameters.device)
-        adversarial_discovery(full_train_path, full_test_path, model_0, save_path)
+        adversarial_discovery(full_train_path, full_test_path, model_0_train_loader, model_0_test_loader, model_0, save_path)
 
     # Train just model_1
     elif args.model1:

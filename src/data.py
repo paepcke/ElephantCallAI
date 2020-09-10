@@ -194,7 +194,7 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.intialize_data(init_pos=False, init_neg=True)
 
     def add_neg_features(self, neg_features):
-        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(neg_features) + len(self.neg_features)))
+        print("Length of neg_features was {} and grew to {} ".format(len(self.neg_features), len(neg_features) + len(self.neg_features)))
         self.neg_features += neg_features
         self.intialize_data(init_pos=False, init_neg=True)
 
@@ -231,6 +231,41 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         # Re-form the feature and data set
         self.features = self.pos_features + self.neg_features
+        self.labels = self.pos_labels + self.neg_labels
+
+    def update_labels(self, new_pos_labels_dir, new_neg_labels_dir):
+        """
+            Kinda an adhoc method, but currently we are using this in
+            the new 3rd label dataset. For the given features / windows
+            in the dataset, replace the corresponding labels with the
+            new 3 class labels. 
+            Implemenation: Since the new label names should match the
+            training example names, go through each training example
+            and get the new label path from either pos/neg label dir.
+
+            @ Params
+            @ new_pos_labels_dir - The folder that contains the new positive window labels
+            @ new_neg_labels_dir - The folder that contains the new negative window labels
+        """
+        # Replace the labels for the positive examples
+        new_pos_labels = []
+        for pos_feat in self.pos_features:
+            data_id = pos_feat.split('/')[-1]
+            new_pos_label = os.path.join(new_pos_labels_dir, data_id.replace('features', 'labels'))
+            new_pos_labels.append(new_pos_label)
+
+        self.pos_labels = new_pos_labels
+
+        # Replace the labels for the negative examples
+        new_neg_labels = []
+        for neg_feat in self.neg_features:
+            data_id = neg_feat.split('/')[-1]
+            new_neg_label = os.path.join(new_neg_labels_dir, data_id.replace('features', 'labels'))
+            new_neg_labels.append(new_neg_label)
+
+        self.neg_labels = new_neg_labels
+
+        # Re-set self.labels
         self.labels = self.pos_labels + self.neg_labels
 
 

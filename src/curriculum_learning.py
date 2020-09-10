@@ -60,7 +60,7 @@ parser.add_argument('--save_local', dest='save_local', action='store_true',
 # Just so numpy does not print rediculously un-readible stuff
 np.set_printoptions(precision=2)
 
-
+# SHOULD JUST DO FOR NEG SAMPLES!!!
 def model_statistics(model, full_dataloaders, threshold=0.5):
     """
         Full data "scoring" statistics computation. Takes a model

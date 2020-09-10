@@ -179,6 +179,28 @@ def num_correct(logits, labels):
 
     return num_correct
 
+def multi_class_num_correct(logits, labels):
+    """
+        Treat '2' and '0' as the same for now! May want to profile this later.
+
+        @ Pre-condition: assumes that the labels have already converted 
+        the '2' labels back to the singular '0' value
+    """
+    softmax = nn.Softmax(dim=1)
+    with torch.no_grad():
+        pred = softmax(logits)
+        class_preds = torch.argmax(pred, dim=1)
+
+        # Treat all '2's as 0s
+        two_pred = (class_preds == 2)
+        class_preds[two_pred] = 0
+
+        # Cast to proper type!
+        class_preds = class_preds.float()
+        num_correct = (class_preds == labels).sum().item()
+
+    return num_correct
+
 def num_non_zero(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
@@ -236,6 +258,33 @@ def get_precission_recall_values(logits, labels):
         tp_fp = torch.sum(binary_preds).item()
         # Number true positives
         tp = (binary_preds + labels) == 2
+        tp = torch.sum(tp).item()
+        # Number of actual calls
+        tp_fn = torch.sum(labels).item()
+
+    return tp, tp_fp, tp_fn
+
+def multi_class_precission_recall_values(logits, labels):
+    """
+        Treat '2' and '0' as the same for now! May want to profile this later.
+
+        @ Pre-condition: assumes that the labels have already converted 
+        the '2' labels back to the singular '0' value
+    """
+    softmax = nn.Softmax(dim=1)
+    with torch.no_grad():
+        pred = softmax(logits)
+        class_preds = torch.argmax(pred, dim=1)
+
+        # Treat all '2's as 0s
+        two_pred = (class_preds == 2)
+        class_preds[two_pred] = 0
+
+        # Number predicted
+        tp_fp = torch.sum(class_preds).item()
+        # Number true positives - This works because
+        # we have converted all '2' labels to '0'
+        tp = (class_preds + labels) == 2
         tp = torch.sum(tp).item()
         # Number of actual calls
         tp_fn = torch.sum(labels).item()

@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score, get_precission_recall_values
+from utils import is_eval_epoch, num_correct, num_non_zero, get_f_score, get_precission_recall_values, multi_class_num_correct, multi_class_precission_recall_values
 import time
 import parameters
 import pdb
@@ -10,7 +10,7 @@ import faulthandler; faulthandler.enable()
 
 
 def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer, 
-            include_boundaries=False):
+            include_boundaries=False, multi_class=False):
     model.train(True)
     time_start = time.time()
 
@@ -18,26 +18,24 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     running_corrects = 0
     running_samples = 0
     # May ditch these!
-    running_non_zero = 0
+    #running_non_zero = 0
+
     # True positives
     running_tp = 0
     # True positives, false positives
     running_tp_fp = 0
     # True positives, false negatives
     running_tp_fn = 0
-    #running_fscore = 0.0
-    #running_precission = 0.0
-    #running_recall = 0.0
 
     # For focal loss purposes
-    running_true_non_zero = 0
+    #running_true_non_zero = 0
 
     print ("Num batches:", len(dataloader))
     for idx, batch in enumerate(dataloader):
         optimizer.zero_grad()
         if (idx % 250 == 0) and parameters.VERBOSE:
             print ("Batch number {} of {}".format(idx, len(dataloader)))
-            print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
+            #print ("Total Non Zero Predicted {}, Total True Non Zero {}".format(running_non_zero, running_true_non_zero))
 
         # Cast the variables to the correct type and 
         # put on the correct torch device
@@ -45,12 +43,16 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         labels = batch[1].clone().float()
         inputs = inputs.to(parameters.device)
         labels = labels.to(parameters.device)
+        
+        # Change shape if is multi class
+        if multi_class:
+            labels = labels.view(-1).long()
 
         # Forward pass
         # ONLY Squeeze the last dim!
-        logits = model(inputs).squeeze()
-        # Include boundary positions if necessary
+        logits = model(inputs).squeeze(-1)
 
+        # Include boundary positions if necessary
         if include_boundaries:
             boundary_masks = batch[2]
             loss = loss_func(logits, labels, boundary_masks)
@@ -61,25 +63,37 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         loss.backward()
         optimizer.step()
 
-        running_true_non_zero += torch.sum(labels).item()
+        # For now ax some of these
+        #running_true_non_zero += torch.sum(labels).item()
         running_loss += loss.item()
-        running_corrects += num_correct(logits, labels)
-        running_non_zero += num_non_zero(logits, labels)
-        if len(logits.shape) == 2:
-            running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
-        else: # For the binary window classification
-            running_samples += logits.shape[0]
-        #running_fscore += get_f_score(logits, labels)
-        tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+        # We have to update some of these
+        if multi_class:
+            # Return to the binary class setting for metric 
+            # comparison by converting '2' --> '0'
+            gt_two = (labels == 2)
+            labels[gt_two] = 0
+            running_corrects += multi_class_num_correct(logits, labels)
+            tp, tp_fp, tp_fn = multi_class_precission_recall_values(logits, labels)
+        else:
+            running_corrects += num_correct(logits, labels)
+            tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+
         running_tp += tp
         running_tp_fp += tp_fp
         running_tp_fn += tp_fn 
-        
+
+        # May want to ax this
+        #running_non_zero += num_non_zero(logits, labels)
+
+        # For multi_class or bindary window class
+        if multi_class or len(logits.shape) == 1:
+            running_samples += logits.shape[0]
+        else:
+            running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations        
 
     train_epoch_loss = running_loss / (idx + 1)
     train_epoch_acc = float(running_corrects) / running_samples
-    #train_epoch_fscore = running_fscore / (idx + 1)
-    train_non_zero = running_non_zero
+    #train_non_zero = running_non_zero
 
     # If this is zero print a warning
     train_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
@@ -93,7 +107,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
     scheduler.step()
 
     #Logging
-    print ('Train Non-Zero: {}'.format(train_non_zero))
+    #print ('Train Non-Zero: {}'.format(train_non_zero))
     print('Training loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
         train_epoch_loss, train_epoch_acc, train_epoch_precision, train_epoch_recall, train_epoch_fscore ,(time.time()-time_start)/60))
     
@@ -102,7 +116,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
             'train_epoch_recall': train_epoch_recall} 
 
 
-def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
+def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False, multi_class=False):
     model.eval()
     time_start = time.time()
 
@@ -110,8 +124,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     running_corrects = 0
     running_samples = 0
     # May ditch these!
-    running_non_zero = 0
-    running_fscore = 0.0
+    #running_non_zero = 0
     # True positives
     running_tp = 0
     # True positives, false positives
@@ -120,7 +133,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
     running_tp_fn = 0
 
     # For focal loss purposes
-    running_true_non_zero = 0
+    #running_true_non_zero = 0
 
     print ("Num batches:", len(dataloader))
     with torch.no_grad(): 
@@ -134,10 +147,13 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
             labels = batch[1].clone().float()
             inputs = inputs.to(parameters.device)
             labels = labels.to(parameters.device)
+            # Change shape if is multi class
+            if multi_class:
+                labels = labels.view(-1).long()
 
             # Forward pass
             # ONLY Squeeze the last dim!
-            logits = model(inputs).squeeze(-1) # Shape - (batch_size, seq_len)
+            logits = model(inputs).squeeze(-1) 
             # Are we zeroing out the hidden state in the model???
 
             if include_boundaries:
@@ -146,24 +162,38 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
             else:
                 loss = loss_func(logits, labels)
 
-            running_true_non_zero += torch.sum(labels).item()
+            # For now ax some of these
+            #running_true_non_zero += torch.sum(labels).item()
             running_loss += loss.item()
-            running_corrects += num_correct(logits, labels)
-            running_non_zero += num_non_zero(logits, labels)
-            if len(logits.shape) == 2:
-                running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
-            else: # For the binary window classification
-                running_samples += logits.shape[0]
-            #running_fscore += get_f_score(logits, labels)
-            tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+            # We have to update some of these
+            if multi_class:
+                # Return to the binary class setting for metric 
+                # comparison by converting '2' --> '0'
+                gt_two = (labels == 2)
+                labels[gt_two] = 0
+                running_corrects += multi_class_num_correct(logits, labels)
+                tp, tp_fp, tp_fn = multi_class_precission_recall_values(logits, labels)
+            else:
+                running_corrects += num_correct(logits, labels)
+                tp, tp_fp, tp_fn = get_precission_recall_values(logits, labels)
+
             running_tp += tp
             running_tp_fp += tp_fp
             running_tp_fn += tp_fn 
 
+            # May want to ax this
+            #running_non_zero += num_non_zero(logits, labels)
+
+            # For multi_class or bindary window class
+            if multi_class or len(logits.shape) == 1:
+                running_samples += logits.shape[0]
+            else:
+                running_samples += logits.shape[0] * logits.shape[1] # Count the number slices for accuracy calculations
+
+
     valid_epoch_loss = running_loss / (idx + 1)
     valid_epoch_acc = float(running_corrects) / running_samples
-    #valid_epoch_fscore = running_fscore / (idx + 1)
-    valid_non_zero = running_non_zero
+    #valid_non_zero = running_non_zero
 
     # If this is zero print a warning
     valid_epoch_precision = running_tp / running_tp_fp if running_tp_fp > 0 else 1
@@ -174,7 +204,7 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
         valid_epoch_fscore = 0
 
     #Logging
-    print ('Val Non-Zero: {}'.format(valid_non_zero))
+    #print ('Val Non-Zero: {}'.format(valid_non_zero))
     print('Validation loss: {:.6f}, acc: {:.4f}, p: {:.4f}, r: {:.4f}, f-score: {:.4f}, time: {:.4f}'.format(
             valid_epoch_loss, valid_epoch_acc, valid_epoch_precision, valid_epoch_recall,
             valid_epoch_fscore, (time.time()-time_start)/60))
@@ -185,7 +215,8 @@ def eval_epoch(dataloader, model, loss_func, writer, include_boundaries=False):
             'valid_epoch_recall': valid_epoch_recall}
 
 def train(dataloaders, model, loss_func, optimizer, 
-                        scheduler, writer, num_epochs, starting_epoch=0, include_boundaries=False):
+                        scheduler, writer, num_epochs, starting_epoch=0, 
+                        include_boundaries=False, multi_class=False):
     
     train_start_time = time.time()
 
@@ -211,7 +242,8 @@ def train(dataloaders, model, loss_func, optimizer,
         for epoch in range(starting_epoch, num_epochs):
             print ('Epoch [{}/{}]'.format(epoch + 1, num_epochs))
 
-            train_epoch_results = train_epoch(dataloaders['train'], model, loss_func, optimizer, scheduler, writer, include_boundaries)
+            train_epoch_results = train_epoch(dataloaders['train'], model, loss_func, optimizer, 
+                                                scheduler, writer, include_boundaries, multi_class)
             ## Write train metrics to tensorboard
             writer.add_scalar('train_epoch_loss', train_epoch_results['train_epoch_loss'], epoch)
             writer.add_scalar('train_epoch_acc', train_epoch_results['train_epoch_acc'], epoch)
@@ -219,7 +251,8 @@ def train(dataloaders, model, loss_func, optimizer,
             writer.add_scalar('learning_rate', scheduler.get_lr(), epoch)
 
             if is_eval_epoch(epoch):
-                val_epoch_results = eval_epoch(dataloaders['valid'], model, loss_func, writer, include_boundaries) 
+                val_epoch_results = eval_epoch(dataloaders['valid'], model, loss_func, writer, 
+                                                include_boundaries, multi_class) 
                 ## Write val metrics to tensorboard
                 writer.add_scalar('valid_epoch_loss', val_epoch_results['valid_epoch_loss'], epoch)
                 writer.add_scalar('valid_epoch_acc', val_epoch_results['valid_epoch_acc'], epoch)
