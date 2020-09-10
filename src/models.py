@@ -98,6 +98,8 @@ def get_model(model_id):
         return Model28(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 29:
         return Model29(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 30:
+        return Model30(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -1610,7 +1612,7 @@ class Model28(nn.Module):
         return out
 
 """
-ResNet-18 that outputs three classes
+ResNet-18 that outputs three classes - Make the hidden 256
 """
 class Model29(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
@@ -1620,11 +1622,11 @@ class Model29(nn.Module):
 
         self.model = models.resnet18()
         # We output 3 * 256 to give the 3 class prediction per
-        # time slice
+        # time slice. Middel was 128 before!!!
         self.model.fc = nn.Sequential(
-           nn.Linear(512, 128),
+           nn.Linear(512, 256),
            nn.ReLU(inplace=True),
-           nn.Linear(128, 256 * 3)) # This is hard coded to the size of the training windows
+           nn.Linear(256, 256 * 3)) # This is hard coded to the size of the training windows
 
         # Note this is not used right now!
         if loss.lower() == "focal":
@@ -1648,4 +1650,37 @@ class Model29(nn.Module):
         out = out.view(-1, 3)
         return out
 
+"""
+ResNet-18 that takes in model_0 predictions as a channel!
+"""
+class Model30(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model30, self).__init__()
+
+        self.input_size = input_size
+
+        self.model = models.resnet18()
+        # We output 3 * 256 to give the 3 class prediction per
+        # time slice. Middel was 128 before!!!
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 256),
+           nn.ReLU(inplace=True),
+           nn.Linear(256, 256)) # This is hard coded to the size of the training windows
+
+        # Note this is not used right now!
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            # Initialize the final bias layer so that initially we predict
+            # everything very negative --> sig(neg) << 0.5. Thus we inflate
+            # the weighting for all pos. samples.
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        """
+            Assumes input is already 3 channels
+        """
+        out = self.model(inputs)
+        return out
 

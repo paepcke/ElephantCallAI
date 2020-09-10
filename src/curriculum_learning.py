@@ -138,7 +138,7 @@ def curriculum_profiling(model, train_dataloaders, full_dataloaders, loss_func, 
     test_window_errors = None
     test_inv_avg_predictions = None
     # Train 5, 10, 15, 20, 25 epochs
-    for i in range(1):
+    for i in range(20):
         # In train curriculum, for now do not return model based on best performance
         # but simply return the model at the end of that training loop
         model_weights = train_curriculum(model, train_dataloaders, loss_func, optimizer,

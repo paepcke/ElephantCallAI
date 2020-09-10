@@ -43,7 +43,7 @@ def train_epoch(dataloader, model, loss_func, optimizer, scheduler, writer,
         labels = batch[1].clone().float()
         inputs = inputs.to(parameters.device)
         labels = labels.to(parameters.device)
-        
+
         # Change shape if is multi class
         if multi_class:
             labels = labels.view(-1).long()
