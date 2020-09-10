@@ -156,6 +156,11 @@ class ElephantDatasetFuzzy(data.Dataset):
         # This is only used if we want to generate fixed repeated
         # windows during hierarchical training
         self.fixed_indeces = None
+        # By default this is False 
+        # and only True for the special case where
+        # we incorperate model_0 predictions into 
+        # the 2-stage model 
+        self.model_0_feature = False
 
         '''
         self.features = glob.glob(data_path + "/" + "*features*", recursive=True)
@@ -268,6 +273,36 @@ class ElephantDatasetFuzzy(data.Dataset):
         # Re-set self.labels
         self.labels = self.pos_labels + self.neg_labels
 
+    def add_model_0_preds(self, model_0_pos_dir, model_0_neg_dir):
+        """
+            Add the additional feature of the model_0 predictions for
+            each training window.  
+            Implemenation: Since the new label names should match the
+            training example names, go through each training example
+            and get the new label path from either pos/neg label dir.
+
+            @ Params
+            @ model_0_pos_dir - The folder that contains the model_0 positive window preds
+            @ model_0_neg_dir - The folder that contains the model_0 negative window preds
+        """
+        # Replace the labels for the positive examples
+        self.model_0_pos_preds = []
+        for pos_feat in self.pos_features:
+            data_id = pos_feat.split('/')[-1]
+            new_pos_label = os.path.join(model_0_pos_dir, data_id.replace('features', 'labels'))
+            self.model_0_pos_preds.append(new_pos_label)
+
+        # Replace the labels for the negative examples
+        self.model_0_neg_preds = []
+        for neg_feat in self.neg_features:
+            data_id = neg_feat.split('/')[-1]
+            new_neg_label = os.path.join(model_0_neg_dir, data_id.replace('features', 'labels'))
+            self.model_0_neg_preds.append(new_neg_label)
+
+        # Re-set self.labels
+        self.model_0_preds = self.model_0_pos_preds + self.model_0_neg_preds
+        self.model_0_feature = True
+
 
     def create_fixed_windows(self):
         self.fixed_indeces = []
@@ -331,7 +366,14 @@ class ElephantDatasetFuzzy(data.Dataset):
         feature = np.load(self.features[index])
         label = np.load(self.labels[index])
 
-        feature = self.apply_transforms(feature)
+        # Load the model_0 predictions and incorperate
+        # them into the data transform
+        if self.model_0_feature:
+            model_0_pred = np.load(self.model_0_preds[index])
+            feature = self.apply_transforms(feature, model_0_pred)
+        else:
+            feature = self.apply_transforms(feature)
+
         if self.shift_windows:
             feature, label = self.sample_chunk(feature, label)
 
@@ -387,7 +429,7 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         return feature[start_slice : end_slice, :], label[start_slice : end_slice]
 
-    def apply_transforms(self, data):
+    def apply_transforms(self, data, model_0_pred=None):
         if self.scale:
             data = 10 * np.log10(data)
 
@@ -398,6 +440,26 @@ class ElephantDatasetFuzzy(data.Dataset):
             data = (data - 132.228) / 726.319 # Calculated these over the training dataset 
         elif self.preprocess == "feature":
             data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
+
+        # If model_0_pred is provided, then create a 3 channel
+        # "image" where channels 1 and 2 are the spectrogram and 
+        # the 3rd channel is a (-1, 1) valued image of model_0 preds.
+        # Specifically, create a column of '1' for '1' predictions and
+        # a column of '-1' for '0' preds
+        if model_0_pred is not None:
+            # Expand the channel dim of the spectrogram
+            data = np.expand_dims(data, axis=0)
+            # Create the prediction mask. First convert '0'
+            # to '-1' value
+            model_0_pred[model_0_pred == 0] = -1
+            # Repeat the pred values along the feature axis
+            model_0_pred = np.expand_dims(model_0_pred, axis=1)
+            model_0_pred = np.repeat(model_0_pred, data.shape[2], axis=1)
+
+            # Repeat the spectrogram data to creat 3 channels and then
+            # make the final channel by the model_0_pred
+            data = np.repeat(data, 3, axis=0)
+            data[2, :, :] = model_0_pred
 
         return data
 

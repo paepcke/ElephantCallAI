@@ -119,6 +119,122 @@ def spect_call_to_time(call, NFFT=4096, hop=800):
 
     return (begin_s, end_s, length_s)
 
+# NEED TO WORK ON THIS!
+def multi_class_predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hierarchical_model=None, hierarchy_threshold=15):
+    """
+        Generate the prediction sequence for a full audio sequence
+        using a sliding window. Slide the window by one spectrogram frame
+        and pass each window through the given model. Compute the average
+        over overlapping window predictions to get the final prediction.
+        Allow for having a hierarchical model! If using a hierarchical model
+        also save the model_0 predictions!
+
+        Return:
+        With Hierarchical Model - hierarchical predictions, model_0 predictions
+        Solo Model - predictions
+    """
+    # Get the number of frames in the full audio clip
+    predictions = np.zeros(spectrogram.shape[0])
+    if hierarchical_model is not None:
+        hierarchical_predictions = np.zeros(spectrogram.shape[0])
+
+    # Keeps track of the number of predictions made for a given
+    # slice for final averaging!
+    overlap_counts = np.zeros(spectrogram.shape[0])
+    
+
+    # This is a bit janky but we will manually transform
+    # each spectrogram chunk
+    #spectrogram = torch.from_numpy(spectrogram).float()
+    # Add a batch dim for the model!
+    #spectrogram = torch.unsqueeze(spectrogram, 0) # Shape - (1, time, freq)
+
+    # Added!
+    spectrogram = np.expand_dims(spectrogram,axis=0)
+
+    # For the sliding window we slide the window by one spectrogram
+    # frame, determined by the hop size.
+    spect_idx = 0 # The frame idx of the beginning of the current window
+    i = 0
+    # How can I parralelize this shit??????
+    while  spect_idx + chunk_size <= spectrogram.shape[1]:
+        spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
+        # Transform the slice - this is definitely sketchy!!!! 
+        spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
+        spect_slice = torch.from_numpy(spect_slice).float()
+        spect_slice = spect_slice.to(parameters.device)
+
+        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        compressed_out = outputs.view(-1, 1).squeeze()
+
+        # Now check if we are running the hierarchical model
+        if hierarchical_model is not None:
+            chunk_preds = torch.sigmoid(compressed_out)
+            binary_preds = torch.where(chunk_preds > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+            pred_counts = torch.sum(binary_preds)
+            # Check if we need to run the second model
+            hierarchical_compressed_out = compressed_out
+            if pred_counts.item() >= hierarchy_threshold:
+                hierarchical_outputs = hierarchical_model(spect_slice)
+                hierarchical_compressed_out = hierarchical_outputs.view(-1, 1).squeeze()
+
+            # Save the hierarchical model's output
+            hierarchical_predictions[spect_idx: spect_idx + chunk_size] += hierarchical_compressed_out.cpu().detach().numpy()
+
+        overlap_counts[spect_idx: spect_idx + chunk_size] += 1
+        # Save the model_0's output!
+        predictions[spect_idx: spect_idx + chunk_size] += compressed_out.cpu().detach().numpy()
+
+        spect_idx += jump
+        i += 1
+
+    # Do the last one if it was not covered
+    if (spect_idx - jump + chunk_size != spectrogram.shape[1]):
+        #print ('One final chunk!')
+        spect_slice = spectrogram[:, spect_idx: , :]
+        # Transform the slice 
+        # Should use the function from the dataset!!
+        spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)
+        spect_slice = torch.from_numpy(spect_slice).float()
+        spect_slice = spect_slice.to(parameters.device)
+
+        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        # In the case of ResNet the output is forced to the chunk size
+        compressed_out = outputs.view(-1, 1).squeeze()[:predictions[spect_idx: ].shape[0]]
+
+        # Now check if we are running the hierarchical model
+        if hierarchical_model is not None:
+            chunk_preds = torch.sigmoid(compressed_out)
+            binary_preds = torch.where(chunk_preds > parameters.THRESHOLD, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+            pred_counts = torch.sum(binary_preds)
+            # Check if we need to run the second model
+            hierarchical_compressed_out = compressed_out
+            if pred_counts.item() >= hierarchy_threshold:
+                hierarchical_outputs = hierarchical_model(spect_slice)
+                hierarchical_compressed_out = hierarchical_outputs.view(-1, 1).squeeze()[:predictions[spect_idx: ].shape[0]]
+
+            # Save the hierarchical model's output
+            hierarchical_predictions[spect_idx: ] += hierarchical_compressed_out.cpu().detach().numpy()
+
+
+        overlap_counts[spect_idx: ] += 1
+        # Save the model_0's output!
+        predictions[spect_idx: ] += compressed_out.cpu().detach().numpy()
+
+
+    # Average the predictions on overlapping frames
+    predictions = predictions / overlap_counts
+    if hierarchical_model is not None:
+        hierarchical_predictions = hierarchical_predictions / overlap_counts
+
+    # Get squashed [0, 1] predictions
+    predictions = sigmoid(predictions)
+
+    if hierarchical_model is not None:
+        hierarchical_predictions = sigmoid(hierarchical_predictions)
+        return hierarchical_predictions, predictions
+
+    return predictions
 
 def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hierarchical_model=None, hierarchy_threshold=15):
     """
@@ -158,9 +274,6 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
     i = 0
     # How can I parralelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
-        #if (i % 1000 == 0):
-        #    print ("Chunk number " + str(i))
-
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
         # Transform the slice - this is definitely sketchy!!!! 
         spect_slice = (spect_slice - np.mean(spect_slice)) / np.std(spect_slice)

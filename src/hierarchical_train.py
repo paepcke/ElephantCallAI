@@ -306,8 +306,29 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     if parameters.EXTRA_LABEL:
         # Given the save path update the labels based on the folders 
         # in hierarchical
-        train_loader.dataset.update_labels(os.path.join(save_path, 'transformed_model_0_tp_train_preds'), 
-                                            os.path.join(save_path, 'transformed_model_0_fp_train_preds'))
+        new_pos_train_labels_dir = os.path.join(save_path, 'transformed_model_0_tp_train_preds')
+        new_neg_train_labels_dir = os.path.join(save_path, 'transformed_model_0_fp_train_preds')
+        train_loader.dataset.update_labels(new_pos_labels_dir=new_pos_train_labels_dir, 
+                                            new_neg_labels_dir=new_neg_train_labels_dir)
+        # UPDATE THE TEST LABELS!!
+        new_pos_test_labels_dir = os.path.join(save_path, 'transformed_model_0_tp_test_preds')
+        new_neg_test_labels_dir = os.path.join(save_path, 'transformed_model_0_fp_test_preds')
+        test_loader.dataset.update_labels(new_pos_labels_dir=new_pos_test_labels_dir, 
+                                            new_neg_labels_dir=new_neg_test_labels_dir)
+
+    # If we are using model_0 predictions as additional features for the model
+    if parameters.MODEL_0_FEATURES:
+        # Add train features
+        model_0_train_pos_dir = os.path.join(save_path, 'model_0_tp_train_preds')
+        model_0_train_neg_dir = os.path.join(save_path, 'model_0_fp_train_preds')
+        train_loader.dataset.add_model_0_preds(model_0_pos_dir=model_0_train_pos_dir, 
+                                                model_0_neg_dir=model_0_train_neg_dir)
+        # Add test features
+        model_0_test_pos_dir = os.path.join(save_path, 'model_0_tp_test_preds')
+        model_0_test_neg_dir = os.path.join(save_path, 'model_0_fp_test_preds')
+        test_loader.dataset.add_model_0_preds(model_0_pos_dir=model_0_test_pos_dir, 
+                                                model_0_neg_dir=model_0_test_neg_dir)
+
 
     # Create repeated dataset with fixed indeces
     # WITH THE EXTRA LABELS THIS DOES NOT WORK RIGHT NOW!

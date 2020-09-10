@@ -134,6 +134,10 @@ def hierarchical_model_1_path():
     if parameters.HIERARCHICAL_ADD_FP:
         model_name += "_AddingFPs"
 
+    # Just for now quickly
+    #if parameters.EXTRA_LABEL:
+    #    model_name += '_MULTI-CLASS'
+
     return model_name
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):

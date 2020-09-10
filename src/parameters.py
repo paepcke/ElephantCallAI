@@ -58,7 +58,7 @@ CHUNK_SIZE = 256
 FALSE_POSITIVE_THRESHOLD = 15 
 
 ''' Specify 'same' to keep training Model_0 '''
-HIERARCHICAL_MODEL = 29
+HIERARCHICAL_MODEL = 17
 HIERARCHICAL_PRE_TRAIN = False
 
 ''' Deptricated!!! '''
@@ -71,7 +71,10 @@ HIERARCHICAL_REPEATS_NEG = 1
 HIERARCHICAL_ADD_FP = False
 
 # Use '2' label for FP model_0 predictions
-EXTRA_LABEL = True
+EXTRA_LABEL = False
+
+# Use model_0 predictions as an extra feature
+MODEL_0_FEATURES = False
 
 ''' Whether window shifting as data-aug is used in training '''
 HIERARCHICAL_SHIFT_WINDOWS = False 
