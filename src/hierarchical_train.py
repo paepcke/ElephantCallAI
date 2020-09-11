@@ -93,6 +93,7 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
     adversarial_examples = []
     # Only keep the FP model predictions
     # May consider doing the literal logits!
+    model_0_FP_logits = []
     model_0_FP_predictions = []
     model_0_FP_binary_predictions = []
 
@@ -138,11 +139,14 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
 
         # Add the model predictions for FP chunks
         # Hopefully this doesn't slow things down a ton!
+        logits = logits.cpu().detach().numpy()
         predictions = predictions.cpu().detach().numpy()
         binary_preds = binary_preds.cpu().detach().numpy()
+        fp_logits = logits[gt_empty & predicted_chunks]
         fp_preds = predictions[gt_empty & predicted_chunks]
         fp_binary_preds = binary_preds[gt_empty & predicted_chunks]
         for i in range(len(epoch_adversarial_examples)):
+            model_0_FP_logits.append(fp_logits[i])
             model_0_FP_predictions.append(fp_preds[i])
             model_0_FP_binary_predictions.append(fp_binary_preds[i])
 
@@ -163,7 +167,7 @@ def adversarial_discovery_helper(dataloader, model, min_length, threshold=0.5, n
                     visualize(features, output, label, title=data_file)
 
     print (len(adversarial_examples))
-    return adversarial_examples, model_0_FP_predictions, model_0_FP_binary_predictions
+    return adversarial_examples, model_0_FP_logits, model_0_FP_predictions, model_0_FP_binary_predictions
 
 
 def model_0_Elephant_Predictions(dataloader, model, threshold=0.5):
@@ -172,6 +176,7 @@ def model_0_Elephant_Predictions(dataloader, model, threshold=0.5):
     """
     elephant_examples = []
     # Only keep the FP model predictions
+    model_0_logits = []
     model_0_predictions = []
     model_0_binary_predictions = []
     gt_labels = []
@@ -208,17 +213,20 @@ def model_0_Elephant_Predictions(dataloader, model, threshold=0.5):
         epoch_true_pos_examples = list(data_files[gt_elephant])
         elephant_examples += epoch_true_pos_examples
         # Collect GT and Model_0 preds
+        logits = logits.cpu().detach().numpy()
         predictions = predictions.cpu().detach().numpy()
         binary_preds = binary_preds.cpu().detach().numpy()
+        tp_logits = logits[gt_elephant]
         tp_preds = predictions[gt_elephant]
         tp_binary_preds = binary_preds[gt_elephant]
         gt_labeling = labels[gt_elephant].cpu().detach().numpy()
         for i in range(len(epoch_true_pos_examples)):
+            model_0_logits.append(tp_logits[i])
             model_0_predictions.append(tp_preds[i])
             model_0_binary_predictions.append(tp_binary_preds[i])
             gt_labels.append(gt_labeling[i])
 
-    return elephant_examples, model_0_predictions, model_0_binary_predictions, gt_labels
+    return elephant_examples, model_0_logits, model_0_predictions, model_0_binary_predictions, gt_labels
 
 
 
@@ -331,13 +339,13 @@ def train_model_1(adversarial_train_files, adversarial_test_files, train_loader,
     # If we are using model_0 predictions as additional features for the model
     if parameters.MODEL_0_FEATURES:
         # Add train features
-        model_0_train_pos_dir = os.path.join(save_path, 'model_0_tp_train_preds')
-        model_0_train_neg_dir = os.path.join(save_path, 'model_0_fp_train_preds')
+        model_0_train_pos_dir = os.path.join(save_path, 'model_0_tp_train_logits')
+        model_0_train_neg_dir = os.path.join(save_path, 'model_0_fp_train_logits')
         train_loader.dataset.add_model_0_preds(model_0_pos_dir=model_0_train_pos_dir, 
                                                 model_0_neg_dir=model_0_train_neg_dir)
         # Add test features
-        model_0_test_pos_dir = os.path.join(save_path, 'model_0_tp_test_preds')
-        model_0_test_neg_dir = os.path.join(save_path, 'model_0_fp_test_preds')
+        model_0_test_pos_dir = os.path.join(save_path, 'model_0_tp_test_logits')
+        model_0_test_neg_dir = os.path.join(save_path, 'model_0_fp_test_logits')
         test_loader.dataset.add_model_0_preds(model_0_pos_dir=model_0_test_pos_dir, 
                                                 model_0_neg_dir=model_0_test_neg_dir)
 
@@ -484,7 +492,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader,
     if shift_windows:
         train_adversarial_file = "model_0-False_Pos_Train_Shift.txt"
 
-    adversarial_train_files, model_0_fp_train_preds, model_0_fp_binary_train_preds  = adversarial_discovery_helper(full_train_loader,
+    adversarial_train_files, model_0_fp_train_logits, model_0_fp_train_preds, model_0_fp_binary_train_preds  = adversarial_discovery_helper(full_train_loader,
                                                              model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
     # Save the adversarial feature file paths
     adversarial_train_save_path = os.path.join(save_path, train_adversarial_file)
@@ -494,6 +502,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader,
 
     # Save model_0 FP train predictions both raw and transformed with additional label
     print ("Saving model_0 FP predictions on the train data")
+    save_model_0_predictions(save_path, adversarial_train_files, model_0_fp_train_logits, "model_0_fp_train_logits")
     save_model_0_predictions(save_path, adversarial_train_files, model_0_fp_train_preds, "model_0_fp_train_preds")
     save_model_0_predictions(save_path, adversarial_train_files, model_0_fp_binary_train_preds, "model_0_fp_binary_train_preds")
     transformed_model_0_fp_binary_train_preds = transform_model_0_predictions(model_0_fp_binary_train_preds)
@@ -501,14 +510,15 @@ def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader,
 
     # Save model_0 TP train predictions both raw and transformed with additional label
     print ("Saving model_0 TP predictions on the train data")
-    elephant_train_files, model_0_tp_train_preds, model_0_tp_binary_train_preds, gt_train_labels = model_0_Elephant_Predictions(model_1_train_loader, model_0)
+    elephant_train_files, model_0_tp_train_logits, model_0_tp_train_preds, model_0_tp_binary_train_preds, gt_train_labels = model_0_Elephant_Predictions(model_1_train_loader, model_0)
+    save_model_0_predictions(save_path, elephant_train_files, model_0_tp_train_logits, "model_0_tp_train_logits")
     save_model_0_predictions(save_path, elephant_train_files, model_0_tp_train_preds, "model_0_tp_train_preds")
     save_model_0_predictions(save_path, elephant_train_files, model_0_tp_binary_train_preds, "model_0_tp_binary_train_preds")
     transformed_model_0_tp_binary_train_preds = transform_model_0_predictions(model_0_tp_binary_train_preds, gt_train_labels)
     save_model_0_predictions(save_path, elephant_train_files, transformed_model_0_tp_binary_train_preds, "transformed_model_0_tp_binary_train_preds")
 
     test_adversarial_files = "model_0-False_Pos_Test.txt"
-    adversarial_test_files, model_0_fp_test_preds, model_0_fp_binary_test_preds = adversarial_discovery_helper(full_test_loader, 
+    adversarial_test_files, model_0_fp_test_logits, model_0_fp_test_preds, model_0_fp_binary_test_preds = adversarial_discovery_helper(full_test_loader, 
                                                              model_0, min_length=parameters.FALSE_POSITIVE_THRESHOLD)
     adversarial_test_save_path = os.path.join(save_path, test_adversarial_files)
     with open(adversarial_test_save_path, 'w') as f:
@@ -517,6 +527,7 @@ def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader,
 
     # Save model_0 FP test predictions both raw and transformed with additional label
     print ("Saving model_0 FP predictions on the test data")
+    save_model_0_predictions(save_path, adversarial_test_files, model_0_fp_test_logits, "model_0_fp_test_logits")
     save_model_0_predictions(save_path, adversarial_test_files, model_0_fp_test_preds, "model_0_fp_test_preds")
     save_model_0_predictions(save_path, adversarial_test_files, model_0_fp_binary_test_preds, "model_0_fp_binary_test_preds")
     transformed_model_0_fp_binary_test_preds = transform_model_0_predictions(model_0_fp_binary_test_preds)
@@ -524,7 +535,8 @@ def adversarial_discovery(full_train_path, full_test_path, model_1_train_loader,
 
     # Save model_0 TP train predictions both raw and transformed with additional label
     print ("Saving model_0 TP predictions on the test data")
-    elephant_test_files, model_0_tp_test_preds, model_0_tp_binary_test_preds, gt_test_labels = model_0_Elephant_Predictions(model_1_test_loader, model_0)
+    elephant_test_files, model_0_tp_test_logits, model_0_tp_test_preds, model_0_tp_binary_test_preds, gt_test_labels = model_0_Elephant_Predictions(model_1_test_loader, model_0)
+    save_model_0_predictions(save_path, elephant_test_files, model_0_tp_test_logits, "model_0_tp_test_logits")
     save_model_0_predictions(save_path, elephant_test_files, model_0_tp_test_preds, "model_0_tp_test_preds")
     save_model_0_predictions(save_path, elephant_test_files, model_0_tp_binary_test_preds, "model_0_tp_binary_test_preds")
     transformed_model_0_tp_binary_test_preds = transform_model_0_predictions(model_0_tp_binary_test_preds, gt_test_labels)
