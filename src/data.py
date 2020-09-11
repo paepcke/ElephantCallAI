@@ -455,6 +455,8 @@ class ElephantDatasetFuzzy(data.Dataset):
             # Repeat the pred values along the feature axis
             model_0_pred = np.expand_dims(model_0_pred, axis=1)
             model_0_pred = np.repeat(model_0_pred, data.shape[2], axis=1)
+            # Consider normalizing this input!!
+            model_0_pred = (model_0_pred - np.mean(model_0_pred)) / np.std(model_0_pred)
 
             # Repeat the spectrogram data to creat 3 channels and then
             # make the final channel by the model_0_pred
