@@ -32,7 +32,7 @@ from train import train_curriculum
         ...
     Look at some profiling:
         - After five epochs keep a histogram of how many get x segments incorrect
-        - keep track of the variance of number of wrong for each example! Namely,
+        - keep track of the variance of number of wrong (segments) for each example! Namely,
         for each example, see how many wrong were for that example after 
         5, 10, 15, 20, 25 epochs and then calculate the # wrong variance.
         - Also keep track of the variance of "avg" confidence like in focal loss
