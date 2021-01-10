@@ -107,6 +107,40 @@ def loadModel(model_path):
     return model, model_id
 
 
+class PredictionTimer:
+    def __init__(self, device_name):
+        # TODO: record batch size?
+        self.cur_start = None
+        self.device_name = device_name
+        self.duration_history = []
+
+    def start_timer(self):
+        self.cur_start = time.time()
+
+    def finish_timer(self):
+        if self.cur_start is None:
+            raise ValueError("Some sort of multithreading is going on here...")
+        now = time.time()
+        duration = now - self.cur_start  # this is a FLOAT for # of seconds
+        self.cur_start = None
+        self.duration_history.append(duration)
+
+    def pretty_print(self):
+        history = np.array(self.duration_history)
+        num_trials = len(self.duration_history)
+        mean_seconds = history.mean()
+        std_seconds = history.std()
+        print("For {} calls, the average latency was {} and the std of that latency was {}".format(num_trials,
+                                                                                                   mean_seconds,
+                                                                                                   std_seconds))
+TIME_TRACKER = PredictionTimer(device.type)
+
+
+def forward(model, data):
+    TIME_TRACKER.start_timer()
+    outputs = model(data)
+    TIME_TRACKER.finish_timer()
+    return outputs
 
 ##############################################################################
 ### Full Time series evaluation assuming we have access to the spectrogram ###
@@ -432,7 +466,7 @@ def predict_spec_full(spectrogram, model):
 
     spectrogram = Variable(spectrogram.to(parameters.device))
 
-    outputs = model(spectrogram) # Shape - (1, seq_len, 1)
+    outputs = forward(model, spectrogram) # Shape - (1, seq_len, 1)
     compressed_out = outputs.view(-1, 1)
     compressed_out = outputs.squeeze()
 
@@ -478,7 +512,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         spect_slice = torch.from_numpy(spect_slice).float()
         spect_slice = Variable(spect_slice.to(parameters.device))
 
-        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        outputs = forward(model, spect_slice) # Shape - (1, chunk_size, 1)
         compressed_out = outputs.view(-1, 1)
         compressed_out = outputs.squeeze()
 
@@ -498,7 +532,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
         spect_slice = torch.from_numpy(spect_slice).float()
         spect_slice = Variable(spect_slice.to(parameters.device))
 
-        outputs = model(spect_slice) # Shape - (1, chunk_size, 1)
+        outputs = forward(model, spect_slice) # Shape - (1, chunk_size, 1)
         compressed_out = outputs.view(-1, 1)
         # In the case of ResNet the output is forced to the chunk size
         compressed_out = outputs.squeeze()[:predictions[spect_idx: ].shape[0]]
@@ -961,6 +995,8 @@ def main(args):
             os.mkdir(save_path)
         # Save the predictions
         create_predictions_csv(full_dataset, predictions, save_path)
+
+    TIME_TRACKER.pretty_print()
 
     '''
     assert(len(sys.argv) > 2)
