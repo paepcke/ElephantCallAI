@@ -110,6 +110,7 @@ def loadModel(model_path):
 class PredictionTimer:
     def __init__(self, device_name):
         # TODO: record batch size?
+        # TODO: record gpu mem copy cost?
         self.cur_start = None
         self.device_name = device_name
         self.duration_history = []
@@ -130,9 +131,14 @@ class PredictionTimer:
         num_trials = len(self.duration_history)
         mean_seconds = history.mean()
         std_seconds = history.std()
-        print("For {} calls, the average latency was {} and the std of that latency was {}".format(num_trials,
-                                                                                                   mean_seconds,
-                                                                                                   std_seconds))
+        max_latency = history.max()
+        print("Inference device was {}. For {} calls, the average latency was {}\n"
+              "The std of that latency was {}\n"
+              "The max recorded latency was {}.".format(self.device_name,
+                   num_trials,
+                   mean_seconds,
+                   std_seconds,
+                   max_latency))
 TIME_TRACKER = PredictionTimer(device.type)
 
 
