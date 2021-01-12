@@ -579,7 +579,8 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
         print ("Generating Prediction for:", data_id)
 
         if sliding_window:
-            predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump)
+            # predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump)
+            predictions = predict_batched(spectrogram, model, jump=jump)
         else:
             predictions = predict_spec_full(spectrogram, model)
 
@@ -1003,6 +1004,7 @@ def main(args):
         create_predictions_csv(full_dataset, predictions, save_path)
 
     TIME_TRACKER.pretty_print()
+    print("Inference batch size was {}".format(BATCH_SIZE))
 
     '''
     assert(len(sys.argv) > 2)
@@ -1721,6 +1723,101 @@ def test_event_metric(test, compare, threshold=0.1, is_truth=False, call_length=
 
     return true_events, false_events
 '''
+
+FREQS = 77
+TIME_STEPS_IN_WINDOW = 256
+BATCH_SIZE = 32
+
+def predict_batched(spectrogram, model, jump=128):
+    # the axes on the files on my machine are mixed up, this will fix it
+    # spectrogram = np.moveaxis(spectrogram, 0, -1)
+
+    return batched_model_eval(spectrogram, jump, BATCH_SIZE, model)
+
+
+# TODO: unit test with mock model?
+def batched_model_eval(data, jump, batchsize, model):
+    time_idx = 0
+
+    # TODO: reformat expectation of data to forego additional first dimension?
+
+    # data is an ndarray of shape 1, -1 (depends on input length), FREQS
+
+    # key assumption: TIME_STEPS_IN_WINDOW is evenly divisible by 'jump'
+    assert(TIME_STEPS_IN_WINDOW % jump == 0)
+    k = TIME_STEPS_IN_WINDOW // jump
+
+    # cut off data at end to allow for even divisibility
+    raw_end_time = data.shape[0]
+    clean_end_time = raw_end_time - (raw_end_time % jump)
+
+    predictions = np.zeros(clean_end_time)
+    overlap_counts = np.zeros(clean_end_time)
+
+    # there's a little inefficiency here: one jump's worth of data is re-copied to GPU mem every batch. with large batch sizes it won't be that bad.
+
+    while time_idx + TIME_STEPS_IN_WINDOW*batchsize + (k - 1)*jump <= clean_end_time:
+        forward_inference_on_batch(model, data, time_idx, jump, batchsize, predictions, overlap_counts, k)
+        time_idx += TIME_STEPS_IN_WINDOW*batchsize
+
+    # final batch (if size < batchsize)
+    final_full_batch_size = (clean_end_time - time_idx - (k - 1)*jump)//TIME_STEPS_IN_WINDOW
+    if final_full_batch_size > 0:
+        forward_inference_on_batch(model, data, time_idx, jump, final_full_batch_size, predictions, overlap_counts, k)
+        time_idx += TIME_STEPS_IN_WINDOW*final_full_batch_size
+
+    # remaining jumps (less than k)
+    if time_idx + TIME_STEPS_IN_WINDOW <= clean_end_time:
+        remaining_jumps = (clean_end_time - time_idx - TIME_STEPS_IN_WINDOW)//jump + 1
+        forward_inference_on_batch(model, data, time_idx, jump, 1, predictions, overlap_counts, remaining_jumps)
+
+    # Average the predictions on overlapping frames
+    predictions = predictions / overlap_counts
+
+    # TODO: why do you have to do this? Why not just incorporate the sigmoid into the model?
+    # Get squashed [0, 1] predictions
+    predictions = sigmoid(predictions)
+
+    return predictions
+
+
+def forward_inference_on_batch(
+        model,  # the ML model we use to generate predictions
+        data,  # input data, of dims 1, number of time segments, number of frequencies
+        time_idx,  # the beginning time index for this inference
+        jump,  # number of time steps between starts of frames to perform inference on (must be a clean divisor of TIME_STEPS_IN_WINDOW)
+        batchsize,  # number of frames to perform inference on at once. Be careful not to exceed VRAM limits! This is going to be highly hardware-dependent.
+        predictions,  # full ndarray of the sum of all predictions at each individual time step
+        overlap_counts,  # full ndarray of the number of predictions applied to each invididual time step
+
+        # the number of different offsets that should be used. This method will process this many batches of input.
+        # If this number is 1, no 'jumps' will actually be evaluated, just the standard start of the array (the offset of 0).
+        max_jumps):
+
+    # construct a tensor and copy it to the device
+    input_batch = data[time_idx:(time_idx + batchsize * TIME_STEPS_IN_WINDOW + (max_jumps - 1) * jump), :]
+    input_batch = torch.from_numpy(input_batch).float()
+    input_batch = Variable(input_batch.to(parameters.device))
+
+    # TODO: explanation of the overlap method I'm using here
+    for num_jumps_to_offset in range(0, max_jumps):
+        # Used for indexing into the input batch
+        local_begin_idx = num_jumps_to_offset * jump
+        local_end_idx = local_begin_idx + batchsize * TIME_STEPS_IN_WINDOW
+
+        # Used for indexing into the prediction arrays
+        global_begin_idx = local_begin_idx + time_idx
+        global_end_idx = local_end_idx + time_idx
+
+        reshaped_input_batch = input_batch[local_begin_idx:local_end_idx, :].reshape(batchsize, TIME_STEPS_IN_WINDOW, FREQS)
+        raw_outputs = forward(model, reshaped_input_batch)
+        outputs = raw_outputs.view(batchsize, TIME_STEPS_IN_WINDOW)
+
+        relevant_predictions = predictions[global_begin_idx:global_end_idx].reshape((batchsize, TIME_STEPS_IN_WINDOW))
+        relevant_overlap_counts = overlap_counts[global_begin_idx:global_end_idx].reshape((batchsize, TIME_STEPS_IN_WINDOW))
+
+        relevant_predictions += outputs.cpu().detach().numpy()
+        relevant_overlap_counts += 1
 
 
 if __name__ == '__main__':
