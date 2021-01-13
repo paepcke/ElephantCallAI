@@ -580,7 +580,10 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
 
         if sliding_window:
             # predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump)
+            start = time.time()
             predictions = predict_batched(spectrogram, model, jump=jump)
+            duration = time.time() - start
+            print("Prediction took {} seconds".format(duration))
         else:
             predictions = predict_spec_full(spectrogram, model)
 
