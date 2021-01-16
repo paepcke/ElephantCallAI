@@ -24,6 +24,8 @@ oauth = OAuth2(
 
 client = LoggingClient(oauth)
 user = client.user().get()
+print ("Beginning")
+
 print('User ID is {0}'.format(user.id))
 import os
 def download(folder, path):
