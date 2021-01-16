@@ -13,8 +13,6 @@ print(auth_url)
 from boxsdk import LoggingClient
 # The fuck you only have 60 seconds to do this. Seems abusrda
 access_token, refresh_token = oauth.authenticate('Un0Zg8ptyWxfetjjI7JL1mvZFBs2iU2Q') # Enter auth code in here from redirect link
-print ("done")
-quit()
 
 # Hoping passing in refresh token here means it gets used
 oauth = OAuth2(
