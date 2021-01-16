@@ -5,6 +5,7 @@ data/*
 models/*
 whale-detection-challenge/*
 Elephant_Archive/*
+elephant_dataset/*
 elephant_dataset/Test_full/
 elephant_dataset/Data/*
 elephant_dataset/New_Data/*
