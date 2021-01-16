@@ -39,6 +39,6 @@ def download(folder, path):
             client.file(file_id=item.id).download_to(output_file)
 
 
-shared_folder = client.get_shared_item("https://cornell.box.com/s/n0xesdrdrlq4ch96zl6zqwkkigfejrhw")
+shared_folder = client.get_shared_item("https://cornell.app.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g")
 
-download(shared_folder, "/home/data/elephants/rawdata/DetectorDevelopment/")
+download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/")
