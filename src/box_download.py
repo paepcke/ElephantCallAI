@@ -25,7 +25,6 @@ oauth = OAuth2(
 client = LoggingClient(oauth)
 user = client.user().get()
 print ("Beginning")
-
 print('User ID is {0}'.format(user.id))
 import os
 def download(folder, path):
@@ -39,6 +38,6 @@ def download(folder, path):
             client.file(file_id=item.id).download_to(output_file)
 
 
-shared_folder = client.get_shared_item("https://cornell.app.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g")
+shared_folder = client.get_shared_item("https://stanford.app.box.com/folder/120406029581?s=m286jb2r44nk6dw80urg3xjgggdcq88g")
 
 download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/")
