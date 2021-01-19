@@ -52,7 +52,7 @@ def download(folder, path, failed_files_out, failed_files):
     items = folder.get_items()
     for item in items:
         print (item.name)
-        if item.type == 'file' and (failed_files is None or item.name is in failed_files): #and not os.path.exists(path + item.name):
+        if item.type == 'file' and (failed_files is None or item.name in failed_files): #and not os.path.exists(path + item.name):
             print ("Downloading")
             output_file = open(path + item.name, 'wb')
             try: # Catch some weird exception
