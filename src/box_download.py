@@ -33,9 +33,13 @@ def download(folder, path):
     os.makedirs(path, exist_ok=True)
     items = folder.get_items()
     for item in items:
-        if item.type == 'file':
+        print (item.name)
+        if item.type == 'file' and not os.path.exists(path + item.name):
+            print ("Downloading")
             output_file = open(path + item.name, 'wb')
             client.file(file_id=item.id).download_to(output_file)
+        else:
+            print ("Already exists")
 
 
 shared_folder = client.get_shared_item("https://cornell.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g")
