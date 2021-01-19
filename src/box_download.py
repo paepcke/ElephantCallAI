@@ -3,8 +3,10 @@ import argparse
 
 # Use argparse to load in failed data files
 parser = argparse.ArgumentParser()
-parser.add_argument('--failed',
-     help='Just try dowloading the previously failed files')
+parser.add_argument('--failed_file', default="/home/data/elephants/rawdata/NewLocationData/HHperformance_sounds/failed_files.txt",
+     help='File with the failed download files')
+parser.add_argument('--failed', action='store_true',
+    help='Just try dowloading the previously failed files')
 
 oauth = OAuth2(
     client_id='7qurgji0m5sek66vgqvlzwtk4mwub8mi',
@@ -36,9 +38,9 @@ print('User ID is {0}'.format(user.id))
 # Load in the set of failed files if downloading them
 args = parser.parse_args()
 failed_files = None
-if args.failed is not None:
+if args.failed:
     failed_files = set()
-    f = open(failed, 'r')
+    f = open(args.failed_file, 'r')
     for line in f:
         failed_files.add(line)
 
