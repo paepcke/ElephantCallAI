@@ -1,4 +1,10 @@
 from boxsdk import OAuth2
+import argparse
+
+# Use argparse to load in failed data files
+parser = argparse.ArgumentParser()
+parser.add_argument('--failed',
+     help='Just try dowloading the previously failed files')
 
 oauth = OAuth2(
     client_id='7qurgji0m5sek66vgqvlzwtk4mwub8mi',
@@ -26,17 +32,27 @@ client = LoggingClient(oauth)
 user = client.user().get()
 print ("Beginning")
 print('User ID is {0}'.format(user.id))
+
+# Load in the set of failed files if downloading them
+args = parser.parse_args()
+failed_files = None
+if args.failed is not None:
+    failed_files = set()
+    f = open(failed, 'r')
+    for line in f:
+        failed_files.add(line)
+
 import os
-def download(folder, path, failed_files):
+def download(folder, path, failed_files_out, failed_files):
     # TODO: Make folder locally
     path += folder.name + '/'
     os.makedirs(path, exist_ok=True)
-    # Open the failed_files
-    failed = open(path + failed_files, 'w')
+    # Open the failed_files_out
+    failed = open(path + failed_files_out, 'w')
     items = folder.get_items()
     for item in items:
         print (item.name)
-        if item.type == 'file': #and not os.path.exists(path + item.name):
+        if item.type == 'file' and (failed_files is None or item.name is in failed_files): #and not os.path.exists(path + item.name):
             print ("Downloading")
             output_file = open(path + item.name, 'wb')
             try: # Catch some weird exception
@@ -51,4 +67,5 @@ def download(folder, path, failed_files):
 
 shared_folder = client.get_shared_item("https://cornell.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g") 
 
-download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/", "failed_files.txt")
+download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/", "failed_files.txt", failed_files)
+
