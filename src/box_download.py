@@ -27,21 +27,28 @@ user = client.user().get()
 print ("Beginning")
 print('User ID is {0}'.format(user.id))
 import os
-def download(folder, path):
+def download(folder, path, failed_files):
     # TODO: Make folder locally
     path += folder.name + '/'
     os.makedirs(path, exist_ok=True)
+    # Open the failed_files
+    failed = open(path + failed_files, 'w')
     items = folder.get_items()
     for item in items:
         print (item.name)
-        if item.type == 'file' and not os.path.exists(path + item.name):
+        if item.type == 'file': #and not os.path.exists(path + item.name):
             print ("Downloading")
             output_file = open(path + item.name, 'wb')
-            client.file(file_id=item.id).download_to(output_file)
+            try: # Catch some weird exception
+                client.file(file_id=item.id).download_to(output_file)
+            except Exception as e:
+               failed.write(item.name + "\n") 
         else:
             print ("Already exists")
 
+    failed.close()
 
-shared_folder = client.get_shared_item("https://cornell.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g")
 
-download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/")
+shared_folder = client.get_shared_item("https://cornell.box.com/s/m286jb2r44nk6dw80urg3xjgggdcq88g") 
+
+download(shared_folder, "/home/data/elephants/rawdata/NewLocationData/", "failed_files.txt")
