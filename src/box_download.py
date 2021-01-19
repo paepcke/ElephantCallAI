@@ -57,10 +57,18 @@ def download(folder, path, failed_files_out, failed_files):
         if item.type == 'file' and (failed_files is None or item.name in failed_files): #and not os.path.exists(path + item.name):
             print ("Downloading")
             output_file = open(path + item.name, 'wb')
-            try: # Catch some weird exception
-                client.file(file_id=item.id).download_to(output_file)
-            except Exception as e:
-               failed.write(item.name + "\n") 
+            # Let us keep trying to download the file!
+            i = 0
+            while True:
+                try: # Catch some weird exception
+                    client.file(file_id=item.id).download_to(output_file)
+                except Exception as e:
+                    #failed.write(item.name + "\n") 
+                    print (item.name + " failed x" + str(i))
+                    i += 1
+                else:
+                    print ("It worked!")
+                    break
         else:
             print ("Already exists")
 
