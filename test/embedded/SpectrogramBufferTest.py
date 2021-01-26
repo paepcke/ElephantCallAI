@@ -80,7 +80,7 @@ class SpectrogramBufferTest(unittest.TestCase):
         buffer.pending_post_processing_end = 3
         buffer.rows_unprocessed = 2
         buffer.rows_allocated = 5
-        buffer.timestamp_deque.append((0, datetime.now(timezone.utc)))
+        buffer.post_processing_timestamp_deque.append((0, datetime.now(timezone.utc)))
 
         buffer.mark_post_processing_complete(2)
         self.assertEqual(2, buffer.allocated_begin)
@@ -96,7 +96,7 @@ class SpectrogramBufferTest(unittest.TestCase):
         buffer.allocated_begin = 4
         buffer.rows_unprocessed = 2
         buffer.rows_allocated = 8
-        buffer.timestamp_deque.append((4, datetime.now(timezone.utc)))
+        buffer.post_processing_timestamp_deque.append((4, datetime.now(timezone.utc)))
 
         buffer.mark_post_processing_complete(4)
         self.assertEqual(0, buffer.allocated_begin)
@@ -121,6 +121,8 @@ class SpectrogramBufferTest(unittest.TestCase):
         buffer.unprocessed_end = 2
         buffer.rows_unprocessed = 2
         buffer.rows_allocated = 2
+        buffer.unprocessed_timestamp_deque.append((0, datetime.now(timezone.utc)))
+
         data_out = buffer.get_unprocessed_data(2)
 
         # these should be the same memory location
@@ -201,7 +203,7 @@ class SpectrogramBufferTest(unittest.TestCase):
         buffer.pending_post_processing_end = 3
         buffer.rows_unprocessed = 0
         buffer.rows_allocated = 3
-        buffer.timestamp_deque.append((0, datetime.now(timezone.utc)))
+        buffer.post_processing_timestamp_deque.append((0, datetime.now(timezone.utc)))
 
         buffer.mark_post_processing_complete(3)
         self.assertEqual(3, buffer.allocated_begin)
@@ -210,7 +212,7 @@ class SpectrogramBufferTest(unittest.TestCase):
         self.assertEqual(0, buffer.rows_allocated)
         self.assertEqual(0, buffer.rows_unprocessed)
 
-        self.assertEqual(0, len(buffer.timestamp_deque))
+        self.assertEqual(0, len(buffer.post_processing_timestamp_deque))
 
     def test_timestamp_queue_updates_freeing_data(self):
         buffer = SpectrogramBuffer(override_buffer_size=8, min_appendable_time_steps=1)
@@ -219,14 +221,15 @@ class SpectrogramBufferTest(unittest.TestCase):
         buffer.rows_unprocessed = 2
         buffer.rows_allocated = 5
         now = datetime.now(timezone.utc)
-        buffer.timestamp_deque.append((0, now))
-        buffer.mark_post_processing_complete(3)
+        buffer.post_processing_timestamp_deque.append((0, now))
+        buffer.unprocessed_timestamp_deque.append((3, now + 3*TIME_DELTA_PER_TIME_STEP))
+        buffer.mark_post_processing_complete(2)
 
-        self.assertEqual(1, len(buffer.timestamp_deque))
+        self.assertEqual(1, len(buffer.post_processing_timestamp_deque))
 
-        top_timestamp = buffer.timestamp_deque[0]
-        self.assertEqual(3, top_timestamp[0])
-        expected_time = now + 3 * TIME_DELTA_PER_TIME_STEP
+        top_timestamp = buffer.post_processing_timestamp_deque[0]
+        self.assertEqual(2, top_timestamp[0])
+        expected_time = now + 2 * TIME_DELTA_PER_TIME_STEP
         self.assertEqual(expected_time, top_timestamp[1])
 
     def test_timestamp_queue_updates_freeing_data_pruning_multiple_timestamps(self):
@@ -239,20 +242,20 @@ class SpectrogramBufferTest(unittest.TestCase):
         time2 = now + 10*timedelta(seconds=2)
         time3 = time2 + 18*timedelta(seconds=3)
         time4 = time3 + 7*timedelta(seconds=1)
-        buffer.timestamp_deque.append((0, now))
-        buffer.timestamp_deque.append((2, time2))
-        buffer.timestamp_deque.append((4, time3))
-        buffer.timestamp_deque.append((6, time4))
+        buffer.post_processing_timestamp_deque.append((0, now))
+        buffer.post_processing_timestamp_deque.append((2, time2))
+        buffer.post_processing_timestamp_deque.append((3, time3))
+        buffer.post_processing_timestamp_deque.append((5, time4))
 
-        buffer.mark_post_processing_complete(5)
+        buffer.mark_post_processing_complete(4)
 
-        self.assertEqual(2, len(buffer.timestamp_deque))
-        top_timestamp = buffer.timestamp_deque[0]
-        self.assertEqual(5, top_timestamp[0])
+        self.assertEqual(2, len(buffer.post_processing_timestamp_deque))
+        top_timestamp = buffer.post_processing_timestamp_deque[0]
+        self.assertEqual(4, top_timestamp[0])
         expected_time = time3 + 1 * TIME_DELTA_PER_TIME_STEP
         self.assertEqual(expected_time, top_timestamp[1])
 
-        self.assertEqual((6, time4), buffer.timestamp_deque[1])
+        self.assertEqual((5, time4), buffer.post_processing_timestamp_deque[1])
 
     def test_timestamp_queue_updates_freeing_data_pruning_multiple_timestamps_with_wraparound(self):
         buffer = SpectrogramBuffer(override_buffer_size=8, min_appendable_time_steps=1)
@@ -264,19 +267,19 @@ class SpectrogramBufferTest(unittest.TestCase):
         now = datetime.now(timezone.utc)
         time2 = now + 10 * timedelta(seconds=2)
         time3 = time2 + 18 * timedelta(seconds=3)
-        buffer.timestamp_deque.append((5, now))
-        buffer.timestamp_deque.append((0, time2))
-        buffer.timestamp_deque.append((2, time3))
+        buffer.post_processing_timestamp_deque.append((5, now))
+        buffer.post_processing_timestamp_deque.append((0, time2))
+        buffer.post_processing_timestamp_deque.append((2, time3))
 
         buffer.mark_post_processing_complete(5)
 
-        self.assertEqual(2, len(buffer.timestamp_deque))
-        top_timestamp = buffer.timestamp_deque[0]
+        self.assertEqual(2, len(buffer.post_processing_timestamp_deque))
+        top_timestamp = buffer.post_processing_timestamp_deque[0]
         self.assertEqual(1, top_timestamp[0])
         expected_time = time2 + 1 * TIME_DELTA_PER_TIME_STEP
         self.assertEqual(expected_time, top_timestamp[1])
 
-        self.assertEqual((2, time3), buffer.timestamp_deque[1])
+        self.assertEqual((2, time3), buffer.post_processing_timestamp_deque[1])
 
     def test_timestamp_queue_updates_freeing_data_exact_new_timestamp(self):
         buffer = SpectrogramBuffer(override_buffer_size=8, min_appendable_time_steps=1)
@@ -288,19 +291,72 @@ class SpectrogramBufferTest(unittest.TestCase):
         now = datetime.now(timezone.utc)
         time2 = now + 10 * timedelta(seconds=2)
         time3 = time2 + 18 * timedelta(seconds=3)
-        buffer.timestamp_deque.append((5, now))
-        buffer.timestamp_deque.append((0, time2))
-        buffer.timestamp_deque.append((2, time3))
+        buffer.post_processing_timestamp_deque.append((5, now))
+        buffer.post_processing_timestamp_deque.append((0, time2))
+        buffer.post_processing_timestamp_deque.append((2, time3))
 
         buffer.mark_post_processing_complete(4)
 
-        self.assertEqual(2, len(buffer.timestamp_deque))
-        top_timestamp = buffer.timestamp_deque[0]
+        self.assertEqual(2, len(buffer.post_processing_timestamp_deque))
+        top_timestamp = buffer.post_processing_timestamp_deque[0]
         self.assertEqual(0, top_timestamp[0])
         expected_time = time2
         self.assertEqual(expected_time, top_timestamp[1])
 
-        self.assertEqual((2, time3), buffer.timestamp_deque[1])
+        self.assertEqual((2, time3), buffer.post_processing_timestamp_deque[1])
+
+    def test_transfer_timestamps_non_exact(self):
+        buffer = SpectrogramBuffer(override_buffer_size=8, min_appendable_time_steps=1)
+        buffer.unprocessed_end = 3
+        buffer.pending_post_processing_end = 6
+        buffer.allocated_begin = 4
+        buffer.rows_unprocessed = 5
+        buffer.rows_allocated = 7
+        now = datetime.now(timezone.utc)
+        time2 = now + 10 * timedelta(seconds=2)
+        time3 = time2 + 18 * timedelta(seconds=3)
+        time4 = time3 + 7 * timedelta(seconds=1)
+        buffer.post_processing_timestamp_deque.append((4, now))
+        buffer.unprocessed_timestamp_deque.append((6, time2))
+        buffer.unprocessed_timestamp_deque.append((7, time3))
+        buffer.unprocessed_timestamp_deque.append((2, time4))
+
+        buffer.get_unprocessed_data(3)
+        self.assertEqual(1, buffer.pending_post_processing_end)
+        self.assertEqual(3, len(buffer.post_processing_timestamp_deque))
+        self.assertEqual((4, now), buffer.post_processing_timestamp_deque[0])
+        self.assertEqual((6, time2), buffer.post_processing_timestamp_deque[1])
+        self.assertEqual((7, time3), buffer.post_processing_timestamp_deque[2])
+
+        self.assertEqual(2, len(buffer.unprocessed_timestamp_deque))
+        self.assertEqual((1, time3 + 2*TIME_DELTA_PER_TIME_STEP), buffer.unprocessed_timestamp_deque[0])
+        self.assertEqual((2, time4), buffer.unprocessed_timestamp_deque[1])
+
+    def test_transfer_timestamps_exact(self):
+        buffer = SpectrogramBuffer(override_buffer_size=8, min_appendable_time_steps=1)
+        buffer.unprocessed_end = 3
+        buffer.pending_post_processing_end = 6
+        buffer.allocated_begin = 4
+        buffer.rows_unprocessed = 5
+        buffer.rows_allocated = 7
+        now = datetime.now(timezone.utc)
+        time2 = now + 10 * timedelta(seconds=2)
+        time3 = time2 + 18 * timedelta(seconds=3)
+        time4 = time3 + 7 * timedelta(seconds=1)
+        buffer.post_processing_timestamp_deque.append((4, now))
+        buffer.unprocessed_timestamp_deque.append((6, time2))
+        buffer.unprocessed_timestamp_deque.append((1, time3))
+        buffer.unprocessed_timestamp_deque.append((2, time4))
+
+        buffer.get_unprocessed_data(4)
+        self.assertEqual(2, buffer.pending_post_processing_end)
+        self.assertEqual(3, len(buffer.post_processing_timestamp_deque))
+        self.assertEqual((4, now), buffer.post_processing_timestamp_deque[0])
+        self.assertEqual((6, time2), buffer.post_processing_timestamp_deque[1])
+        self.assertEqual((1, time3), buffer.post_processing_timestamp_deque[2])
+
+        self.assertEqual(1, len(buffer.unprocessed_timestamp_deque))
+        self.assertEqual((2, time4), buffer.unprocessed_timestamp_deque[0])
 
 
 if __name__ == '__main__':

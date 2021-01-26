@@ -43,9 +43,11 @@ class SpectrogramBuffer:
     # The number of rows currently allocated to storing data
     rows_allocated: int
 
-    # A queue of tuples that allow us to keep track of the timestamps corresponding to examples in the queue.
-    # TODO: a deque for each state (unprocessed, post-processing)
-    timestamp_deque: Deque[Tuple[int, datetime]]
+    # A queue of tuples that allow us to keep track of the timestamps corresponding to unprocessed examples in the queue.
+    unprocessed_timestamp_deque: Deque[Tuple[int, datetime]]
+
+    # A queue of tuples that allow us to keep track of the timestamps corresponding to examples in the queue that are awaiting post-processing.
+    post_processing_timestamp_deque: Deque[Tuple[int, datetime]]
 
     def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None):
         buf_size = BUFFER_SIZE_IN_TIME_STEPS if override_buffer_size is None else override_buffer_size
@@ -55,7 +57,8 @@ class SpectrogramBuffer:
         self.allocated_begin = 0
         self.rows_allocated = 0
         self.rows_unprocessed = 0
-        self.timestamp_deque = deque()
+        self.unprocessed_timestamp_deque = deque()
+        self.post_processing_timestamp_deque = deque()
         if min_appendable_time_steps is None:
             self.min_appendable_time_steps = MIN_APPENDABLE_TIME_STEPS
         else:
@@ -70,7 +73,7 @@ class SpectrogramBuffer:
         available_time_distance_in_buf = self.buffer.shape[0] - self.rows_allocated
 
         if available_time_distance_in_buf < new_data_time_len:
-            # TODO: handle this more gracefully
+            # TODO: handle this more gracefully?
             raise ValueError("Not enough space in the buffer for new data!")
         self._assert_sufficient_time_steps(new_data, time)
 
@@ -90,11 +93,11 @@ class SpectrogramBuffer:
         self.rows_unprocessed += new_data_time_len
 
         # handle the timestamp
-        if time is None and len(self.timestamp_deque) == 0:
+        if time is None and len(self.unprocessed_timestamp_deque) == 0:
             now = datetime.now(timezone.utc)
-            self.timestamp_deque.append((data_start_idx, now))
+            self.unprocessed_timestamp_deque.append((data_start_idx, now))
         elif time is not None:
-            self.timestamp_deque.append((data_start_idx, time))
+            self.unprocessed_timestamp_deque.append((data_start_idx, time))
         # If time is None, this class assumes that the recording of this data occurred immediately after
         # the recording of the previous data, without interruption.
 
@@ -108,8 +111,10 @@ class SpectrogramBuffer:
         """Read unprocessed data from the buffer. By default, this read marks the data as 'processed'."""
         data, new_begin_idx = self.consume_data(time_steps, False, target=target, force_copy=False)
         if mark_for_postprocessing:
+            old_post_proc_end = self.pending_post_processing_end
             self.pending_post_processing_end = new_begin_idx
             self.rows_unprocessed -= time_steps
+            self._transfer_timestamp_data(old_post_proc_end)
         return data
 
     def get_processed_data(self, time_steps: int, target: Optional[np.ndarray] = None, free_buffer_region: bool = True) -> np.ndarray:
@@ -138,8 +143,8 @@ class SpectrogramBuffer:
 
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
     def _free_rows_update_timestamp(self, old_allocated_begin: int):
-        if self.rows_allocated == 0:
-            self.timestamp_deque.clear()
+        if (self.rows_allocated - self.rows_unprocessed) == 0:
+            self.post_processing_timestamp_deque.clear()
             return
 
         new_allocated_begin = self.allocated_begin
@@ -147,18 +152,48 @@ class SpectrogramBuffer:
         # the timestamp isn't exact, add the time delta for how many rows after the most recently deleted timestamp were
         # freed, then re-queue that timestamp.
         max_distance = (new_allocated_begin - old_allocated_begin) % self.buffer.shape[0]
-        cur_timestamp_entry = self.timestamp_deque.popleft()
+        cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
         next_timestamp_distance = 0
-        if len(self.timestamp_deque) != 0:
-            next_timestamp_distance = self._circular_distance(self.timestamp_deque[0][0], old_allocated_begin)
-        while len(self.timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
-            cur_timestamp_entry = self.timestamp_deque.popleft()
-            next_timestamp_distance = self._circular_distance(self.timestamp_deque[0][0], old_allocated_begin)
+        if len(self.post_processing_timestamp_deque) != 0:
+            next_timestamp_distance = self._circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
+        while len(self.post_processing_timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
+            cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
+            if len(self.post_processing_timestamp_deque) == 0:
+                break
+            next_timestamp_distance = self._circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
 
         new_timestamp = (new_allocated_begin,
                          cur_timestamp_entry[1]
                          + TIME_DELTA_PER_TIME_STEP * (self._circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
-        self.timestamp_deque.appendleft(new_timestamp)
+        self.post_processing_timestamp_deque.appendleft(new_timestamp)
+
+    # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method
+    def _transfer_timestamp_data(self, old_post_proc_end: int):
+        new_post_proc_end = self.pending_post_processing_end
+        max_distance = (new_post_proc_end - old_post_proc_end) % self.buffer.shape[0]
+        cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
+        next_timestamp_distance = 0
+        if len(self.unprocessed_timestamp_deque) != 0:
+            next_timestamp_distance = self._circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+        while len(self.unprocessed_timestamp_deque) != 0 and next_timestamp_distance < max_distance:
+            self.post_processing_timestamp_deque.append(cur_timestamp_entry)  # transfer the element to the post-processing timestamp deque
+            cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
+            if len(self.unprocessed_timestamp_deque) == 0:
+                break
+            next_timestamp_distance = self._circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+
+        if self.rows_unprocessed != 0:
+            circular_distance = self._circular_distance(new_post_proc_end, cur_timestamp_entry[0])
+            new_earliest_unprocessed_timestamp = (new_post_proc_end,
+                                                  cur_timestamp_entry[1]
+                                                  + TIME_DELTA_PER_TIME_STEP * circular_distance)
+            if len(self.unprocessed_timestamp_deque) != 0:
+                first_index = self.unprocessed_timestamp_deque[0][0]
+                if cur_timestamp_entry[0] + circular_distance != first_index:
+                    self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
+            else:
+                self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
+        self.post_processing_timestamp_deque.append(cur_timestamp_entry)
 
     def _circular_distance(self, right_idx: int, left_idx: int) -> int:
         return (right_idx - left_idx) % self.buffer.shape[0]
@@ -206,4 +241,5 @@ class SpectrogramBuffer:
         self.allocated_begin = 0
         self.rows_allocated = 0
         self.rows_unprocessed = 0
-        self.timestamp_deque.clear()
+        self.unprocessed_timestamp_deque.clear()
+        self.post_processing_timestamp_deque.clear()
