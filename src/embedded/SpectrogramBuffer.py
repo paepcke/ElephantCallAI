@@ -18,8 +18,8 @@ BUFFER_SIZE_IN_TIME_STEPS = BUFFER_SIZE_MB * 1024 * 1024 // (FREQ_BINS * BYTES_P
 # This constant is the default value, but other values can be configured in the constructor.
 MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 
-# TODO: figure this out by looking at other places in the codebase, current value is a placeholder
-TIME_DELTA_PER_TIME_STEP = timedelta(seconds=1)
+# This represents the length of the non-overlapping segments of each time window.
+TIME_DELTA_PER_TIME_STEP = timedelta(seconds=0.1)
 
 """A thread-safe spectrogram buffer."""
 class SpectrogramBuffer:
@@ -107,15 +107,28 @@ class SpectrogramBuffer:
                              "into the buffer in a single append operation.").format(self.min_appendable_time_steps))
 
     # data should always be accessed from the *return value* of this method
-    def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None, mark_for_postprocessing: bool = True) -> np.ndarray:
+    # TODO: add 'clip_different_timestamps' param
+    def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None,
+                             mark_for_postprocessing: bool = True) -> Tuple[np.ndarray, int]:
         """Read unprocessed data from the buffer. By default, this read marks the data as 'processed'."""
+        data_start_idx = self.pending_post_processing_end  # return this value to allow simple indexing of a prediction buffer
         data, new_begin_idx = self.consume_data(time_steps, False, target=target, force_copy=False)
         if mark_for_postprocessing:
             old_post_proc_end = self.pending_post_processing_end
             self.pending_post_processing_end = new_begin_idx
             self.rows_unprocessed -= time_steps
             self._transfer_timestamp_data(old_post_proc_end)
-        return data
+        return data, data_start_idx
+
+    def mark_for_post_processing(self, time_steps: int):
+        """Can be used to manually reclassify a region of the buffer without reading it"""
+        available_time_steps = self.rows_unprocessed
+        if time_steps > available_time_steps:
+            time_steps = available_time_steps
+        self.rows_unprocessed -= time_steps
+        old_post_proc_end = self.pending_post_processing_end
+        self.pending_post_processing_end = (self.pending_post_processing_end + time_steps) % self.buffer.shape[0]
+        self._transfer_timestamp_data(old_post_proc_end)
 
     def get_processed_data(self, time_steps: int, target: Optional[np.ndarray] = None, free_buffer_region: bool = True) -> np.ndarray:
         """Read data from the buffer for post-processing. This copies the data into a separate location
@@ -143,6 +156,7 @@ class SpectrogramBuffer:
 
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
     def _free_rows_update_timestamp(self, old_allocated_begin: int):
+        """Updates the timestamp deques after a region of the buffer is deallocated"""
         if (self.rows_allocated - self.rows_unprocessed) == 0:
             self.post_processing_timestamp_deque.clear()
             return
@@ -155,35 +169,36 @@ class SpectrogramBuffer:
         cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
         next_timestamp_distance = 0
         if len(self.post_processing_timestamp_deque) != 0:
-            next_timestamp_distance = self._circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
+            next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
         while len(self.post_processing_timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
             cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
             if len(self.post_processing_timestamp_deque) == 0:
                 break
-            next_timestamp_distance = self._circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
+            next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
 
         new_timestamp = (new_allocated_begin,
                          cur_timestamp_entry[1]
-                         + TIME_DELTA_PER_TIME_STEP * (self._circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
+                         + TIME_DELTA_PER_TIME_STEP * (self.circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
         self.post_processing_timestamp_deque.appendleft(new_timestamp)
 
     # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method
     def _transfer_timestamp_data(self, old_post_proc_end: int):
+        """Moves timestamps from the unprocessed deque to the pending_post_processing deque as data in the buffer is reclassified"""
         new_post_proc_end = self.pending_post_processing_end
         max_distance = (new_post_proc_end - old_post_proc_end) % self.buffer.shape[0]
         cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
         next_timestamp_distance = 0
         if len(self.unprocessed_timestamp_deque) != 0:
-            next_timestamp_distance = self._circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+            next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
         while len(self.unprocessed_timestamp_deque) != 0 and next_timestamp_distance < max_distance:
-            self.post_processing_timestamp_deque.append(cur_timestamp_entry)  # transfer the element to the post-processing timestamp deque
+            self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)  # transfer the element to the post-processing timestamp deque
             cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
             if len(self.unprocessed_timestamp_deque) == 0:
                 break
-            next_timestamp_distance = self._circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+            next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
 
         if self.rows_unprocessed != 0:
-            circular_distance = self._circular_distance(new_post_proc_end, cur_timestamp_entry[0])
+            circular_distance = self.circular_distance(new_post_proc_end, cur_timestamp_entry[0])
             new_earliest_unprocessed_timestamp = (new_post_proc_end,
                                                   cur_timestamp_entry[1]
                                                   + TIME_DELTA_PER_TIME_STEP * circular_distance)
@@ -193,15 +208,27 @@ class SpectrogramBuffer:
                     self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
             else:
                 self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
-        self.post_processing_timestamp_deque.append(cur_timestamp_entry)
+        self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)
 
-    def _circular_distance(self, right_idx: int, left_idx: int) -> int:
+    def _transfer_timestamp_entry_without_duplication(self, cur_timestamp_entry: Tuple[int, datetime]):
+        """A helper method that ensures timestamps only exist in the case of discontinuities or manual labels via 'append_data()'"""
+        if len(self.post_processing_timestamp_deque) != 0:
+            prev_time_idx, prev_timestamp = self.post_processing_timestamp_deque[-1]
+            if cur_timestamp_entry[1] != (prev_timestamp + self.circular_distance(cur_timestamp_entry[0], prev_time_idx) * TIME_DELTA_PER_TIME_STEP):
+                self.post_processing_timestamp_deque.append(cur_timestamp_entry)
+        else:
+            self.post_processing_timestamp_deque.append(cur_timestamp_entry)
+
+    def circular_distance(self, right_idx: int, left_idx: int) -> int:
+        """A helper method that returns the distance between right_idx and left_idx, going past the end of the array if necessary"""
+        # Note: be careful when using this for the case in which right_idx == left_idx, there's not enough information
+        # to tell whether the appropriate return value should be 0 or the entire size of the buffer
         return (right_idx - left_idx) % self.buffer.shape[0]
 
-    # copy data from the buffer into the target if necessary, otherwise, return a view.
-    # returns (read data, new value for starting index of read-from chunk)
     def consume_data(self, time_steps: int, processed: bool, target: Optional[np.ndarray] = None,
                      force_copy: Optional[bool] = False) -> Tuple[np.ndarray, int]:
+        """copy data from the buffer into the target if necessary, otherwise, return a view.
+        returns (read data, new value for starting index of read-from chunk)"""
         begin_idx: int
         end_idx: int
         if processed:
