@@ -8,7 +8,7 @@ from typing import List
 from src.embedded.DataCoordinator import DataCoordinator
 from src.embedded.TransitionState import TransitionState
 from src.embedded.SpectrogramBuffer import TIME_DELTA_PER_TIME_STEP, FREQ_BINS
-from src.embedded.Predictor import Predictor
+from src.embedded.predictors.ConstPredictor import ConstPredictor
 
 
 INTERVAL_OUTPUT_PATH = "/tmp/intervals.txt"
@@ -24,8 +24,8 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         now = datetime.now(timezone.utc)
         data = np.zeros((12, FREQ_BINS))
-        ones_predictor = Predictor(1)
-        zeros_predictor = Predictor(-1)
+        ones_predictor = ConstPredictor(1)
+        zeros_predictor = ConstPredictor(-1)
 
         coordinator.write(data, timestamp=now)
         coordinator.make_predictions(ones_predictor, 4, 0)
@@ -59,7 +59,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_dont_predict_without_another_timestamp_if_not_leaving_full_time_window(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         data = np.zeros((8, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
@@ -70,7 +70,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_can_predict_without_another_timestamp_if_leaving_full_time_window_with_overlap_allowance(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         data = np.zeros((8, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
@@ -82,7 +82,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_predict_entire_outstanding_data_if_another_timestamp_exists(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         data = np.zeros((12, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
 
         coordinator.write(data)
@@ -96,7 +96,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_predict_subset_of_outstanding_data_if_another_timestamp_exists(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         data = np.zeros((12, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
 
         coordinator.write(data)
@@ -110,7 +110,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_exception_thrown_if_overlap_allowance_geq_time_window_len(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
         data = np.zeros((12, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
@@ -123,7 +123,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_cant_predict_less_than_min_appendable_time_steps(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
         data = np.zeros((8, FREQ_BINS))
-        predictor = Predictor(1)
+        predictor = ConstPredictor(1)
 
         coordinator.write(data)
 

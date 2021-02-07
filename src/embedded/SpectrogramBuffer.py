@@ -1,4 +1,5 @@
 from typing import Optional, Tuple, Deque
+from threading import Lock
 
 import numpy as np
 from collections import deque
@@ -49,6 +50,14 @@ class SpectrogramBuffer:
     # A queue of tuples that allow us to keep track of the timestamps corresponding to examples in the queue that are awaiting post-processing.
     post_processing_timestamp_deque: Deque[Tuple[int, datetime]]
 
+    # NOTE: this synchronization scheme is only guaranteed to work if there is only one thread that writes data in,
+    # one thread that consumes unprocessed data, and one thread that consumes data for post-processing.
+    # A synchronization object that synchronizes changes to the metadata (buffer pointers)
+    metadata_mutex: Lock
+
+    # A synchronization object that synchronizes changes to the timestamp deques
+    timestamp_mutex: Lock
+
     def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None):
         buf_size = BUFFER_SIZE_IN_TIME_STEPS if override_buffer_size is None else override_buffer_size
         self.buffer = np.zeros((buf_size, FREQ_BINS))
@@ -63,14 +72,23 @@ class SpectrogramBuffer:
             self.min_appendable_time_steps = MIN_APPENDABLE_TIME_STEPS
         else:
             self.min_appendable_time_steps = min_appendable_time_steps
+        self.metadata_mutex = Lock()
+        self.timestamp_mutex = Lock()
 
+    def get_metadata_snapshot(self):
+        with self.metadata_mutex:
+            metadata_snapshot = SpectrogramBufferMetadata(self)
+        return metadata_snapshot
 
     # TODO: an approach where the STFT writes directly into this buffer?
     def append_data(self, new_data: np.ndarray, time: Optional[datetime] = None):
+        with self.metadata_mutex:
+            metadata_snapshot = SpectrogramBufferMetadata(self)
+
         """Append new unprocessed data to the buffer."""
         new_data_time_len = new_data.shape[0]
         # TODO: synchronization between different threads
-        available_time_distance_in_buf = self.buffer.shape[0] - self.rows_allocated
+        available_time_distance_in_buf = self.buffer.shape[0] - metadata_snapshot.rows_allocated
 
         if available_time_distance_in_buf < new_data_time_len:
             # TODO: handle this more gracefully?
@@ -78,28 +96,32 @@ class SpectrogramBuffer:
         self._assert_sufficient_time_steps(new_data, time)
 
         # remember this for timestamp updates
-        data_start_idx = self.unprocessed_end
+        data_start_idx = metadata_snapshot.unprocessed_end
 
         if self.unprocessed_end + new_data_time_len > self.buffer.shape[0]:
-            first_len = self.buffer.shape[0] - self.unprocessed_end
-            self.buffer[self.unprocessed_end:self.buffer.shape[0], :] = new_data[0:first_len, :]
+            first_len = self.buffer.shape[0] - metadata_snapshot.unprocessed_end
+            self.buffer[metadata_snapshot.unprocessed_end:self.buffer.shape[0], :] = new_data[0:first_len, :]
             second_len = new_data_time_len - first_len
             self.buffer[0:second_len, :] = new_data[first_len:new_data_time_len, :]
-            self.unprocessed_end = second_len
+            next_unprocessed_end = second_len
         else:
-            self.buffer[self.unprocessed_end:(self.unprocessed_end + new_data_time_len), :] = new_data
-            self.unprocessed_end += new_data_time_len
-        self.rows_allocated += new_data_time_len
-        self.rows_unprocessed += new_data_time_len
+            self.buffer[metadata_snapshot.unprocessed_end:(metadata_snapshot.unprocessed_end + new_data_time_len), :] = new_data
+            next_unprocessed_end = metadata_snapshot.unprocessed_end + new_data_time_len
 
-        # handle the timestamp
-        if time is None and len(self.unprocessed_timestamp_deque) == 0:
-            now = datetime.now(timezone.utc)
-            self.unprocessed_timestamp_deque.append((data_start_idx, now))
-        elif time is not None:
-            self.unprocessed_timestamp_deque.append((data_start_idx, time))
-        # If time is None, this class assumes that the recording of this data occurred immediately after
-        # the recording of the previous data, without interruption.
+        with self.metadata_mutex:
+            self.unprocessed_end = next_unprocessed_end
+            self.rows_allocated += new_data_time_len
+            self.rows_unprocessed += new_data_time_len
+
+        with self.timestamp_mutex:
+            # handle the timestamp
+            if time is None and len(self.unprocessed_timestamp_deque) == 0:
+                now = datetime.now(timezone.utc)
+                self.unprocessed_timestamp_deque.append((data_start_idx, now))
+            elif time is not None:
+                self.unprocessed_timestamp_deque.append((data_start_idx, time))
+            # If time is None, this class assumes that the recording of this data occurred immediately after
+            # the recording of the previous data, without interruption.
 
     def _assert_sufficient_time_steps(self, new_data: np.ndarray, time: Optional[datetime]):
         if new_data.shape[0] < self.min_appendable_time_steps:
@@ -111,104 +133,115 @@ class SpectrogramBuffer:
     def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None,
                              mark_for_postprocessing: bool = True) -> Tuple[np.ndarray, int]:
         """Read unprocessed data from the buffer. By default, this read marks the data as 'processed'."""
-        data_start_idx = self.pending_post_processing_end  # return this value to allow simple indexing of a prediction buffer
+        with self.metadata_mutex:
+            metadata_snapshot = SpectrogramBufferMetadata(self)
+        data_start_idx = metadata_snapshot.pending_post_processing_end  # return this value to allow simple indexing of a prediction buffer
         data, new_begin_idx = self.consume_data(time_steps, False, target=target, force_copy=False)
         if mark_for_postprocessing:
-            old_post_proc_end = self.pending_post_processing_end
-            self.pending_post_processing_end = new_begin_idx
-            self.rows_unprocessed -= time_steps
-            self._transfer_timestamp_data(old_post_proc_end)
+            with self.metadata_mutex:
+                old_post_proc_end = self.pending_post_processing_end
+                self.pending_post_processing_end = new_begin_idx
+                self.rows_unprocessed -= time_steps
+                self._transfer_timestamp_data(old_post_proc_end)
         return data, data_start_idx
 
     def mark_for_post_processing(self, time_steps: int):
         """Can be used to manually reclassify a region of the buffer without reading it"""
-        available_time_steps = self.rows_unprocessed
-        if time_steps > available_time_steps:
-            time_steps = available_time_steps
-        self.rows_unprocessed -= time_steps
-        old_post_proc_end = self.pending_post_processing_end
-        self.pending_post_processing_end = (self.pending_post_processing_end + time_steps) % self.buffer.shape[0]
-        self._transfer_timestamp_data(old_post_proc_end)
+        with self.metadata_mutex:
+            available_time_steps = self.rows_unprocessed
+            if time_steps > available_time_steps:
+                time_steps = available_time_steps
+            self.rows_unprocessed -= time_steps
+            old_post_proc_end = self.pending_post_processing_end
+            self.pending_post_processing_end = (self.pending_post_processing_end + time_steps) % self.buffer.shape[0]
+            self._transfer_timestamp_data(old_post_proc_end)
 
     def get_processed_data(self, time_steps: int, target: Optional[np.ndarray] = None, free_buffer_region: bool = True) -> np.ndarray:
         """Read data from the buffer for post-processing. This copies the data into a separate location
         and, by default, frees the region of the buffer for other use."""
-        # TODO: block this operation until there is a meaningful number of rows left for processing
+        # TODO: block this operation until there is a meaningful number of rows left for processing?
         data, new_begin_idx = self.consume_data(time_steps, True, target=target, force_copy=True)
         if free_buffer_region:
-            self.rows_allocated -= time_steps
-            old_allocated_begin = self.allocated_begin
-            self.allocated_begin = new_begin_idx
-            self._free_rows_update_timestamp(old_allocated_begin)
+            with self.metadata_mutex:
+                self.rows_allocated -= time_steps
+                old_allocated_begin = self.allocated_begin
+                self.allocated_begin = new_begin_idx
+                self._free_rows_update_timestamp(old_allocated_begin)
         return data
 
     def mark_post_processing_complete(self, time_steps: int) -> int:
         """Manually free the oldest *time_steps* time steps of the buffer for reuse. Allows data here to be overwritten.
         Returns an integer corresponding to the number of rows actually freed for reuse."""
-        available_time_steps = self.rows_allocated - self.rows_unprocessed
-        if time_steps > available_time_steps:
-            time_steps = available_time_steps
-        self.rows_allocated -= time_steps
-        old_allocated_begin = self.allocated_begin
-        self.allocated_begin = (self.allocated_begin + time_steps) % self.buffer.shape[0]
-        self._free_rows_update_timestamp(old_allocated_begin)
-        return time_steps
+        with self.metadata_mutex:
+            available_time_steps = self.rows_allocated - self.rows_unprocessed
+            if time_steps > available_time_steps:
+                time_steps = available_time_steps
+            self.rows_allocated -= time_steps
+            old_allocated_begin = self.allocated_begin
+            self.allocated_begin = (self.allocated_begin + time_steps) % self.buffer.shape[0]
+            self._free_rows_update_timestamp(old_allocated_begin)
+            return time_steps
 
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
+    # Call this method while holding the metadata_mutex
     def _free_rows_update_timestamp(self, old_allocated_begin: int):
         """Updates the timestamp deques after a region of the buffer is deallocated"""
         if (self.rows_allocated - self.rows_unprocessed) == 0:
-            self.post_processing_timestamp_deque.clear()
+            with self.timestamp_mutex:
+                self.post_processing_timestamp_deque.clear()
             return
 
-        new_allocated_begin = self.allocated_begin
-        # take elements off the timestamp queue until we go past or hit the new allocated beginning, then, assuming
-        # the timestamp isn't exact, add the time delta for how many rows after the most recently deleted timestamp were
-        # freed, then re-queue that timestamp.
-        max_distance = (new_allocated_begin - old_allocated_begin) % self.buffer.shape[0]
-        cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
-        next_timestamp_distance = 0
-        if len(self.post_processing_timestamp_deque) != 0:
-            next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
-        while len(self.post_processing_timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
+        with self.timestamp_mutex:
+            new_allocated_begin = self.allocated_begin
+            # take elements off the timestamp queue until we go past or hit the new allocated beginning, then, assuming
+            # the timestamp isn't exact, add the time delta for how many rows after the most recently deleted timestamp were
+            # freed, then re-queue that timestamp.
+            max_distance = (new_allocated_begin - old_allocated_begin) % self.buffer.shape[0]
             cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
-            if len(self.post_processing_timestamp_deque) == 0:
-                break
-            next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
+            next_timestamp_distance = 0
+            if len(self.post_processing_timestamp_deque) != 0:
+                next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
+            while len(self.post_processing_timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
+                cur_timestamp_entry = self.post_processing_timestamp_deque.popleft()
+                if len(self.post_processing_timestamp_deque) == 0:
+                    break
+                next_timestamp_distance = self.circular_distance(self.post_processing_timestamp_deque[0][0], old_allocated_begin)
 
-        new_timestamp = (new_allocated_begin,
-                         cur_timestamp_entry[1]
-                         + TIME_DELTA_PER_TIME_STEP * (self.circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
-        self.post_processing_timestamp_deque.appendleft(new_timestamp)
+            new_timestamp = (new_allocated_begin,
+                             cur_timestamp_entry[1]
+                             + TIME_DELTA_PER_TIME_STEP * (self.circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
+            self.post_processing_timestamp_deque.appendleft(new_timestamp)
 
-    # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method
+    # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method.
+    # Call this method while holding the metadata mutex.
     def _transfer_timestamp_data(self, old_post_proc_end: int):
         """Moves timestamps from the unprocessed deque to the pending_post_processing deque as data in the buffer is reclassified"""
-        new_post_proc_end = self.pending_post_processing_end
-        max_distance = (new_post_proc_end - old_post_proc_end) % self.buffer.shape[0]
-        cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
-        next_timestamp_distance = 0
-        if len(self.unprocessed_timestamp_deque) != 0:
-            next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
-        while len(self.unprocessed_timestamp_deque) != 0 and next_timestamp_distance < max_distance:
-            self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)  # transfer the element to the post-processing timestamp deque
+        with self.timestamp_mutex:
+            new_post_proc_end = self.pending_post_processing_end
+            max_distance = (new_post_proc_end - old_post_proc_end) % self.buffer.shape[0]
             cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
-            if len(self.unprocessed_timestamp_deque) == 0:
-                break
-            next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
-
-        if self.rows_unprocessed != 0:
-            circular_distance = self.circular_distance(new_post_proc_end, cur_timestamp_entry[0])
-            new_earliest_unprocessed_timestamp = (new_post_proc_end,
-                                                  cur_timestamp_entry[1]
-                                                  + TIME_DELTA_PER_TIME_STEP * circular_distance)
+            next_timestamp_distance = 0
             if len(self.unprocessed_timestamp_deque) != 0:
-                first_index = self.unprocessed_timestamp_deque[0][0]
-                if cur_timestamp_entry[0] + circular_distance != first_index:
+                next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+            while len(self.unprocessed_timestamp_deque) != 0 and next_timestamp_distance < max_distance:
+                self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)  # transfer the element to the post-processing timestamp deque
+                cur_timestamp_entry = self.unprocessed_timestamp_deque.popleft()
+                if len(self.unprocessed_timestamp_deque) == 0:
+                    break
+                next_timestamp_distance = self.circular_distance(self.unprocessed_timestamp_deque[0][0], old_post_proc_end)
+
+            if self.rows_unprocessed != 0:
+                circular_distance = self.circular_distance(new_post_proc_end, cur_timestamp_entry[0])
+                new_earliest_unprocessed_timestamp = (new_post_proc_end,
+                                                      cur_timestamp_entry[1]
+                                                      + TIME_DELTA_PER_TIME_STEP * circular_distance)
+                if len(self.unprocessed_timestamp_deque) != 0:
+                    first_index = self.unprocessed_timestamp_deque[0][0]
+                    if cur_timestamp_entry[0] + circular_distance != first_index:
+                        self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
+                else:
                     self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
-            else:
-                self.unprocessed_timestamp_deque.appendleft(new_earliest_unprocessed_timestamp)
-        self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)
+            self._transfer_timestamp_entry_without_duplication(cur_timestamp_entry)
 
     def _transfer_timestamp_entry_without_duplication(self, cur_timestamp_entry: Tuple[int, datetime]):
         """A helper method that ensures timestamps only exist in the case of discontinuities or manual labels via 'append_data()'"""
@@ -229,19 +262,21 @@ class SpectrogramBuffer:
                      force_copy: Optional[bool] = False) -> Tuple[np.ndarray, int]:
         """copy data from the buffer into the target if necessary, otherwise, return a view.
         returns (read data, new value for starting index of read-from chunk)"""
+        with self.metadata_mutex:
+            metadata_snapshot = SpectrogramBufferMetadata(self)
         begin_idx: int
         end_idx: int
         if processed:
-            begin_idx = self.allocated_begin
-            available_time_steps = self.rows_allocated - self.rows_unprocessed
+            begin_idx = metadata_snapshot.allocated_begin
+            available_time_steps = metadata_snapshot.rows_allocated - metadata_snapshot.rows_unprocessed
         else:
-            begin_idx = self.pending_post_processing_end
-            available_time_steps = self.rows_unprocessed
+            begin_idx = metadata_snapshot.pending_post_processing_end
+            available_time_steps = metadata_snapshot.rows_unprocessed
         if time_steps > available_time_steps:
             time_steps = available_time_steps
             if available_time_steps == 0:
                 raise ValueError("No data to read")
-        if self.pending_post_processing_end + time_steps > self.buffer.shape[0]:
+        if metadata_snapshot.pending_post_processing_end + time_steps > self.buffer.shape[0]:
             if target is None:
                 target = np.zeros((time_steps, FREQ_BINS))
             first_len = self.buffer.shape[0] - begin_idx
@@ -262,11 +297,28 @@ class SpectrogramBuffer:
 
     def clear(self):
         """Overwrites the entire buffer with 0 and deallocates all of it."""
-        self.buffer[:, :] = 0
-        self.unprocessed_end = 0
-        self.pending_post_processing_end = 0
-        self.allocated_begin = 0
-        self.rows_allocated = 0
-        self.rows_unprocessed = 0
-        self.unprocessed_timestamp_deque.clear()
-        self.post_processing_timestamp_deque.clear()
+        with self.metadata_mutex:
+            with self.timestamp_mutex:
+                self.buffer[:, :] = 0
+                self.unprocessed_end = 0
+                self.pending_post_processing_end = 0
+                self.allocated_begin = 0
+                self.rows_allocated = 0
+                self.rows_unprocessed = 0
+                self.unprocessed_timestamp_deque.clear()
+                self.post_processing_timestamp_deque.clear()
+
+
+class SpectrogramBufferMetadata:
+    unprocessed_end: int
+    pending_post_processing_end: int
+    allocated_begin: int
+    rows_allocated: int
+    rows_unprocessed: int
+
+    def __init__(self, buffer):
+        self.unprocessed_end = buffer.unprocessed_end
+        self.pending_post_processing_end = buffer.pending_post_processing_end
+        self.allocated_begin = buffer.allocated_begin
+        self.rows_allocated = buffer.rows_allocated
+        self.rows_unprocessed = buffer.rows_unprocessed
