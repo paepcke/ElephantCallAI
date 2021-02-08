@@ -4,10 +4,10 @@ from time import sleep
 from embedded.predictors.Predictor import Predictor
 from src.embedded.DataCoordinator import DataCoordinator
 
-GIVE_UP_THRESHOLD = 10
+GIVE_UP_THRESHOLD = 1000
 TIME_WINDOW = 256*4
 OVERLAP_ALLOWANCE = 128
-SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS = 0.1
+SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS = 0.01
 
 
 class PredictionManager:

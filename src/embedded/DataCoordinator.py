@@ -65,9 +65,9 @@ class DataCoordinator:
                 # process the first time_window samples
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
                                                                                      mark_for_postprocessing=False)
-                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
+                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
                 return predictions.shape[0]
             else:
                 # We can't risk having 'hanging' data that isn't large enough to process all at once
@@ -78,25 +78,28 @@ class DataCoordinator:
                 # process the first time_window samples, there is enough data for there to be another full time_window after this
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
                                                                                      mark_for_postprocessing=False)
-                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
+                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
                 return predictions.shape[0]
             else:
                 # process all of this remaining data
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_dist,
-                                                                                     mark_for_postprocessing=True)
+                                                                                     mark_for_postprocessing=False)
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
+                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_dist)
                 return predictions.shape[0]
 
-    # returns number of rows for which predictions were finalized
-    def finalize_predictions(self, time_window: int) -> int:
+    # returns a tuple of:
+    # 1. number of rows for which predictions were finalized
+    # 2. finalized predictions
+    def finalize_predictions(self, time_window: int) -> Tuple[int, Optional[np.ndarray]]:
         metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
         rows_pending_post_proc = metadata_snapshot.rows_allocated - metadata_snapshot.rows_unprocessed
         if rows_pending_post_proc == 0 or time_window <= 0:
             # There's nothing to finalize here
-            return 0
+            return 0, None
         if time_window > rows_pending_post_proc:
             time_window = rows_pending_post_proc
         begin_idx = metadata_snapshot.allocated_begin
@@ -126,7 +129,7 @@ class DataCoordinator:
         intervals = self.get_detection_intervals(final_predictions, timestamps)
         self.save_detection_intervals(intervals)
 
-        return time_window
+        return time_window, final_predictions
 
     # Start with the left-over transition state and a deque of timestamps, return a list of event intervals
     def get_detection_intervals(self, finalized_predictions: np.ndarray, timestamps: Deque[Tuple[int, datetime]]) -> List[Tuple[datetime, datetime]]:

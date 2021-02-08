@@ -38,9 +38,15 @@ class PredictionBuffer:
         if end_idx < begin_idx:
             first_len = self.predictions.shape[0] - begin_idx
             out[0:first_len] = self.predictions[begin_idx:] / self.overlap_counts[begin_idx:]
+            self.predictions[begin_idx:] = 0.
+            self.overlap_counts[begin_idx:] = 0.
             out[first_len:] = self.predictions[:end_idx] / self.overlap_counts[:end_idx]
+            self.predictions[:end_idx] = 0.
+            self.overlap_counts[:end_idx] = 0.
         else:
             out[:] = self.predictions[begin_idx:end_idx] / self.overlap_counts[begin_idx:end_idx]
+            self.predictions[begin_idx:end_idx] = 0
+            self.overlap_counts[begin_idx:end_idx] = 0
         out[:] = self.sigmoid(out)
         return out
 

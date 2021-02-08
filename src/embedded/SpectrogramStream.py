@@ -9,7 +9,7 @@ from src.embedded.DataCoordinator import DataCoordinator
 
 
 CHUNK_SIZE = 256
-SLEEP_BETWEEN_CHUNKS_IN_SECONDS = 0.1
+SLEEP_BETWEEN_CHUNKS_IN_SECONDS = 0.01
 MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
 
@@ -31,6 +31,8 @@ class SpectrogramStream:
 
     def stream(self, data_coordinator: DataCoordinator):
         max_time_steps = min(self.spectrogram_data.shape[0]//CHUNK_SIZE, self.max_time_steps)
+        if max_time_steps != self.max_time_steps:
+            print("WARNING: processing all {} time steps of data".format(max_time_steps*CHUNK_SIZE))
 
         need_new_timestamp = True
 
