@@ -27,6 +27,8 @@ class PredictionCollector:
         total_time_steps_collected = 0
 
         while num_consecutive_times_buffer_empty < GIVE_UP_THRESHOLD:
+            # TODO: For all thread-owning classes like this one, come up with a less ham-fisted way of orchestrating
+            # when operations that involve consuming data from the buffer happen. Perhaps base it on a lock?
             sleep(SLEEP_BETWEEN_COLLECTIONS_IN_SECONDS)
             num_time_steps_collected, predictions = data_coordinator.finalize_predictions(TIME_WINDOW)
             total_time_steps_collected += num_time_steps_collected

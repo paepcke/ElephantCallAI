@@ -53,8 +53,8 @@ class DataCoordinatorTest(unittest.TestCase):
         end_interval_0 = now + 4*TIME_DELTA_PER_TIME_STEP
         begin_interval_1 = now + 8*TIME_DELTA_PER_TIME_STEP
         end_interval_1 = now + 11*TIME_DELTA_PER_TIME_STEP
-        self.assertEqual("{} - {}\n".format(begin_interval_0.isoformat(), end_interval_0.isoformat()), lines[0])
-        self.assertEqual("{} - {}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
+        self.assertEqual("{},{}\n".format(begin_interval_0.isoformat(), end_interval_0.isoformat()), lines[0])
+        self.assertEqual("{},{}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
 
     def test_dont_predict_without_another_timestamp_if_not_leaving_full_time_window(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
@@ -192,7 +192,7 @@ class DataCoordinatorTest(unittest.TestCase):
         lines = get_lines_of_interval_file()
 
         self.assertEqual(1, len(lines))
-        self.assertEqual("{} - {}\n".format(start.isoformat(), end.isoformat()), lines[0])
+        self.assertEqual("{},{}\n".format(start.isoformat(), end.isoformat()), lines[0])
 
 
 def clear_interval_file():

@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from datetime import datetime, timezone
 
 from src.embedded import DataCoordinator, SpectrogramStream, PredictionManager, PredictionCollector
 from src.embedded.predictors import ModelPredictor
@@ -12,6 +13,8 @@ LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy
 
 
 def main():
+    start = datetime.now(timezone.utc)
+
     os.system("rm {}".format(INTERVAL_OUTPUT_PATH))
 
     predictor = ModelPredictor.ModelPredictor("../../models/remote_model.pt")
@@ -32,7 +35,9 @@ def main():
     preds_cat = np.concatenate(preds, 0)
     np.save(PREDS_SAVE_PATH, preds_cat)
 
-    print("Done!")
+    finish = datetime.now(timezone.utc)
+
+    print("Done in {}".format(finish - start))
 
 
 def compare_preds():
@@ -45,7 +50,22 @@ def compare_preds():
     errors = np.sum(np.abs(diffs))
     total_acc = 100 - errors/preds.shape[0] * 100
     print("Total accuracy: {}%".format(total_acc))
-    # TODO: more stats, like FP, TP, FN, TN, analysis
+
+    true_pos = np.dot(labels_clipped.T, preds_threshed)
+    false_pos = np.dot((1 - labels_clipped).T, preds_threshed)
+    true_neg = np.dot((1 - labels_clipped).T, 1 - preds_threshed)
+    false_neg = np.dot(labels_clipped.T, 1 - preds_threshed)
+
+
+    class_balance = (true_pos + false_neg)/(true_neg + false_pos)  # ratio of positive examples to negative examples
+    pos_acc = true_pos / (true_pos + false_neg)
+    neg_acc = true_neg / (true_neg + false_pos)
+    precision = true_pos / (true_pos + false_pos)
+
+    print("Class Balance (ratio of # positive examples to # negative examples): {}\n"
+          "Positive Accuracy (% of positive examples correctly classified): {}%\n"
+          "Negative Accuracy (% of negative examples correctly classified): {}%\n"
+          "Precision (% correctness on examples predicted positive): {}%".format(class_balance, 100*pos_acc, 100*neg_acc, 100*precision))
 
 
 if __name__ == "__main__":

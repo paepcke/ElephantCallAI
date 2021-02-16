@@ -61,6 +61,7 @@ class DataCoordinator:
                 second_timestamp = unprocessed_timestamp_deque[1]
 
         if not found_follow_up_timestamp:
+            # TODO: change this to use min_appendable_time_steps as a constraint instead of 'time_window' to allow more flexibility in choosing time window
             if self.spectrogram_buffer.rows_unprocessed >= (2 * time_window - overlap_allowance):
                 # process the first time_window samples
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
@@ -172,6 +173,8 @@ class DataCoordinator:
 
     # appends detection intervals to a file
     def save_detection_intervals(self, intervals: List[Tuple[datetime, datetime]]):
+        # TODO: evaluate holding the same file open for the entire lifespan of the process, perhaps we should do
+        # some flushing instead (w/ a sigterm handler)
         with open(self.interval_output_path, "a+") as writer:
             for interval in intervals:
-                writer.write("{} - {}\n".format(interval[0].isoformat(), interval[1].isoformat()))
+                writer.write("{},{}\n".format(interval[0].isoformat(), interval[1].isoformat()))

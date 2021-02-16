@@ -43,13 +43,17 @@ class SpectrogramStream:
             else:
                 now = None
             try:
-                data_coordinator.write(self.spectrogram_data[(i*CHUNK_SIZE):((i+1)*CHUNK_SIZE), :], timestamp=now)
+                data_coordinator.write(self.transform(self.spectrogram_data[(i*CHUNK_SIZE):((i+1)*CHUNK_SIZE), :]), timestamp=now)
                 need_new_timestamp = False
             except ValueError:
+                # TODO: formally track intervals of 'blackout'
                 need_new_timestamp = True
                 print("Dropped a chunk", file=sys.stderr)
 
         print("Done streaming spectrogram data")
+
+    def transform(self, spectrogram_data: np.ndarray):
+        return 10*np.log10(spectrogram_data)
 
     def join(self):
         self.stream_thread.join()

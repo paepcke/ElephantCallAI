@@ -82,10 +82,9 @@ class SpectrogramBuffer:
 
     # TODO: an approach where the STFT writes directly into this buffer?
     def append_data(self, new_data: np.ndarray, time: Optional[datetime] = None):
+        """Append new unprocessed data to the buffer."""
         with self.metadata_mutex:
             metadata_snapshot = SpectrogramBufferMetadata(self)
-
-        """Append new unprocessed data to the buffer."""
         new_data_time_len = new_data.shape[0]
         # TODO: synchronization between different threads
         available_time_distance_in_buf = self.buffer.shape[0] - metadata_snapshot.rows_allocated
