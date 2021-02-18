@@ -12,15 +12,21 @@ PREDS_SAVE_PATH = "/tmp/preds.npy"
 LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy"
 
 
-def main():
+def integration_test_with_model(small_buffer: bool = False):
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(INTERVAL_OUTPUT_PATH))
 
     predictor = ModelPredictor.ModelPredictor("../../models/remote_model.pt")
 
-    data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH)
-    spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, max_time_steps=10000)
+    if small_buffer:
+        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=2048*8)
+        drop_data = False
+    else:
+        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH)
+        drop_data = True
+
+    spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, max_time_steps=10000, drop_data=drop_data)
     pred_mgr = PredictionManager.PredictionManager(predictor)
     pred_collector = PredictionCollector.PredictionCollector()
 
@@ -69,7 +75,7 @@ def compare_preds():
 
 
 if __name__ == "__main__":
-    main()
+    integration_test_with_model()
     compare_preds()
 
 

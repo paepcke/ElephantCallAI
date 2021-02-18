@@ -36,14 +36,15 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.write(data)
         coordinator.make_predictions(ones_predictor, 3, 0)
+        coordinator.make_predictions(zeros_predictor, 4, 0)
         coordinator.make_predictions(zeros_predictor, 3, 0)
-        coordinator.finalize_predictions(4)
+        coordinator.finalize_predictions(9)
 
         # Does the internal state of the spectrogram buffer look right?
         self.assertEqual(8, coordinator.spectrogram_buffer.unprocessed_end)
-        self.assertEqual(14, coordinator.spectrogram_buffer.pending_post_processing_end)
-        self.assertEqual(12, coordinator.spectrogram_buffer.rows_allocated)
-        self.assertEqual(10, coordinator.spectrogram_buffer.rows_unprocessed)
+        self.assertEqual(2, coordinator.spectrogram_buffer.pending_post_processing_end)
+        self.assertEqual(7, coordinator.spectrogram_buffer.rows_allocated)
+        self.assertEqual(6, coordinator.spectrogram_buffer.rows_unprocessed)
 
         # Does the output file look right?
         lines = get_lines_of_interval_file()

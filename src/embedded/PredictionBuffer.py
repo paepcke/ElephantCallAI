@@ -21,10 +21,10 @@ class PredictionBuffer:
         else:
             first_len = self.predictions.shape[0] - begin_idx
             self.predictions[begin_idx:] += predictions_in[:first_len]
-            self.overlap_counts += overlap_counts_in[:first_len]
+            self.overlap_counts[begin_idx:] += overlap_counts_in[:first_len]
             second_len = data_len + begin_idx - self.predictions.shape[0]
             self.predictions[:second_len] = predictions_in[first_len:]
-            self.overlap_counts[:second_len] = predictions_in[first_len:]
+            self.overlap_counts[:second_len] = overlap_counts_in[first_len:]
 
     def finalize(self, begin_idx: int, end_idx: int, out: Optional[np.ndarray] = None) -> np.ndarray:
         if end_idx == begin_idx:

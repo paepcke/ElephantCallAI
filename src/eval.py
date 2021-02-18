@@ -36,6 +36,7 @@ from scipy.ndimage import gaussian_filter1d
 import csv
 import os
 import argparse
+from typing import Tuple
 
 
 # these can be made configurable through argparse if necessary.
@@ -522,37 +523,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
 
 
 def predict_batched(data, model, jump=TIME_STEPS_IN_WINDOW//2):
-    time_idx = 0
-
-    # key assumption: TIME_STEPS_IN_WINDOW is evenly divisible by 'jump'
-    assert(TIME_STEPS_IN_WINDOW % jump == 0)
-    if jump == 0:
-        k = 1
-    else:
-        k = TIME_STEPS_IN_WINDOW // jump
-
-    # cut off data at end to allow for even divisibility
-    # TODO: discuss an alternative approach to this
-    raw_end_time = data.shape[0]
-    clean_end_time = raw_end_time - (raw_end_time % jump)
-
-    predictions = np.zeros(clean_end_time)
-    overlap_counts = np.zeros(clean_end_time)
-
-    while time_idx + TIME_STEPS_IN_WINDOW*BATCH_SIZE + (k - 1)*jump <= clean_end_time:
-        forward_inference_on_batch(model, data, time_idx, jump, BATCH_SIZE, predictions, overlap_counts, k)
-        time_idx += TIME_STEPS_IN_WINDOW*BATCH_SIZE
-
-    # final batch (if size < BATCH_SIZE)
-    final_full_batch_size = (clean_end_time - time_idx - (k - 1)*jump)//TIME_STEPS_IN_WINDOW
-    if final_full_batch_size > 0:
-        forward_inference_on_batch(model, data, time_idx, jump, final_full_batch_size, predictions, overlap_counts, k)
-        time_idx += TIME_STEPS_IN_WINDOW*final_full_batch_size
-
-    # remaining jumps (less than k)
-    if time_idx + TIME_STEPS_IN_WINDOW <= clean_end_time:
-        remaining_jumps = (clean_end_time - time_idx - TIME_STEPS_IN_WINDOW)//jump + 1
-        forward_inference_on_batch(model, data, time_idx, jump, 1, predictions, overlap_counts, remaining_jumps)
+    predictions, overlap_counts = get_batched_predictions_and_overlap_counts(data, model, jump)
 
     # Average the predictions on overlapping frames
     predictions = predictions / overlap_counts
@@ -561,6 +532,50 @@ def predict_batched(data, model, jump=TIME_STEPS_IN_WINDOW//2):
     predictions = sigmoid(predictions)
 
     return predictions
+
+
+def get_batched_predictions_and_overlap_counts(data, model, jump,
+                                               n_samples_in_time_window: int = TIME_STEPS_IN_WINDOW,
+                                               batch_size: int = BATCH_SIZE) -> Tuple[np.ndarray, np.ndarray]:
+    """Returns (prediction array, overlap count array)."""
+    time_idx = 0
+
+    # key assumption: TIME_STEPS_IN_WINDOW is evenly divisible by 'jump'
+    assert (n_samples_in_time_window % jump == 0)
+    if jump == 0:
+        k = 1
+    else:
+        k = n_samples_in_time_window // jump
+
+    # cut off data at end to allow for even divisibility
+    raw_end_time = data.shape[0]
+    clean_end_time = raw_end_time - (raw_end_time % jump)
+
+    if clean_end_time != raw_end_time:
+        print("WARNING: {} time steps were cut off for the sake of even divisibility".format(
+            raw_end_time - clean_end_time), file=sys.stderr)
+
+    predictions = np.zeros(clean_end_time)
+    overlap_counts = np.zeros(clean_end_time)
+
+    while time_idx + n_samples_in_time_window * batch_size + (k - 1) * jump <= clean_end_time:
+        forward_inference_on_batch(model, data, time_idx, jump, batch_size, predictions, overlap_counts, k)
+        time_idx += n_samples_in_time_window * batch_size
+
+    # final batch (if size < BATCH_SIZE)
+    final_full_batch_size = (clean_end_time - time_idx - (k - 1) * jump) // n_samples_in_time_window
+    if final_full_batch_size > 0:
+        forward_inference_on_batch(model, data, time_idx, jump, final_full_batch_size, predictions,
+                                   overlap_counts, k)
+        time_idx += n_samples_in_time_window* final_full_batch_size
+
+    # remaining jumps (less than k)
+    if time_idx + n_samples_in_time_window <= clean_end_time:
+        remaining_jumps = (clean_end_time - time_idx - n_samples_in_time_window) // jump + 1
+        forward_inference_on_batch(model, data, time_idx, jump, 1, predictions, overlap_counts,
+                                   remaining_jumps)
+
+    return predictions, overlap_counts
 
 
 def forward_inference_on_batch(
