@@ -33,14 +33,22 @@ class DataCoordinator:
         self.spectrogram_buffer.append_data(spectrogram, time=timestamp)
 
     # returns number of rows for which a prediction has been made, useful for backoff logic
+    # TODO: define 'jump' in dataCoordinator rather than use the 'overlap_allowance' parameter here
     def make_predictions(self, predictor: Predictor, time_window: int, overlap_allowance: int) -> int:
         metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
-        if metadata_snapshot.rows_unprocessed <= self.spectrogram_buffer.min_appendable_time_steps:
+        if metadata_snapshot.rows_unprocessed < self.spectrogram_buffer.min_appendable_time_steps:
             # We can't process enough data yet
             return 0
 
         if overlap_allowance >= time_window:
             raise ValueError("Time window must exceed overlap allowance")
+
+        if overlap_allowance != 0:
+            if time_window % overlap_allowance != 0:
+                raise ValueError("Time window must be evenly divisible by overlap_allowance")
+        else:
+            if time_window % self.spectrogram_buffer.min_appendable_time_steps:
+                raise ValueError("With no overlap, time window must be an integer multiple of {}".format(self.spectrogram_buffer.min_appendable_time_steps))
 
         if time_window < self.spectrogram_buffer.min_appendable_time_steps:
             raise ValueError("Predictions must be made on at least {} rows of contiguous spectrogram data"
@@ -62,22 +70,26 @@ class DataCoordinator:
                 second_timestamp = unprocessed_timestamp_deque[1]
 
         if not found_follow_up_timestamp:
-            # TODO: change this to use min_appendable_time_steps as a constraint instead of 'time_window' to allow more flexibility in choosing time window
-            if self.spectrogram_buffer.rows_unprocessed >= (2 * time_window - overlap_allowance):
-                # process the first time_window samples
-                spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
-                                                                                     mark_for_postprocessing=False)
-                predictions, overlap_counts = predictor.make_predictions(spect_data)
-                self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
-                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
-                return predictions.shape[0]
+            if (self.spectrogram_buffer.rows_unprocessed - time_window + overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
+                actual_time_window = time_window
             else:
-                # We can't risk having 'hanging' data that isn't large enough to process all at once
-                return 0
+                candidate_time_window = self.spectrogram_buffer.rows_unprocessed - self.spectrogram_buffer.min_appendable_time_steps + overlap_allowance
+                if candidate_time_window >= self.spectrogram_buffer.min_appendable_time_steps:
+                    actual_time_window = candidate_time_window
+                else:
+                    # We can't risk having 'hanging' data that isn't large enough to process all at once
+                    return 0
+            # process the first time_window samples
+            spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=actual_time_window,
+                                                                                 mark_for_postprocessing=False)
+            predictions, overlap_counts = predictor.make_predictions(spect_data)
+            self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
+            self.spectrogram_buffer.mark_for_post_processing(time_steps=actual_time_window - overlap_allowance)
+            return predictions.shape[0]
         else:
             time_dist = self.spectrogram_buffer.circular_distance(second_timestamp[0], first_timestamp[0])
-            if time_dist >= (2*time_window - overlap_allowance):
-                # process the first time_window samples, there is enough data for there to be another full time_window after this
+            if (time_dist - time_window + overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
+                # process the first time_window samples, there is enough data for there to be another full min_appendable_time_steps after this
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
                                                                                      mark_for_postprocessing=False)
                 predictions, overlap_counts = predictor.make_predictions(spect_data)

@@ -1,3 +1,4 @@
+import math
 from threading import Thread
 import numpy as np
 from typing import Optional
@@ -8,7 +9,7 @@ import sys
 from src.embedded.DataCoordinator import DataCoordinator
 
 
-CHUNK_SIZE = 256
+CHUNK_SIZE = 256*4 + 3*64
 SLEEP_BETWEEN_CHUNKS_IN_SECONDS = 0.01
 MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
@@ -35,7 +36,7 @@ class SpectrogramStream:
     def stream(self, data_coordinator: DataCoordinator):
         max_time_steps = min(self.spectrogram_data.shape[0]//CHUNK_SIZE, self.max_time_steps)
         if max_time_steps != self.max_time_steps:
-            print("WARNING: processing all {} time steps of data".format(max_time_steps*CHUNK_SIZE))
+            print("WARNING: processing all {} time steps of data".format(self.spectrogram_data.shape[0]))
 
         need_new_timestamp = True
         i = 0
@@ -51,7 +52,7 @@ class SpectrogramStream:
                 need_new_timestamp = False
                 i += 1
             except ValueError:
-                # TODO: formally track intervals of 'blackout'
+                # TODO: formally track intervals of 'blackout', either here or in prediction collection
                 if self.drop_data:
                     i += 1
                     need_new_timestamp = True

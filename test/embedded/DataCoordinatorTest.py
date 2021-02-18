@@ -39,6 +39,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.make_predictions(zeros_predictor, 4, 0)
         coordinator.make_predictions(zeros_predictor, 3, 0)
         coordinator.finalize_predictions(9)
+        coordinator.wrap_up()
 
         # Does the internal state of the spectrogram buffer look right?
         self.assertEqual(8, coordinator.spectrogram_buffer.unprocessed_end)
@@ -57,31 +58,75 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual("{},{}\n".format(begin_interval_0.isoformat(), end_interval_0.isoformat()), lines[0])
         self.assertEqual("{},{}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
 
-    def test_dont_predict_without_another_timestamp_if_not_leaving_full_time_window(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
+    def test_dont_predict_without_another_timestamp_if_not_leaving_min_appendable_time_steps(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
-        processed = coordinator.make_predictions(predictor, 7, 2)
+        processed = coordinator.make_predictions(predictor, 6, 2)
+        coordinator.wrap_up()
 
         self.assertEqual(0, processed)
 
-    def test_can_predict_without_another_timestamp_if_leaving_full_time_window_with_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
+    def test_can_predict_without_another_timestamp_if_leaving_min_appendable_time_steps_with_overlap_allowance(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
-        processed = coordinator.make_predictions(predictor, 5, 2)
+        processed = coordinator.make_predictions(predictor, 4, 1)
+        coordinator.wrap_up()
 
-        self.assertEqual(5, processed)
+        self.assertEqual(4, processed)
         self.assertEqual(3, coordinator.spectrogram_buffer.rows_allocated - coordinator.spectrogram_buffer.rows_unprocessed)
 
+    def test_time_window_must_be_a_multiple_of_overlap_allowance(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
+        data = np.zeros((8, FREQ_BINS))
+        predictor = ConstPredictor(1)
+
+        coordinator.write(data)
+
+        try:
+            coordinator.make_predictions(predictor, 5, 2)
+        except ValueError:
+            coordinator.wrap_up()
+            return
+        coordinator.wrap_up()
+        self.fail("Expected exception but none thrown")
+
+    def test_time_window_must_be_a_multiple_of_min_appendable_if_no_overlap_allowance(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
+        data = np.zeros((8, FREQ_BINS))
+        predictor = ConstPredictor(1)
+
+        coordinator.write(data)
+
+        try:
+            coordinator.make_predictions(predictor, 5, 0)
+        except ValueError:
+            coordinator.wrap_up()
+            return
+        coordinator.wrap_up()
+        self.fail("Expected exception but none thrown")
+
+    def test_can_make_fewer_predictions_than_requested_to_allow_future_predictions(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6)
+        data = np.zeros((10, FREQ_BINS))
+        predictor = ConstPredictor(1)
+
+        coordinator.write(data)
+
+        processed = coordinator.make_predictions(predictor, 8, 2)
+        coordinator.wrap_up()
+
+        self.assertEqual(6, processed)
+
     def test_predict_entire_outstanding_data_if_another_timestamp_exists(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
@@ -91,6 +136,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 4, 1)
+        coordinator.wrap_up()
 
         self.assertEqual(5, processed)
 
@@ -105,6 +151,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 2, 1)
+        coordinator.wrap_up()
 
         self.assertEqual(2, processed)
 
@@ -116,9 +163,11 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         try:
-            processed = coordinator.make_predictions(predictor, 5, 5)
+            coordinator.make_predictions(predictor, 5, 5)
         except ValueError:
+            coordinator.wrap_up()
             return
+        coordinator.wrap_up()
         self.fail("Expected exception but none thrown. 'overlap_allowance' >= 'time_window' should not be allowed.")
 
     def test_cant_predict_less_than_min_appendable_time_steps(self):
@@ -131,7 +180,9 @@ class DataCoordinatorTest(unittest.TestCase):
         try:
             coordinator.make_predictions(predictor, 2, 1)
         except ValueError:
+            coordinator.wrap_up()
             return
+        coordinator.wrap_up()
         self.fail("Expected exception but none thrown. Should not be able to predict less than min_appendable_time_steps at once.")
 
     def test_get_detection_intervals(self):
@@ -152,6 +203,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.transition_state = TransitionState(now, 2)
 
         intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
+        coordinator.wrap_up()
 
         self.assertEqual(4, len(intervals))
         self.assertEqual((now, now + 5*TIME_DELTA_PER_TIME_STEP), intervals[0])
@@ -173,6 +225,7 @@ class DataCoordinatorTest(unittest.TestCase):
         finalized_predictions[9] = 0
 
         intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
+        coordinator.wrap_up()
 
         self.assertEqual(1, len(intervals))
         self.assertEqual((now, now + 9*TIME_DELTA_PER_TIME_STEP), intervals[0])
@@ -189,6 +242,7 @@ class DataCoordinatorTest(unittest.TestCase):
         end = now + 2*TIME_DELTA_PER_TIME_STEP
         intervals = [(start, end)]
         coordinator.save_detection_intervals(intervals)
+        coordinator.wrap_up()
 
         lines = get_lines_of_interval_file()
 
