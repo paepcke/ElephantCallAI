@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from collections import deque
 
+from embedded.IntervalRecorder import IntervalRecorder
 from src.embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
 from src.embedded.PredictionBuffer import PredictionBuffer
 from src.embedded.TransitionState import TransitionState, non_detected_transition_state
@@ -16,12 +17,12 @@ class DataCoordinator:
     Extracts intervals of continuously-detected positive predictions and saves these intervals to a file."""
     spectrogram_buffer: SpectrogramBuffer
     prediction_buffer: PredictionBuffer
-    interval_output_path: str
     transition_state: TransitionState
+    interval_recorder: IntervalRecorder
 
     def __init__(self, interval_output_path: str, override_buffer_size: Optional[int] = None,
                  min_appendable_time_steps: Optional[int] = None):
-        self.interval_output_path = interval_output_path
+        self.interval_recorder = IntervalRecorder(interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
@@ -173,8 +174,8 @@ class DataCoordinator:
 
     # appends detection intervals to a file
     def save_detection_intervals(self, intervals: List[Tuple[datetime, datetime]]):
-        # TODO: evaluate holding the same file open for the entire lifespan of the process, perhaps we should do
-        # some flushing instead (w/ a sigterm handler)
-        with open(self.interval_output_path, "a+") as writer:
-            for interval in intervals:
-                writer.write("{},{}\n".format(interval[0].isoformat(), interval[1].isoformat()))
+        for interval in intervals:
+            self.interval_recorder.write_interval(interval)
+
+    def wrap_up(self):
+        self.interval_recorder.close()

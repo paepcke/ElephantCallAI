@@ -38,6 +38,8 @@ def integration_test_with_model(small_buffer: bool = False):
     pred_mgr.join()
     preds = pred_collector.join()
 
+    data_coordinator.wrap_up()
+
     preds_cat = np.concatenate(preds, 0)
     np.save(PREDS_SAVE_PATH, preds_cat)
 
