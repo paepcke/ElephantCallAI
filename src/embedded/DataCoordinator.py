@@ -2,6 +2,7 @@ from typing import Optional, Deque, Tuple, List
 import numpy as np
 from datetime import datetime
 from collections import deque
+import sys
 
 from embedded.IntervalRecorder import IntervalRecorder
 from src.embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
@@ -19,33 +20,51 @@ class DataCoordinator:
     prediction_buffer: PredictionBuffer
     transition_state: TransitionState
     interval_recorder: IntervalRecorder
+    # This parameter determines the offset between evaluated overlapping spectrogram frames.
+    # It is computed as 'min_appendable_time_steps - jump'.
+    overlap_allowance: int
 
-    def __init__(self, interval_output_path: str, override_buffer_size: Optional[int] = None,
+    def __init__(self, interval_output_path: str, jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
                  min_appendable_time_steps: Optional[int] = None):
         self.interval_recorder = IntervalRecorder(interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
         self.transition_state = non_detected_transition_state()
+        if jump is None:
+            print("WARNING: DataCoordinator overlap_allowance parameter is 0. There will not be any overlap between "
+                  "evaluated spectrogram frames. Please make sure this is intentional.", file=sys.stderr)
+            self.overlap_allowance = 0
+        else:
+            if jump == 0:
+                raise ValueError("jump must be greater than 0")
+            elif jump > self.spectrogram_buffer.min_appendable_time_steps:
+                raise ValueError("jump must be less than or equal to min appendable time steps")
+            elif self.spectrogram_buffer.min_appendable_time_steps % jump != 0:
+                raise ValueError("jump must evenly divide min appendable time steps")
+            self.overlap_allowance = self.spectrogram_buffer.min_appendable_time_steps - jump
 
     # Appends new spectrogram data to the spectrogram buffer
     def write(self, spectrogram: np.ndarray, timestamp: Optional[datetime] = None):
+        jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
+        if spectrogram.shape[0] % jump != 0:
+            raise ValueError("Must append a number of time steps equal to an integer multiple of jump size")
         self.spectrogram_buffer.append_data(spectrogram, time=timestamp)
 
     # returns number of rows for which a prediction has been made, useful for backoff logic
-    # TODO: define 'jump' in dataCoordinator rather than use the 'overlap_allowance' parameter here
-    def make_predictions(self, predictor: Predictor, time_window: int, overlap_allowance: int) -> int:
+    def make_predictions(self, predictor: Predictor, time_window: int) -> int:
         metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
         if metadata_snapshot.rows_unprocessed < self.spectrogram_buffer.min_appendable_time_steps:
             # We can't process enough data yet
             return 0
 
-        if overlap_allowance >= time_window:
+        if self.overlap_allowance >= time_window:
             raise ValueError("Time window must exceed overlap allowance")
 
-        if overlap_allowance != 0:
-            if time_window % overlap_allowance != 0:
-                raise ValueError("Time window must be evenly divisible by overlap_allowance")
+        jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
+        if self.overlap_allowance != 0:
+            if time_window % jump != 0:
+                raise ValueError("Time window must be evenly divisible by jump")
         else:
             if time_window % self.spectrogram_buffer.min_appendable_time_steps:
                 raise ValueError("With no overlap, time window must be an integer multiple of {}".format(self.spectrogram_buffer.min_appendable_time_steps))
@@ -55,7 +74,9 @@ class DataCoordinator:
                              .format(self.spectrogram_buffer.min_appendable_time_steps))
 
         if time_window > metadata_snapshot.rows_unprocessed:
-            time_window = metadata_snapshot.rows_unprocessed
+            time_window = metadata_snapshot.rows_unprocessed - metadata_snapshot.rows_unprocessed % jump
+            if time_window == 0:
+                return 0
 
         # if 'enough' data would be left for one time seq window, allow it. Else, if NO data from this time seq would be left (there is a follow-up timestamp), allow it.
         # else, disallow it.
@@ -70,10 +91,11 @@ class DataCoordinator:
                 second_timestamp = unprocessed_timestamp_deque[1]
 
         if not found_follow_up_timestamp:
-            if (self.spectrogram_buffer.rows_unprocessed - time_window + overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
+            if (self.spectrogram_buffer.rows_unprocessed - time_window + self.overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
                 actual_time_window = time_window
             else:
-                candidate_time_window = self.spectrogram_buffer.rows_unprocessed - self.spectrogram_buffer.min_appendable_time_steps + overlap_allowance
+                candidate_time_window = self.spectrogram_buffer.rows_unprocessed - self.spectrogram_buffer.min_appendable_time_steps + self.overlap_allowance
+                candidate_time_window -= (candidate_time_window%jump)
                 if candidate_time_window >= self.spectrogram_buffer.min_appendable_time_steps:
                     actual_time_window = candidate_time_window
                 else:
@@ -84,17 +106,17 @@ class DataCoordinator:
                                                                                  mark_for_postprocessing=False)
             predictions, overlap_counts = predictor.make_predictions(spect_data)
             self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
-            self.spectrogram_buffer.mark_for_post_processing(time_steps=actual_time_window - overlap_allowance)
+            self.spectrogram_buffer.mark_for_post_processing(time_steps=actual_time_window - self.overlap_allowance)
             return predictions.shape[0]
         else:
             time_dist = self.spectrogram_buffer.circular_distance(second_timestamp[0], first_timestamp[0])
-            if (time_dist - time_window + overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
+            if (time_dist - time_window + self.overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
                 # process the first time_window samples, there is enough data for there to be another full min_appendable_time_steps after this
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_window,
                                                                                      mark_for_postprocessing=False)
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
-                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - overlap_allowance)
+                self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - self.overlap_allowance)
                 return predictions.shape[0]
             else:
                 # process all of this remaining data

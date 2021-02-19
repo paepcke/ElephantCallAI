@@ -17,13 +17,14 @@ def integration_test_with_model(small_buffer: bool = False):
 
     os.system("rm {}".format(INTERVAL_OUTPUT_PATH))
 
-    predictor = ModelPredictor.ModelPredictor("../../models/remote_model.pt")
+    jump = 64
+    predictor = ModelPredictor.ModelPredictor("../../models/remote_model.pt", jump=jump)
 
     if small_buffer:
-        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=2048*8)
+        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=2048*8, jump=jump)
         drop_data = False
     else:
-        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH)
+        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, jump=jump)
         drop_data = True
 
     spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, max_time_steps=10000, drop_data=drop_data)

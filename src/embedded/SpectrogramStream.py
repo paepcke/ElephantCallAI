@@ -9,7 +9,7 @@ import sys
 from src.embedded.DataCoordinator import DataCoordinator
 
 
-CHUNK_SIZE = 256*4 + 3*64
+CHUNK_SIZE = 256*8
 SLEEP_BETWEEN_CHUNKS_IN_SECONDS = 0.01
 MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 

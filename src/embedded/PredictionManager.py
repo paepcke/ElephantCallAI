@@ -5,19 +5,16 @@ from embedded.predictors.Predictor import Predictor
 from src.embedded.DataCoordinator import DataCoordinator
 
 GIVE_UP_THRESHOLD = 1000
-TIME_WINDOW = 256*4  # TODO: Make this more precise to optimize the prediction parallelism
-DEFAULT_OVERLAP_ALLOWANCE = 64
+TIME_WINDOW = 256*4 + 3*64
 SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS = 0.01
 
 
 class PredictionManager:
     predictor: Predictor
     predictor_thread: Thread
-    overlap_allowance: int
 
-    def __init__(self, predictor: Predictor, overlap_allowance: int = DEFAULT_OVERLAP_ALLOWANCE):
+    def __init__(self, predictor: Predictor):
         self.predictor = predictor
-        self.overlap_allowance = overlap_allowance
 
     def start(self, data_coordinator: DataCoordinator):
         self.predictor_thread = Thread(target=self.predict, args=(data_coordinator,))
@@ -29,7 +26,7 @@ class PredictionManager:
 
         while num_consecutive_times_buffer_empty < GIVE_UP_THRESHOLD:
             sleep(SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS)
-            num_time_steps_predicted = data_coordinator.make_predictions(self.predictor, TIME_WINDOW, self.overlap_allowance)
+            num_time_steps_predicted = data_coordinator.make_predictions(self.predictor, TIME_WINDOW)
             total_time_steps_predicted += num_time_steps_predicted
             if num_time_steps_predicted != 0:
                 num_consecutive_times_buffer_empty = 0

@@ -21,23 +21,23 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_data_pipeline(self):
         clear_interval_file()
 
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=1)
         now = datetime.now(timezone.utc)
         data = np.zeros((12, FREQ_BINS))
         ones_predictor = ConstPredictor(1)
         zeros_predictor = ConstPredictor(-1)
 
         coordinator.write(data, timestamp=now)
-        coordinator.make_predictions(ones_predictor, 4, 0)
-        coordinator.make_predictions(zeros_predictor, 4, 0)
+        coordinator.make_predictions(ones_predictor, 4)
+        coordinator.make_predictions(zeros_predictor, 4)
 
         coordinator.finalize_predictions(4)
         coordinator.finalize_predictions(4)
 
         coordinator.write(data)
-        coordinator.make_predictions(ones_predictor, 3, 0)
-        coordinator.make_predictions(zeros_predictor, 4, 0)
-        coordinator.make_predictions(zeros_predictor, 3, 0)
+        coordinator.make_predictions(ones_predictor, 3)
+        coordinator.make_predictions(zeros_predictor, 4)
+        coordinator.make_predictions(zeros_predictor, 3)
         coordinator.finalize_predictions(9)
         coordinator.wrap_up()
 
@@ -59,39 +59,39 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual("{},{}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
 
     def test_dont_predict_without_another_timestamp_if_not_leaving_min_appendable_time_steps(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6)
-        data = np.zeros((8, FREQ_BINS))
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
+        data = np.zeros((6, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
-        processed = coordinator.make_predictions(predictor, 6, 2)
+        processed = coordinator.make_predictions(predictor, 6)
         coordinator.wrap_up()
 
         self.assertEqual(0, processed)
 
     def test_can_predict_without_another_timestamp_if_leaving_min_appendable_time_steps_with_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
-        processed = coordinator.make_predictions(predictor, 4, 1)
+        processed = coordinator.make_predictions(predictor, 4)
         coordinator.wrap_up()
 
         self.assertEqual(4, processed)
-        self.assertEqual(3, coordinator.spectrogram_buffer.rows_allocated - coordinator.spectrogram_buffer.rows_unprocessed)
+        self.assertEqual(2, coordinator.spectrogram_buffer.rows_allocated - coordinator.spectrogram_buffer.rows_unprocessed)
 
     def test_time_window_must_be_a_multiple_of_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
         try:
-            coordinator.make_predictions(predictor, 5, 2)
+            coordinator.make_predictions(predictor, 5)
         except ValueError:
             coordinator.wrap_up()
             return
@@ -100,13 +100,13 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_time_window_must_be_a_multiple_of_min_appendable_if_no_overlap_allowance(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
-        data = np.zeros((8, FREQ_BINS))
+        data = np.zeros((9, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
         try:
-            coordinator.make_predictions(predictor, 5, 0)
+            coordinator.make_predictions(predictor, 5)
         except ValueError:
             coordinator.wrap_up()
             return
@@ -114,19 +114,19 @@ class DataCoordinatorTest(unittest.TestCase):
         self.fail("Expected exception but none thrown")
 
     def test_can_make_fewer_predictions_than_requested_to_allow_future_predictions(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6)
-        data = np.zeros((10, FREQ_BINS))
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
+        data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
-        processed = coordinator.make_predictions(predictor, 8, 2)
+        processed = coordinator.make_predictions(predictor, 12)
         coordinator.wrap_up()
 
-        self.assertEqual(6, processed)
+        self.assertEqual(9, processed)
 
     def test_predict_entire_outstanding_data_if_another_timestamp_exists(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
@@ -135,13 +135,13 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
-        processed = coordinator.make_predictions(predictor, 4, 1)
+        processed = coordinator.make_predictions(predictor, 4)
         coordinator.wrap_up()
 
         self.assertEqual(5, processed)
 
     def test_predict_subset_of_outstanding_data_if_another_timestamp_exists(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=2, jump=1)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
@@ -150,35 +150,27 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
-        processed = coordinator.make_predictions(predictor, 2, 1)
+        processed = coordinator.make_predictions(predictor, 2)
         coordinator.wrap_up()
 
         self.assertEqual(2, processed)
 
-    def test_exception_thrown_if_overlap_allowance_geq_time_window_len(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1)
-        data = np.zeros((12, FREQ_BINS))
-        predictor = ConstPredictor(1)
-
-        coordinator.write(data)
-
+    def test_exception_thrown_if_jump_geq_min_appendable_len(self):
         try:
-            coordinator.make_predictions(predictor, 5, 5)
+            DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=5)
         except ValueError:
-            coordinator.wrap_up()
             return
-        coordinator.wrap_up()
         self.fail("Expected exception but none thrown. 'overlap_allowance' >= 'time_window' should not be allowed.")
 
     def test_cant_predict_less_than_min_appendable_time_steps(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3, jump=1)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
 
         try:
-            coordinator.make_predictions(predictor, 2, 1)
+            coordinator.make_predictions(predictor, 2)
         except ValueError:
             coordinator.wrap_up()
             return
