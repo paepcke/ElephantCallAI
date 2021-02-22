@@ -12,6 +12,7 @@ from src.embedded.predictors.ConstPredictor import ConstPredictor
 
 
 INTERVAL_OUTPUT_PATH = "/tmp/intervals.txt"
+TEST_LOCK_TIMEOUT_SECONDS = 0.2
 
 
 class DataCoordinatorTest(unittest.TestCase):
@@ -176,6 +177,43 @@ class DataCoordinatorTest(unittest.TestCase):
             return
         coordinator.wrap_up()
         self.fail("Expected exception but none thrown. Should not be able to predict less than min_appendable_time_steps at once.")
+
+    def test_prediction_lock_allows_entry_when_appropriate_without_discontinuity(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        data = np.zeros((6, FREQ_BINS))
+
+        coordinator.write(data)
+
+        got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
+        coordinator.wrap_up()
+
+        self.assertTrue(got_lock)
+
+    def test_prediction_lock_disallows_entry_when_appropriate_without_discontinuity(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        data = np.zeros((4, FREQ_BINS))
+
+        coordinator.write(data)
+
+        got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
+        coordinator.wrap_up()
+
+        self.assertFalse(got_lock)
+
+    def test_prediction_lock_allows_entry_when_appropriate_with_discontinuity(self):
+        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
+                                      jump=2)
+        data = np.zeros((10, FREQ_BINS))
+        now = datetime.now(timezone.utc)
+
+        coordinator.write(data)
+
+        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((4, now + 40 * TIME_DELTA_PER_TIME_STEP))
+
+        got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
+        coordinator.wrap_up()
+
+        self.assertTrue(got_lock)
 
     def test_get_detection_intervals(self):
         coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16)

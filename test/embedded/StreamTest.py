@@ -27,7 +27,7 @@ def integration_test_with_model(small_buffer: bool = False):
         data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, jump=jump)
         drop_data = True
 
-    spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, max_time_steps=10000, drop_data=drop_data)
+    spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)
     pred_mgr = PredictionManager.PredictionManager(predictor)
     pred_collector = PredictionCollector.PredictionCollector()
 

@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from collections import deque
 import sys
+from threading import Lock
 
 from embedded.IntervalRecorder import IntervalRecorder
 from src.embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
@@ -23,9 +24,34 @@ class DataCoordinator:
     # This parameter determines the offset between evaluated overlapping spectrogram frames.
     # It is computed as 'min_appendable_time_steps - jump'.
     overlap_allowance: int
+    prediction_load: float  # If predictions take up at least this proportion of the buffer, allow them to be collected
+
+
+    # Thread synchronization states
+
+    # This will be unlocked if and only if there is enough available data in the buffer for a prediction to be made.
+    # It allows a prediction-making thread to sleep until such time.
+    data_available_for_prediction_lock: Lock
+
+    # This will be unlocked if and only if there are predictions available for collection.
+    # It allows a prediction-collecting thread to sleep until such time.
+    predictions_available_for_collection_lock: Lock
+
+    # A small piece of state that determines whether the data_coordinator thread that produces this data is expected to unlock the prediction lock
+    _holding_prediction_lock: bool
+
+    # A small piece of state that determines whether the data_coordinator thread that produces this data is expected to unlock the collection lock
+    _holding_collection_lock: bool
+
+    # manipulating the prediction lock inside the DataCoordinator logic must be done while holding this
+    prediction_sync_lock: Lock
+
+    # manipulating the collection lock inside the DataCoordinator logic must be done while holding this
+    collection_sync_lock: Lock
 
     def __init__(self, interval_output_path: str, jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
-                 min_appendable_time_steps: Optional[int] = None):
+                 # We assume that 'min_appendable_time_steps' is sufficient to make a prediction.
+                 min_appendable_time_steps: Optional[int] = None, prediction_load: float = 0.005):
         self.interval_recorder = IntervalRecorder(interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
@@ -44,12 +70,29 @@ class DataCoordinator:
                 raise ValueError("jump must evenly divide min appendable time steps")
             self.overlap_allowance = self.spectrogram_buffer.min_appendable_time_steps - jump
 
+        if prediction_load < 0 or prediction_load >= 1:
+            raise ValueError("Prediction load must be a value between 0 and 1, excluding 1.")
+        self.prediction_load = prediction_load
+
+        # Initialize thread synchronization resources
+        self.data_available_for_prediction_lock = Lock()
+        self.predictions_available_for_collection_lock = Lock()
+        self.data_available_for_prediction_lock.acquire()
+        self.predictions_available_for_collection_lock.acquire()
+        self._holding_prediction_lock = True
+        self._holding_collection_lock = True
+        self.prediction_sync_lock = Lock()
+        self.collection_sync_lock = Lock()
+
     # Appends new spectrogram data to the spectrogram buffer
     def write(self, spectrogram: np.ndarray, timestamp: Optional[datetime] = None):
         jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
         if spectrogram.shape[0] % jump != 0:
             raise ValueError("Must append a number of time steps equal to an integer multiple of jump size")
         self.spectrogram_buffer.append_data(spectrogram, time=timestamp)
+
+        # Update thread synchronization states
+        self.update_prediction_lock()
 
     # returns number of rows for which a prediction has been made, useful for backoff logic
     def make_predictions(self, predictor: Predictor, time_window: int) -> int:
@@ -107,7 +150,8 @@ class DataCoordinator:
             predictions, overlap_counts = predictor.make_predictions(spect_data)
             self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
             self.spectrogram_buffer.mark_for_post_processing(time_steps=actual_time_window - self.overlap_allowance)
-            return predictions.shape[0]
+
+            num_predictions = predictions.shape[0]
         else:
             time_dist = self.spectrogram_buffer.circular_distance(second_timestamp[0], first_timestamp[0])
             if (time_dist - time_window + self.overlap_allowance) >= self.spectrogram_buffer.min_appendable_time_steps:
@@ -117,7 +161,7 @@ class DataCoordinator:
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
                 self.spectrogram_buffer.mark_for_post_processing(time_steps=time_window - self.overlap_allowance)
-                return predictions.shape[0]
+                num_predictions = predictions.shape[0]
             else:
                 # process all of this remaining data
                 spect_data, begin_idx = self.spectrogram_buffer.get_unprocessed_data(time_steps=time_dist,
@@ -125,7 +169,13 @@ class DataCoordinator:
                 predictions, overlap_counts = predictor.make_predictions(spect_data)
                 self.prediction_buffer.write(begin_idx, predictions, overlap_counts)
                 self.spectrogram_buffer.mark_for_post_processing(time_steps=time_dist)
-                return predictions.shape[0]
+                num_predictions = predictions.shape[0]
+
+        # Update thread synchronization states
+        self.update_prediction_lock()
+        self.update_collection_lock()
+
+        return num_predictions
 
     # returns a tuple of:
     # 1. number of rows for which predictions were finalized
@@ -160,6 +210,9 @@ class DataCoordinator:
 
         # free the underlying memory in the spectrogrambuffer
         self.spectrogram_buffer.mark_post_processing_complete(time_window)
+
+        # update thread synchronization states
+        self.update_collection_lock()
 
         # create time intervals for detection events, save them to a file
         intervals = self.get_detection_intervals(final_predictions, timestamps)
@@ -205,6 +258,52 @@ class DataCoordinator:
                 self.transition_state = TransitionState(start_time, 1)
 
         return intervals
+
+    def update_prediction_lock(self):
+        with self.prediction_sync_lock:
+            metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
+            with self.spectrogram_buffer.timestamp_mutex:
+                unprocessed_discontinuities = len(self.spectrogram_buffer.unprocessed_timestamp_deque)
+            if unprocessed_discontinuities >= 2:
+                # unlock it if possible
+                if self._holding_prediction_lock:
+                    self._holding_prediction_lock = False
+                    self.data_available_for_prediction_lock.release()
+            else:
+                jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
+                if metadata_snapshot.rows_unprocessed >= (self.spectrogram_buffer.min_appendable_time_steps + jump):
+                    # unlock it if possible
+                    if self._holding_prediction_lock:
+                        self._holding_prediction_lock = False
+                        self.data_available_for_prediction_lock.release()
+                else:
+                    # make sure it's locked
+                    if not self._holding_prediction_lock:
+                        self.data_available_for_prediction_lock.acquire()
+                        self._holding_prediction_lock = True
+
+    def update_collection_lock(self):
+        with self.collection_sync_lock:
+            metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
+            prediction_threshold = self.spectrogram_buffer.buffer.shape[0] * self.prediction_load
+            pending_predictions = metadata_snapshot.rows_allocated - metadata_snapshot.rows_unprocessed
+            # 1. If there's some configurably large amount of pending predictions, unlock it
+            if pending_predictions >= prediction_threshold and pending_predictions > 0:
+                # unlock it if possible
+                if self._holding_collection_lock:
+                    self._holding_collection_lock = False
+                    self.predictions_available_for_collection_lock.release()
+                return
+            # 2. If there is very little unprocessed data in the buffer, we're probably just finishing off the data we have, so unlock it
+            if metadata_snapshot.rows_unprocessed <= 2*self.spectrogram_buffer.min_appendable_time_steps and pending_predictions > 0:
+                if self._holding_collection_lock:
+                    self._holding_collection_lock = False
+                    self.predictions_available_for_collection_lock.release()
+            # 3. Else, make sure it's locked
+            else:
+                if not self._holding_collection_lock:
+                    self.predictions_available_for_collection_lock.acquire()
+                    self._holding_collection_lock = True
 
     # appends detection intervals to a file
     def save_detection_intervals(self, intervals: List[Tuple[datetime, datetime]]):

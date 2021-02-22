@@ -5,9 +5,9 @@ import numpy as np
 
 from src.embedded.DataCoordinator import DataCoordinator
 
-GIVE_UP_THRESHOLD = 1000
+GIVE_UP_THRESHOLD = 100
 TIME_WINDOW = 256
-SLEEP_BETWEEN_COLLECTIONS_IN_SECONDS = 0.01
+LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
 class PredictionCollector:
@@ -27,9 +27,11 @@ class PredictionCollector:
         total_time_steps_collected = 0
 
         while num_consecutive_times_buffer_empty < GIVE_UP_THRESHOLD:
-            # TODO: For all thread-owning classes like this one, come up with a less ham-fisted way of orchestrating
-            # when operations that involve consuming data from the buffer happen. Perhaps base it on a lock?
-            sleep(SLEEP_BETWEEN_COLLECTIONS_IN_SECONDS)
+            if not data_coordinator.predictions_available_for_collection_lock.acquire(timeout=LOCK_TIMEOUT_IN_SECONDS):
+                num_consecutive_times_buffer_empty += 1
+                continue
+            else:
+                data_coordinator.predictions_available_for_collection_lock.release()
             num_time_steps_collected, predictions = data_coordinator.finalize_predictions(TIME_WINDOW)
             total_time_steps_collected += num_time_steps_collected
             if num_time_steps_collected != 0:

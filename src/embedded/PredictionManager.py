@@ -4,9 +4,9 @@ from time import sleep
 from embedded.predictors.Predictor import Predictor
 from src.embedded.DataCoordinator import DataCoordinator
 
-GIVE_UP_THRESHOLD = 1000
+GIVE_UP_THRESHOLD = 100
 TIME_WINDOW = 256*4 + 3*64
-SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS = 0.01
+LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
 class PredictionManager:
@@ -25,7 +25,11 @@ class PredictionManager:
         total_time_steps_predicted = 0
 
         while num_consecutive_times_buffer_empty < GIVE_UP_THRESHOLD:
-            sleep(SLEEP_BETWEEN_PREDICTIONS_IN_SECONDS)
+            if not data_coordinator.data_available_for_prediction_lock.acquire(timeout=LOCK_TIMEOUT_IN_SECONDS):
+                num_consecutive_times_buffer_empty += 1
+                continue
+            else:
+                data_coordinator.data_available_for_prediction_lock.release()
             num_time_steps_predicted = data_coordinator.make_predictions(self.predictor, TIME_WINDOW)
             total_time_steps_predicted += num_time_steps_predicted
             if num_time_steps_predicted != 0:

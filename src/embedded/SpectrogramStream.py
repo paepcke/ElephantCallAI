@@ -34,14 +34,17 @@ class SpectrogramStream:
         self.stream_thread.start()
 
     def stream(self, data_coordinator: DataCoordinator):
-        max_time_steps = min(self.spectrogram_data.shape[0]//CHUNK_SIZE, self.max_time_steps)
-        if max_time_steps != self.max_time_steps:
+        max_chunks = self.spectrogram_data.shape[0] // CHUNK_SIZE
+        if self.max_time_steps is not None:
+            max_chunks = min(max_chunks, self.max_time_steps//CHUNK_SIZE)
+
+        if self.max_time_steps is None or max_chunks != self.max_time_steps//CHUNK_SIZE:
             print("WARNING: processing all {} time steps of data".format(self.spectrogram_data.shape[0]))
 
         need_new_timestamp = True
         i = 0
 
-        while i < max_time_steps:
+        while i < max_chunks:
             sleep(SLEEP_BETWEEN_CHUNKS_IN_SECONDS)
             if need_new_timestamp:
                 now = datetime.now(timezone.utc)

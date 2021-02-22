@@ -86,7 +86,6 @@ class SpectrogramBuffer:
         with self.metadata_mutex:
             metadata_snapshot = SpectrogramBufferMetadata(self)
         new_data_time_len = new_data.shape[0]
-        # TODO: synchronization between different threads
         available_time_distance_in_buf = self.buffer.shape[0] - metadata_snapshot.rows_allocated
 
         if available_time_distance_in_buf < new_data_time_len:
@@ -128,7 +127,6 @@ class SpectrogramBuffer:
                              "into the buffer in a single append operation.").format(self.min_appendable_time_steps))
 
     # data should always be accessed from the *return value* of this method
-    # TODO: add 'clip_different_timestamps' param
     def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None,
                              mark_for_postprocessing: bool = True) -> Tuple[np.ndarray, int]:
         """Read unprocessed data from the buffer. By default, this read marks the data as 'processed'."""
@@ -158,7 +156,6 @@ class SpectrogramBuffer:
     def get_processed_data(self, time_steps: int, target: Optional[np.ndarray] = None, free_buffer_region: bool = True) -> np.ndarray:
         """Read data from the buffer for post-processing. This copies the data into a separate location
         and, by default, frees the region of the buffer for other use."""
-        # TODO: block this operation until there is a meaningful number of rows left for processing?
         data, new_begin_idx = self.consume_data(time_steps, True, target=target, force_copy=True)
         if free_buffer_region:
             with self.metadata_mutex:
