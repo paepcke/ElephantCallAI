@@ -55,8 +55,8 @@ class SpectrogramStream:
                 need_new_timestamp = False
                 i += 1
             except ValueError:
-                # TODO: formally track intervals of 'blackout', either here or in prediction collection
                 if self.drop_data:
+                    # TODO: implement a more clever mechanism for deciding when to drop data
                     i += 1
                     need_new_timestamp = True
                     print("Dropped a chunk", file=sys.stderr)

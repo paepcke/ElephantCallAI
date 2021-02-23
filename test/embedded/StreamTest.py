@@ -7,7 +7,9 @@ from src.embedded.predictors import ModelPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
 SPECTROGRAM_NPY_FILE = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_spec.npy"
-INTERVAL_OUTPUT_PATH = "/tmp/intervals.txt"
+MODEL_PATH = "../../models/remote_model.pt"
+PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
+BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy"
 
@@ -15,16 +17,19 @@ LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy
 def integration_test_with_model(small_buffer: bool = False):
     start = datetime.now(timezone.utc)
 
-    os.system("rm {}".format(INTERVAL_OUTPUT_PATH))
+    os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))
+    os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
-    predictor = ModelPredictor.ModelPredictor("../../models/remote_model.pt", jump=jump)
+    predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
 
     if small_buffer:
-        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=2048*8, jump=jump)
+        data_coordinator = DataCoordinator.DataCoordinator(
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=2048 * 8, jump=jump)
         drop_data = False
     else:
-        data_coordinator = DataCoordinator.DataCoordinator(INTERVAL_OUTPUT_PATH, jump=jump)
+        data_coordinator = DataCoordinator.DataCoordinator(
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump)
         drop_data = True
 
     spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)

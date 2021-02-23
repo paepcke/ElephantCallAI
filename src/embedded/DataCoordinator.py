@@ -2,7 +2,7 @@ from typing import Optional, Deque, Tuple, List
 import numpy as np
 from datetime import datetime
 from collections import deque
-import sys
+import sys, signal
 from threading import Lock
 
 from embedded.IntervalRecorder import IntervalRecorder
@@ -19,8 +19,9 @@ class DataCoordinator:
     Extracts intervals of continuously-detected positive predictions and saves these intervals to a file."""
     spectrogram_buffer: SpectrogramBuffer
     prediction_buffer: PredictionBuffer
-    transition_state: TransitionState
-    interval_recorder: IntervalRecorder
+    prediction_transition_state: TransitionState
+    prediction_interval_recorder: IntervalRecorder
+    blackout_interval_recorder: IntervalRecorder
     # This parameter determines the offset between evaluated overlapping spectrogram frames.
     # It is computed as 'min_appendable_time_steps - jump'.
     overlap_allowance: int
@@ -49,14 +50,22 @@ class DataCoordinator:
     # manipulating the collection lock inside the DataCoordinator logic must be done while holding this
     collection_sync_lock: Lock
 
-    def __init__(self, interval_output_path: str, jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
+    def __init__(self, prediction_interval_output_path: str,
+                 # If the data is being inserted faster than it can be processed, we may be forced to drop
+                 # some incoming data. This creates a time discontinuity for which we cannot make predictions.
+                 # This parameter specifies a path to a txt file where those intervals of 'blackout' are recorded.
+                 blackout_interval_output_path: str,
+                 jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
                  # We assume that 'min_appendable_time_steps' is sufficient to make a prediction.
                  min_appendable_time_steps: Optional[int] = None, prediction_load: float = 0.005):
-        self.interval_recorder = IntervalRecorder(interval_output_path)
+        self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
-        self.transition_state = non_detected_transition_state()
+        self.prediction_transition_state = non_detected_transition_state()
+
+        self.blackout_interval_recorder = IntervalRecorder(blackout_interval_output_path)
+
         if jump is None:
             print("WARNING: DataCoordinator overlap_allowance parameter is 0. There will not be any overlap between "
                   "evaluated spectrogram frames. Please make sure this is intentional.", file=sys.stderr)
@@ -84,8 +93,20 @@ class DataCoordinator:
         self.prediction_sync_lock = Lock()
         self.collection_sync_lock = Lock()
 
+        # set up signal handler to close interval files in the event the process is TERM'd or INT'd
+        self._setup_signal_handler()
+
     # Appends new spectrogram data to the spectrogram buffer
     def write(self, spectrogram: np.ndarray, timestamp: Optional[datetime] = None):
+        most_recent_timestamp_entry = None
+        prev_unprocessed_end = None
+        if timestamp is not None:
+            with self.spectrogram_buffer.metadata_mutex:
+                if self.spectrogram_buffer.rows_unprocessed > 0:
+                    with self.spectrogram_buffer.timestamp_mutex:
+                        most_recent_timestamp_entry = self.spectrogram_buffer.unprocessed_timestamp_deque[-1]
+                        prev_unprocessed_end = self.spectrogram_buffer.unprocessed_end
+
         jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
         if spectrogram.shape[0] % jump != 0:
             raise ValueError("Must append a number of time steps equal to an integer multiple of jump size")
@@ -93,6 +114,14 @@ class DataCoordinator:
 
         # Update thread synchronization states
         self.update_prediction_lock()
+
+        if most_recent_timestamp_entry is not None:
+            prev_continuity_len =\
+                self.spectrogram_buffer.circular_distance(prev_unprocessed_end, most_recent_timestamp_entry[0])
+            blackout_start = most_recent_timestamp_entry[1] + TIME_DELTA_PER_TIME_STEP*prev_continuity_len
+            blackout_end = timestamp
+            self.blackout_interval_recorder.write_interval((blackout_start, blackout_end))
+
 
     # returns number of rows for which a prediction has been made, useful for backoff logic
     def make_predictions(self, predictor: Predictor, time_window: int) -> int:
@@ -225,11 +254,11 @@ class DataCoordinator:
         intervals = list()
         cur_timestamp = timestamps.popleft()
 
-        if self.transition_state.is_detected():
-            tentative_interval_end = self.transition_state.start_time + self.transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP
+        if self.prediction_transition_state.is_detected():
+            tentative_interval_end = self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP
             if tentative_interval_end != cur_timestamp[1]:
-                intervals.append((self.transition_state.start_time, tentative_interval_end))
-                self.transition_state = non_detected_transition_state()
+                intervals.append((self.prediction_transition_state.start_time, tentative_interval_end))
+                self.prediction_transition_state = non_detected_transition_state()
 
         for i in range(0, finalized_predictions.shape[0]):
             if len(timestamps) > 0 and timestamps[0][0] <= i:
@@ -237,25 +266,25 @@ class DataCoordinator:
                 cur_timestamp = timestamps.popleft()
                 if cur_timestamp[1] != ((cur_timestamp[0] - prev_timestamp[0])*TIME_DELTA_PER_TIME_STEP + prev_timestamp[1]):
                     # This is a time discontinuity. We can only detect call events that cross this boundary as two separate events; one on each side of the discontinuity.
-                    if self.transition_state.is_detected():
-                        intervals.append((self.transition_state.start_time,
-                                          self.transition_state.start_time + self.transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
-                        self.transition_state = non_detected_transition_state()
+                    if self.prediction_transition_state.is_detected():
+                        intervals.append((self.prediction_transition_state.start_time,
+                                          self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
+                        self.prediction_transition_state = non_detected_transition_state()
 
             # handle next time increment of prediction
-            if self.transition_state.is_detected():
+            if self.prediction_transition_state.is_detected():
                 if finalized_predictions[i] >= PREDICTION_THRESHOLD:
                     # expand the detected event by one time step
-                    self.transition_state.num_consecutive_ones += 1
+                    self.prediction_transition_state.num_consecutive_ones += 1
                 else:
                     # finalize the detected event
-                    intervals.append((self.transition_state.start_time,
-                                      self.transition_state.start_time + self.transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
-                    self.transition_state = non_detected_transition_state()
+                    intervals.append((self.prediction_transition_state.start_time,
+                                      self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
+                    self.prediction_transition_state = non_detected_transition_state()
             elif finalized_predictions[i] >= PREDICTION_THRESHOLD:
                 # begin a new detection event
                 start_time = cur_timestamp[1] + (i - cur_timestamp[0])*TIME_DELTA_PER_TIME_STEP
-                self.transition_state = TransitionState(start_time, 1)
+                self.prediction_transition_state = TransitionState(start_time, 1)
 
         return intervals
 
@@ -308,7 +337,17 @@ class DataCoordinator:
     # appends detection intervals to a file
     def save_detection_intervals(self, intervals: List[Tuple[datetime, datetime]]):
         for interval in intervals:
-            self.interval_recorder.write_interval(interval)
+            self.prediction_interval_recorder.write_interval(interval)
+
+    def _setup_signal_handler(self):
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+
+    def _handle_signal(self, signum, frame):
+        self.wrap_up()
+        print("Received SIGTERM or SIGINT, closing interval files and terminating prediction...", file=sys.stderr)
+        exit(0)
 
     def wrap_up(self):
-        self.interval_recorder.close()
+        self.prediction_interval_recorder.close()
+        self.blackout_interval_recorder.close()

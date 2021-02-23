@@ -11,7 +11,8 @@ from src.embedded.SpectrogramBuffer import TIME_DELTA_PER_TIME_STEP, FREQ_BINS
 from src.embedded.predictors.ConstPredictor import ConstPredictor
 
 
-INTERVAL_OUTPUT_PATH = "/tmp/intervals.txt"
+PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
+BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 TEST_LOCK_TIMEOUT_SECONDS = 0.2
 
 
@@ -20,9 +21,9 @@ class DataCoordinatorTest(unittest.TestCase):
 
     # This test is sort of an integration test for the entire spectrogram-to-predicted-intervals pipeline
     def test_data_pipeline(self):
-        clear_interval_file()
+        clear_interval_files()
 
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=1)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=1)
         now = datetime.now(timezone.utc)
         data = np.zeros((12, FREQ_BINS))
         ones_predictor = ConstPredictor(1)
@@ -49,7 +50,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(6, coordinator.spectrogram_buffer.rows_unprocessed)
 
         # Does the output file look right?
-        lines = get_lines_of_interval_file()
+        lines = get_lines_of_prediction_file()
         self.assertEqual(2, len(lines))
 
         begin_interval_0 = now
@@ -60,7 +61,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual("{},{}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
 
     def test_dont_predict_without_another_timestamp_if_not_leaving_min_appendable_time_steps(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
         data = np.zeros((6, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -72,7 +73,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(0, processed)
 
     def test_can_predict_without_another_timestamp_if_leaving_min_appendable_time_steps_with_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -85,7 +86,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(2, coordinator.spectrogram_buffer.rows_allocated - coordinator.spectrogram_buffer.rows_unprocessed)
 
     def test_time_window_must_be_a_multiple_of_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -100,7 +101,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.fail("Expected exception but none thrown")
 
     def test_time_window_must_be_a_multiple_of_min_appendable_if_no_overlap_allowance(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
         data = np.zeros((9, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -115,7 +116,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.fail("Expected exception but none thrown")
 
     def test_can_make_fewer_predictions_than_requested_to_allow_future_predictions(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -127,7 +128,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(9, processed)
 
     def test_predict_entire_outstanding_data_if_another_timestamp_exists(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
@@ -142,7 +143,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(5, processed)
 
     def test_predict_subset_of_outstanding_data_if_another_timestamp_exists(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=2, jump=1)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=2, jump=1)
         data = np.zeros((12, FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
@@ -158,13 +159,13 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_exception_thrown_if_jump_geq_min_appendable_len(self):
         try:
-            DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=5)
+            DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=5)
         except ValueError:
             return
         self.fail("Expected exception but none thrown. 'overlap_allowance' >= 'time_window' should not be allowed.")
 
     def test_cant_predict_less_than_min_appendable_time_steps(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3, jump=1)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3, jump=1)
         data = np.zeros((8, FREQ_BINS))
         predictor = ConstPredictor(1)
 
@@ -179,7 +180,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.fail("Expected exception but none thrown. Should not be able to predict less than min_appendable_time_steps at once.")
 
     def test_prediction_lock_allows_entry_when_appropriate_without_discontinuity(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((6, FREQ_BINS))
 
         coordinator.write(data)
@@ -190,7 +191,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertTrue(got_lock)
 
     def test_prediction_lock_disallows_entry_when_appropriate_without_discontinuity(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
         data = np.zeros((4, FREQ_BINS))
 
         coordinator.write(data)
@@ -201,7 +202,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertFalse(got_lock)
 
     def test_prediction_lock_allows_entry_when_appropriate_with_discontinuity(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
                                       jump=2)
         data = np.zeros((10, FREQ_BINS))
         now = datetime.now(timezone.utc)
@@ -216,7 +217,7 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertTrue(got_lock)
 
     def test_get_detection_intervals(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
         time1 = now + 40*TIME_DELTA_PER_TIME_STEP
         time2 = time1 + 40*TIME_DELTA_PER_TIME_STEP
@@ -230,7 +231,7 @@ class DataCoordinatorTest(unittest.TestCase):
         finalized_predictions[6] = 0
         finalized_predictions[8] = 0
 
-        coordinator.transition_state = TransitionState(now, 2)
+        coordinator.prediction_transition_state = TransitionState(now, 2)
 
         intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
         coordinator.wrap_up()
@@ -241,11 +242,11 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual((time2, time2 + 2 * TIME_DELTA_PER_TIME_STEP), intervals[2])
         self.assertEqual((time2 + 3*TIME_DELTA_PER_TIME_STEP, time2 + 4*TIME_DELTA_PER_TIME_STEP), intervals[3])
 
-        self.assertEqual(time2 + 5*TIME_DELTA_PER_TIME_STEP, coordinator.transition_state.start_time)
-        self.assertEqual(1, coordinator.transition_state.num_consecutive_ones)
+        self.assertEqual(time2 + 5 * TIME_DELTA_PER_TIME_STEP, coordinator.prediction_transition_state.start_time)
+        self.assertEqual(1, coordinator.prediction_transition_state.num_consecutive_ones)
 
     def test_get_detection_interval_without_initial_state_or_leftover_state(self):
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
 
         timestamps = deque()
@@ -260,13 +261,13 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(1, len(intervals))
         self.assertEqual((now, now + 9*TIME_DELTA_PER_TIME_STEP), intervals[0])
 
-        self.assertIsNone(coordinator.transition_state.start_time)
-        self.assertIsNone(coordinator.transition_state.num_consecutive_ones)
+        self.assertIsNone(coordinator.prediction_transition_state.start_time)
+        self.assertIsNone(coordinator.prediction_transition_state.num_consecutive_ones)
 
     def test_write_intervals_to_file(self):
-        clear_interval_file()
+        clear_interval_files()
 
-        coordinator = DataCoordinator(INTERVAL_OUTPUT_PATH, override_buffer_size=16)
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
         start = now
         end = now + 2*TIME_DELTA_PER_TIME_STEP
@@ -274,20 +275,56 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.save_detection_intervals(intervals)
         coordinator.wrap_up()
 
-        lines = get_lines_of_interval_file()
+        lines = get_lines_of_prediction_file()
 
         self.assertEqual(1, len(lines))
         self.assertEqual("{},{}\n".format(start.isoformat(), end.isoformat()), lines[0])
 
+    def test_blackout_intervals(self):
+        clear_interval_files()
 
-def clear_interval_file():
-    os.system("rm {}".format(INTERVAL_OUTPUT_PATH))
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH,
+                                      override_buffer_size=16, min_appendable_time_steps=1)
+        data = np.zeros((3, FREQ_BINS))
+
+        now = datetime.now(timezone.utc)
+        time1 = now + 46 * TIME_DELTA_PER_TIME_STEP
+        time2 = time1 + 53 * TIME_DELTA_PER_TIME_STEP
+
+        coordinator.write(data, now)
+        coordinator.write(data, time1)
+        coordinator.write(data, time2)
+
+        coordinator.wrap_up()
+
+        lines = get_lines_of_blackout_file()
+
+        blk1_start = now + 3*TIME_DELTA_PER_TIME_STEP
+        blk1_end = time1
+        blk2_start = time1 + 3*TIME_DELTA_PER_TIME_STEP
+        blk2_end = time2
+        self.assertEqual(2, len(lines))
+        self.assertEqual("{},{}\n".format(blk1_start.isoformat(), blk1_end.isoformat()), lines[0])
+        self.assertEqual("{},{}\n".format(blk2_start.isoformat(), blk2_end.isoformat()), lines[1])
 
 
-def get_lines_of_interval_file() -> List[str]:
-    with open(INTERVAL_OUTPUT_PATH, "r") as file:
+def clear_interval_files():
+    os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))
+    os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
+
+
+def get_lines_of_interval_file(file_path: str) -> List[str]:
+    with open(file_path, "r") as file:
         lines = file.readlines()
     return lines
+
+
+def get_lines_of_prediction_file() -> List[str]:
+    return get_lines_of_interval_file(PREDICTION_INTERVALS_OUTPUT_PATH)
+
+
+def get_lines_of_blackout_file() -> List[str]:
+    return get_lines_of_interval_file(BLACKOUT_INTERVALS_OUTPUT_PATH)
 
 
 if __name__ == '__main__':
