@@ -346,7 +346,7 @@ class DataCoordinator:
     def _handle_signal(self, signum, frame):
         self.wrap_up()
         print("Received SIGTERM or SIGINT, closing interval files and terminating prediction...", file=sys.stderr)
-        exit(0)
+        sys.exit(0)
 
     def wrap_up(self):
         self.prediction_interval_recorder.close()
