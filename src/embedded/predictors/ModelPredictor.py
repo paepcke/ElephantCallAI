@@ -5,7 +5,7 @@ from torch import nn
 
 from embedded.predictors.Predictor import Predictor
 from embedded.SpectrogramBuffer import NUM_SAMPLES_IN_TIME_WINDOW
-from eval import get_batched_predictions_and_overlap_counts
+from PredictionUtils import get_batched_predictions_and_overlap_counts
 
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
