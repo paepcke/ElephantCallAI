@@ -2,8 +2,8 @@ import os
 import numpy as np
 from datetime import datetime, timezone
 
-from src.embedded import DataCoordinator, SpectrogramStream, PredictionManager, PredictionCollector
-from src.embedded.predictors import ModelPredictor
+from embedded import DataCoordinator, SpectrogramStream, PredictionManager, PredictionCollector
+from embedded.predictors import ModelPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
 SPECTROGRAM_NPY_FILE = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_spec.npy"

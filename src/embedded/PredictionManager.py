@@ -1,8 +1,7 @@
 from threading import Thread
-from time import sleep
 
 from embedded.predictors.Predictor import Predictor
-from src.embedded.DataCoordinator import DataCoordinator
+from embedded.DataCoordinator import DataCoordinator
 
 GIVE_UP_THRESHOLD = 100
 TIME_WINDOW = 256*4 + 3*64

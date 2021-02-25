@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple
 
-from src.embedded.predictors.Predictor import Predictor
+from embedded.predictors.Predictor import Predictor
 
 
 class ConstPredictor(Predictor):

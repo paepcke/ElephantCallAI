@@ -1,9 +1,8 @@
 from threading import Thread
-from time import sleep
 from typing import List
 import numpy as np
 
-from src.embedded.DataCoordinator import DataCoordinator
+from embedded.DataCoordinator import DataCoordinator
 
 GIVE_UP_THRESHOLD = 100
 TIME_WINDOW = 256

@@ -5,10 +5,10 @@ from collections import deque
 import numpy as np
 from typing import List
 
-from src.embedded.DataCoordinator import DataCoordinator
-from src.embedded.TransitionState import TransitionState
-from src.embedded.SpectrogramBuffer import TIME_DELTA_PER_TIME_STEP, FREQ_BINS
-from src.embedded.predictors.ConstPredictor import ConstPredictor
+from embedded.DataCoordinator import DataCoordinator
+from embedded.TransitionState import TransitionState
+from embedded.SpectrogramBuffer import TIME_DELTA_PER_TIME_STEP, FREQ_BINS
+from embedded.predictors.ConstPredictor import ConstPredictor
 
 
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"

@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from datetime import datetime, timezone, timedelta
 
-from src.embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
+from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
 
 
 class SpectrogramBufferTest(unittest.TestCase):

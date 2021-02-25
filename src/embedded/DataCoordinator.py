@@ -6,9 +6,9 @@ import sys, signal
 from threading import Lock
 
 from embedded.IntervalRecorder import IntervalRecorder
-from src.embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
-from src.embedded.PredictionBuffer import PredictionBuffer
-from src.embedded.TransitionState import TransitionState, non_detected_transition_state
+from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
+from embedded.PredictionBuffer import PredictionBuffer
+from embedded.TransitionState import TransitionState, non_detected_transition_state
 from embedded.predictors import Predictor
 
 PREDICTION_THRESHOLD = 0.5

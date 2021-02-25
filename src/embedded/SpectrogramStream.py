@@ -1,4 +1,3 @@
-import math
 from threading import Thread
 import numpy as np
 from typing import Optional
@@ -6,7 +5,7 @@ from time import sleep
 from datetime import datetime, timezone
 import sys
 
-from src.embedded.DataCoordinator import DataCoordinator
+from embedded.DataCoordinator import DataCoordinator
 
 
 CHUNK_SIZE = 256*8
