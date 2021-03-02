@@ -37,6 +37,13 @@ import csv
 import os
 import argparse
 
+
+# these can be made configurable through argparse if necessary.
+FREQS = 77
+TIME_STEPS_IN_WINDOW = 256
+BATCH_SIZE = 32
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--preds_path', type=str, dest='predictions_path', default='../Predictions',
     help = 'Path to the folder where we output the full test predictions')
@@ -46,7 +53,7 @@ parser.add_argument('--call_preds_path', type=str, dest='call_predictions_path',
 # Defaults based on quatro
 parser.add_argument('--test_files', type=str, default='/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt')
 
-parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale ele general test sounds/", 
+parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_general_test/", 
     help='Path to the processed spectrogram files')
 
 
@@ -105,8 +112,6 @@ def loadModel(model_path):
         model_id += "_Slide" + str(parameters.PREDICTION_SLIDE_LENGTH) 
 
     return model, model_id
-
-
 
 ##############################################################################
 ### Full Time series evaluation assuming we have access to the spectrogram ###
@@ -515,6 +520,104 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128):
 
     return predictions
 
+
+def predict_batched(data, model, jump=TIME_STEPS_IN_WINDOW//2):
+    time_idx = 0
+
+    # key assumption: TIME_STEPS_IN_WINDOW is evenly divisible by 'jump'
+    assert(TIME_STEPS_IN_WINDOW % jump == 0)
+    if jump == 0:
+        k = 1
+    else:
+        k = TIME_STEPS_IN_WINDOW // jump
+
+    # cut off data at end to allow for even divisibility
+    # TODO: discuss an alternative approach to this
+    raw_end_time = data.shape[0]
+    clean_end_time = raw_end_time - (raw_end_time % jump)
+
+    predictions = np.zeros(clean_end_time)
+    overlap_counts = np.zeros(clean_end_time)
+
+    while time_idx + TIME_STEPS_IN_WINDOW*BATCH_SIZE + (k - 1)*jump <= clean_end_time:
+        forward_inference_on_batch(model, data, time_idx, jump, BATCH_SIZE, predictions, overlap_counts, k)
+        time_idx += TIME_STEPS_IN_WINDOW*BATCH_SIZE
+
+    # final batch (if size < BATCH_SIZE)
+    final_full_batch_size = (clean_end_time - time_idx - (k - 1)*jump)//TIME_STEPS_IN_WINDOW
+    if final_full_batch_size > 0:
+        forward_inference_on_batch(model, data, time_idx, jump, final_full_batch_size, predictions, overlap_counts, k)
+        time_idx += TIME_STEPS_IN_WINDOW*final_full_batch_size
+
+    # remaining jumps (less than k)
+    if time_idx + TIME_STEPS_IN_WINDOW <= clean_end_time:
+        remaining_jumps = (clean_end_time - time_idx - TIME_STEPS_IN_WINDOW)//jump + 1
+        forward_inference_on_batch(model, data, time_idx, jump, 1, predictions, overlap_counts, remaining_jumps)
+
+    # Average the predictions on overlapping frames
+    predictions = predictions / overlap_counts
+
+    # Get squashed [0, 1] predictions
+    predictions = sigmoid(predictions)
+
+    return predictions
+
+
+def forward_inference_on_batch(
+        model,  # the ML model we use to generate predictions
+        data,  # input data, of dims number of time segments, number of frequencies
+        time_idx,  # the beginning time index for this inference
+        jump,  # number of time steps between starts of frames to perform inference on (must be a clean divisor of TIME_STEPS_IN_WINDOW)
+        batchsize,  # number of frames to perform inference on at once. Be careful not to exceed VRAM limits! This is going to be highly hardware-dependent.
+        predictions,  # full ndarray of the sum of all predictions at each individual time step
+        overlap_counts,  # full ndarray of the number of predictions applied to each invididual time step
+
+        # the number of different offsets that should be used. This method will process this many batches of input.
+        # If this number is 1, no 'jumps' will actually be evaluated, just the standard start of the array (the offset of 0).
+        max_jumps):
+
+    # select the region of the data to perform inference on
+    input_batch = data[time_idx:(time_idx + batchsize * TIME_STEPS_IN_WINDOW + (max_jumps - 1) * jump), :]
+
+    # one batch of spectrogram 'frames' (each representing a full input to the model) to be processed in parallel are consecutive and non-overlapping.
+    # each iteration of this loop performs this approach with a different offset into the first frame, allowing the evaluation
+    # of overlapping frames. Overlapping frames are NOT evaluated in parallel, but non-overlapping consecutive frames can be.
+    for num_jumps_to_offset in range(0, max_jumps):
+        # Used for indexing into the input batch
+        local_begin_idx = num_jumps_to_offset * jump
+        local_end_idx = local_begin_idx + batchsize * TIME_STEPS_IN_WINDOW
+
+        # Used for indexing into the prediction arrays
+        global_begin_idx = local_begin_idx + time_idx
+        global_end_idx = local_end_idx + time_idx
+
+        reshaped_input_batch = input_batch[local_begin_idx:local_end_idx, :].reshape(batchsize, TIME_STEPS_IN_WINDOW, FREQS)
+
+        # apply per-frame normalization
+        # TODO: figure out how to apply per-frame normalization on the GPU/device so we can get rid of this annoying perf hit
+        # TODO: If we can do this, we won't have to copy the same data to the GPU/device 'max_jumps' times...
+        means = np.mean(reshaped_input_batch, axis=(1,2)).reshape(-1, 1, 1)
+        stds = np.std(reshaped_input_batch, axis=(1,2)).reshape(-1, 1, 1)
+
+        reshaped_input_batch -= means
+        reshaped_input_batch /= stds
+
+        reshaped_input_batch_var = Variable(torch.from_numpy(reshaped_input_batch).float().to(parameters.device))
+
+        raw_outputs = model(reshaped_input_batch_var)
+        outputs = raw_outputs.view(batchsize, TIME_STEPS_IN_WINDOW)
+
+        relevant_predictions = predictions[global_begin_idx:global_end_idx].reshape((batchsize, TIME_STEPS_IN_WINDOW))
+        relevant_overlap_counts = overlap_counts[global_begin_idx:global_end_idx].reshape((batchsize, TIME_STEPS_IN_WINDOW))
+
+        relevant_predictions += outputs.cpu().detach().numpy()
+        relevant_overlap_counts += 1
+
+        # now we restore the segment of the input data
+        reshaped_input_batch *= stds
+        reshaped_input_batch += means
+
+
 def generate_predictions_full_spectrograms(dataset, model, model_id, predictions_path, 
     sliding_window=True, chunk_size=256, jump=128):
     """
@@ -539,6 +642,7 @@ def generate_predictions_full_spectrograms(dataset, model, model_id, predictions
         print ("Generating Prediction for:", data_id)
 
         if sliding_window:
+            # the method 'predict_batched' can be used for speedup once predictions for trailing data have been implemented.
             predictions = predict_spec_sliding_window(spectrogram, model, chunk_size=chunk_size, jump=jump)
         else:
             predictions = predict_spec_full(spectrogram, model)
