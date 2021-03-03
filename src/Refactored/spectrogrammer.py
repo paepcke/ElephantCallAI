@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 '''
-Created on Feb 23, 2020
+Created on Feb, 2021
 
-@author: paepcke
+@author: Jonathan
 '''
 import argparse
 import csv
@@ -13,7 +13,8 @@ from pathlib import Path
 
 # Try it with our ml specgram function but see if fails
 from scipy.io import wavfile
-from scipy.signal.spectral import stft, istft
+from scipy.signal.spectral import stft
+
 from scipy.signal import spectrogram
 from matplotlib import mlab as ml
 
@@ -41,10 +42,11 @@ import pandas as pd
 
 class Spectrogrammer(object):
     '''
-    Create and manipulate spectrograms corresponding to provided
-    .wav files. Given a list of .wav files associated with 
-    spectrograms allows for the preperation of spectrograms and / or
-    the corresponding label masks.
+    Create and manipulate spectrograms from a given folder of spectrogram
+    files and (potentially) .txt label filies. With a possible set of input
+    actions can generate spectrograms from .wav files, generate corresponding
+    spectrogram 0/1 labelings, generate spectrogram time-slicings, and
+    copy over gt_labeling
     '''
 
     # Default specifications
@@ -59,29 +61,43 @@ class Spectrogrammer(object):
     MAX_FREQ = 150 # This we can honestly consider decreasing. But let us leave it for now!
     # Primarily taken from reading in a .wav file!
     DEFAULT_FRAMERATE = 8000
+    # We should not be using these!!
 
 
     #------------------------------------
     # Constructor 
     #-------------------
 
+    """
+        Active thoughts: It would be nice to have functionality for dealing with a whole folder,
+        a list of files, etc. However, this should not be the job of the spectrogramer. I like
+        the idea of being passed a list of the files that we want to do stuff too! The question is
+        how should this be formatted?? This is my thinking!! We want to allow several options
+            - Create just spectrograms
+            - create just labelmasks
+            - create spectrograms and label masks
+            - copy just the raven file.
+        For this need flexability in accepting a collection of .wav and .txt files. Here is what 
+        we shall do! Let us a list of generic files like Andreas does and then do as we want!
+    """
 
     def __init__(self, 
                  infiles,
                  actions,
-                 outdir=None,       # Output to same dir as files are located
+                 outdir=None,       # if None Output to same dir as files are located
                  normalize=False,   # We may want to consider using this!
-                 framerate=None,    # this by default will be found from the .wav file
+                 to_db=False,
                  min_freq=0,        # Hz 
                  max_freq=150,      # Hz
                  nfft=4096,
                  pad_to=4096,
                  hop=800,
+                 framerate=8000,
                  logfile=None,
                  ):
         '''
-        @param infiles: Files to spectrogram identified by the corresponding .wav
-        @type infiles:
+        @param infiles: List of files to process (containing potentially .wav and .txt)
+        @type infiles: [str]
         @param actions: the tasks to accomplish: 
             {spectro|melspectro|labelmask|copyraven}
             NOTE: copy raven is used simply to copy over the raven gt label .txt
@@ -93,6 +109,8 @@ class Spectrogrammer(object):
         @type outdir {None | str}
         @param normalize: whether or not to normalize the signal to be within 16 bits
         @type normalize: bool
+        @param to_db: whether to convert to db scale (log scale essentially)
+        @type to_db: bool
         @param framerate: framerate of the recording. Normally 
             obtained from the wav file itself.
         @type framerate: int
@@ -112,10 +130,12 @@ class Spectrogrammer(object):
         self.hop = hop
         self.min_freq = min_freq
         self.max_freq = max_freq
+        self.framerate = framerate
 
         # Output directory
         self.outdir = outdir
         
+        # We should figure out exactly what the shmuck is going on here
         if logfile is None:
             self.log = LoggingService()
         else:
@@ -123,8 +143,10 @@ class Spectrogrammer(object):
                                       msg_identifier="spectrogrammer")
         
         
+        
         if type(infiles) != list:
             infiles = [infiles]
+        
         
         # Depending on what caller wants us to do,
         # different arguments must be passed. Make
@@ -134,24 +156,32 @@ class Spectrogrammer(object):
         # come up!
 
         # Prerequisites:
+        '''
+        Skip for now!
         if not self._ensure_prerequisites(infiles,
                                           actions,
                                           framerate,
                                           nfft,
                                           outdir):
             return
+        '''
 
+        '''
+        What I want to do here is as follows
+        - If the action includes spectro or melspectro
+        we need to collect the .wav files and then process them.
+        Additionally output the time-labels for the spect columns.
 
-        # Prepare the desired component of each .wav file
+        - If the action includes labelmask generate the 0/1 labels
+        for the spectrogram. NOTE: assume that we have generated
+        the spect time-label file for this! If not output a warning.
+        '''
+
         for infile in infiles:
             # Super basic file checking
             if not os.path.exists(infile):
                 print(f"File {infile} does not exist.")
                 continue
-
-            spect = None
-            spectro_outfile = None
-            label_mask = None
 
             # Get a dict with the file_root and 
             # names related to the infile in our
@@ -160,50 +190,61 @@ class Spectrogrammer(object):
             # .wav and .txt files
             file_family = FileFamily(infile)
 
+
             # Output the files to the same path as input
             # Note this allows self.outdir to change for each file
             if outdir is None:
                 self.outdir = file_family.path
             
-            # Start by trying to read the .wav file - the backbone of everything!
-            try: 
-                self.log.info(f"Reading wav file {infile}...")
-                (self.framerate, samples) = wavfile.read(infile)                    
-                self.log.info(f"Done reading wav file {infile}.")
-            except Exception as e:
-                self.log.warn(f"Cannot process .wav file: {repr(e)}")
-                # We should continue onto the next one!! 
-                # this we have seen with currupted .wav files
-                continue
 
-            # Generate and process the full spectrogram
-            if 'spectro' in actions:
-                try:
-                    spect, times = self.make_spectrogram(samples)
+            # Process wav file if spectro / melspectro in actions
+            if infile.endswith('.wav') and ('spectro' in actions or 'melspectro' in actions):
+                # Process the wave file
+                try: 
+                    self.log.info(f"Reading wav file {infile}...")
+                    (_, samples) = wavfile.read(infile)                    
+                    self.log.info(f"Done reading wav file {infile}.")
                 except Exception as e:
-                    print(f"Cannot create spectrogram for {infile}: {repr(e)}")
-                    return
-
-                # Save the spectrogram
-                spectro_outfile = os.path.join(self.outdir, file_family.spectro)
-                np.save(spectro_outfile, spect)
-                # Save the time mask
-                times_outfile = os.path.join(self.outdir, file_family.time_labels)
-                np.save(times_outfile, times)
-
-
-            if 'labelmask' in actions:
-                # Get label mask with 1s at time periods with an elephant call.
-                time_file = file_family.fullpath(AudioType.TIME)
-                try:
-                    times = np.load(time_file)
-                except Exception as e:
-                    print(f"Have not created the necessary time mask file for the spectrogram {infile}")
+                    self.log.warn(f"Cannot process .wav file: {repr(e)}")
+                    # We should continue onto the next one!! 
+                    # this we have seen with currupted .wav files
                     continue
 
-                raven_file = file_family.fullpath(AudioType.LABEL)
-                label_mask = self.create_label_mask_from_raven_table(times, raven_file)
-                np.save(os.path.join(self.outdir, file_family.mask), label_mask)
+                if 'spectro' in actions:
+                    try:
+                        spect, times = self.make_spectrogram(samples)
+                    except Exception as e: # This likely will not happen
+                        print(f"Cannot create spectrogram for {infile}: {repr(e)}")
+
+                    # Save the spectrogram
+                    spectro_outfile = os.path.join(self.outdir, file_family.spectro)
+                    np.save(spectro_outfile, spect)
+                    # Save the time mask
+                    times_outfile = os.path.join(self.outdir, file_family.time_labels)
+                    np.save(times_outfile, times)
+                else: # melspectro
+                    print ("TODO") 
+            
+            # Process label files
+            elif infile.endswith('.txt') and 'labelmask' in actions or 'copyraven' in actions:
+                # Generate the 0/1 spectrogram labels
+                if 'labelmask' in actions:
+                    # If we have a label file there should be a corresponding wav file
+                    # in the same folder!
+                    wav_file = file_family.fullpath(AudioType.WAV) 
+                    if not os.path.exists(wav_file):
+                        print(f"File {wav_file} does not exist so we cannot generate label mask")
+                        continue
+
+                    label_mask = self.create_label_mask_from_raven_table(wav_file, infile)
+                    if label_mask is None:
+                        print(f"Issue generating {infile} due to error in .wav file")
+                        continue
+
+                    np.save(os.path.join(self.outdir, file_family.mask), label_mask)
+
+                if 'copyraven' in actions:
+                    print ("TODO")
 
                 
 
@@ -271,13 +312,13 @@ class Spectrogrammer(object):
         Returns a two-tuple: an array of segment times
             and a 2D spectrogram array
 
-        @param data: the time/amplitude data
-        @type data: np.array([float])
+        @param raw_audio: the time/amplitude data
+        @type raw_audio: np.array([float])
         @param chunk_size: controls the incremental size used to 
         build up the spectrogram
         @type chunk_size: int
-        @return: (time slices arrya, spectrogram) 
-        @rtype: (np.array([float]), np.array([float]))
+        @return: (spectrogram, time slices array) 
+        @rtype: (np.array([float][time x freq]), np.array([float]))
         
         '''
         
@@ -378,19 +419,18 @@ class Spectrogrammer(object):
         return(freq_labels, num_time_label_choices, mel_spec_db_t)
 
 
-
     #------------------------------------
     # create_label_mask_from_raven_table
     #-------------------
     
     def create_label_mask_from_raven_table(self,
-                                           time_mask,
-                                           label_txt_file):
+                                           wav_file,
+                                           label_file):
         '''
-        Given a raven label table and a time_mask corresponding
-        to the times for each spectrogram column, create a mask
-        a mask file with 1s where the spectrogram time bins
-        would match labels, and 0s elsewhere.
+        Given a .wav recording, plus a manually created 
+        selection table as produced by the Raven program,  
+        create a mask file with 1s where the spectrogram 
+        time bins would match labels, and 0s elsewhere.
         
         Label files are of the form:
         
@@ -398,26 +438,30 @@ class Spectrogrammer(object):
              foo             6.326            4.653              bar
                     ...
 
-        @param time_mask: time mask representing the spectrogram
-            time bins for its columns
-        @type time_mask: np.array<float>
-        @param label_txt_file: either a path to a label file,
-            or an open fd to such a file:
-        @type label_txt_file: {str|file-like}
+        @param wav_file: tthe name of a .wav recording file
+        @type wav_file_or_sig: {str}
+        @param label_file: label file as produced with Raven
+        @type label_file: {str}
         '''
-                       
+            
+        # The x-axis time labels that a spectrogram would have:
+        time_tick_secs_labels = DATAUtils.time_ticks_from_wav(wav_file,
+                                                             hop_length=self.hop,
+                                                             nfft=self.nfft
+                                                             )
+        # Check if the wav file failed to read
+        if time_tick_secs_labels is None:
+            return None
+                                     
         # Start with an all-zero label mask:
-        label_mask = np.zeros(len(time_mask), dtype=int)
+        label_mask = np.zeros(len(time_tick_secs_labels), dtype=int)
+        
         try:
-            if type(label_txt_file) == str:
-                fd = open(label_txt_file, 'rt')#, encoding='latin1') #???
-            else:
-                fd = label_txt_file 
-
-            reader = csv.DictReader(fd, delimiter='\t') 
+            fd = open(label_file, 'r')
+            reader = csv.DictReader(fd, delimiter='\t')
             for (start_bin_idx, end_bin_idx) in self._get_label_indices(reader, 
-                                                                        time_mask,
-                                                                        label_txt_file):
+                                                                        time_tick_secs_labels,
+                                                                        label_file):
             
                 # Fill the mask with 1s in the just-computed range:
                 label_mask[start_bin_idx:end_bin_idx] = 1
@@ -426,8 +470,7 @@ class Spectrogrammer(object):
             # Only close an fd that we may have
             # opened in this method. Fds passed
             # in remain open for caller to close:
-            if type(label_txt_file) == str:
-                fd.close()
+            fd.close()
             
         return label_mask
 
@@ -478,12 +521,13 @@ class Spectrogrammer(object):
             # include the start/end times and then shrink these 
             # boarders in by 1.
             
-            pre_begin_indices = np.nonzero(label_times < begin_time)[0]
-            # Is label start time beyond end of recording?
+            # Get all of the indeces that have time less than the start time
+            pre_begin_indices = np.nonzero(label_times < begin_time)[0] 
             if len(pre_begin_indices) == 0:
                 start_bin_idx = 0
             else:
-                # Make the bounds a bit tighter!
+                # Make the bounds a bit tighter by adding one to the last
+                # index with the time < begin_time
                 start_bin_idx = pre_begin_indices[-1] + 1
             
             # Similarly with end time:
@@ -675,8 +719,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--actions',
                         nargs='+',
-                        choices=['spectro', 'melspectro','cleanspectro','plot',
-                                 'plotexcerpts','plothits', 'labelmask'],
+                        choices=['spectro', 'melspectro','labelmask', 'copyraven'],
                         help="Which tasks to accomplish (repeatable)"
                         )
 
@@ -687,6 +730,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args();
     # Should get the infiles from a given folder!
+
     Spectrogrammer(args.infiles,
                    args.actions,
                    outdir=args.outdir,

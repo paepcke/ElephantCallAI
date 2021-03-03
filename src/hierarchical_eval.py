@@ -24,6 +24,10 @@ parser.add_argument('--test_files', type=str, default='/home/data/elephants/proc
 parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_general_test/", 
     help='Path to the processed spectrogram files')
 
+# Special flag to specify that we are just making predictoins and not comparing against ground truth!
+parser.add_argument('--only_predictions', action='store_true', 
+    help="Specifies that we are only making predictions based on spectrogram files and may not even have label files!")
+
 
 parser.add_argument('--make_full_preds', action='store_true', 
     help = 'Generate predictions for the full test spectrograms')
@@ -60,14 +64,17 @@ python eval.py --test_files /home/data/elephants/processed_data/Test_nouab/Neg_S
 '''
 
 
-def loadModel(model_path, is_hierarchical=True):
+def loadModel(model_path):
     model = torch.load(model_path, map_location=parameters.device)
     print (model)
     # Get the model name from the path
     tokens = model_path.split('/')
-    # If hierarchical, create a sub-folder 
-    # with the model_1 that was used
-    if (is_hierarchical):
+    # The normal hierarchical model has two components: 
+    # 1) The name with the data params etc.
+    # 2) The actual model0/1 architecture
+    # NOTE: For Peter I just give the model as a Folder with the two
+    # model.pts. In this case use the Folder name as the model_id 
+    if len(tokens) > 3:
         model_id = tokens[-3] + "_" + tokens[-2]
     else:
         model_id = tokens[-2]
@@ -863,7 +870,7 @@ def extract_call_predictions(dataset, model_id, predictions_path, pred_threshold
         # Process the predictions to get predicted elephant calls
         # Note that processed_preds zeros out predictions that are not long
         # enough to be an elephant call
-        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_length=min_call_length, in_seconds=in_seconds)
+        predicted_calls, processed_preds = find_elephant_calls(binary_preds, min_call_length=min_call_length, in_seconds=in_seconds)
         print ("Num predicted calls", len(predicted_calls))
 
         # Visualize the predictions around the gt calls
@@ -941,11 +948,14 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
         print ("Outputing Results for:", data_id)
 
         # Read the gt file to extract the "begin path" data_field
-        gt_file = csv.DictReader(open(gt_call_path,'rt'), delimiter='\t')
-        for row in gt_file:
-            # Use the file offset to determine the start of the call
-            begin_path = str(row['Begin Path'])
-            break
+        if labels is not None:
+            gt_file = csv.DictReader(open(gt_call_path,'rt'), delimiter='\t')
+            for row in gt_file:
+                # Use the file offset to determine the start of the call
+                begin_path = str(row['Begin Path'])
+                break
+        else:
+            begin_path = "Dummy_Path"
 
         # Save preditions
         with open(save_path + '/' + data_id + '.txt', 'w') as f:
@@ -1017,10 +1027,18 @@ def main(args):
     # Put in eval mode!
     model_0.eval()
     model_1.eval()
+
+    # Need to make sure the save paths exist!
+    if not os.path.isdir(args.predictions_path):
+            os.mkdir(args.predictions_path)
+    if not os.path.isdir(args.call_predictions_path):
+            os.mkdir(args.call_predictions_path)
+
     
     full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
+    # Include flag indicating if we are just making predictions with no labels
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
-                 full_test_spect_paths['labels'], full_test_spect_paths['gts'])    
+                 full_test_spect_paths['labels'], full_test_spect_paths['gts'], only_preds=args.only_predictions)    
 
     if args.make_full_preds:
         generate_predictions_full_spectrograms(full_dataset, model_0, model_id, args.predictions_path,

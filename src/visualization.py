@@ -19,118 +19,6 @@ parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for
 parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
 parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
 
-'''
-def visualize(features, outputs=None, labels=None, binary_preds=None, boundaries=None, title=None, vert_lines=None, times=None):
-    """
-    Visualizes the spectogram and associated predictions/labels. 
-    features is the entire spectrogram that will be visualized
-
-    For now this just has placeholder plots for outputs and labels
-    when they're not passed in. 
-
-    Inputs are numpy arrays
-    """
-    if binary_preds is not None and boundaries is not None:
-        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5,1)
-    if binary_preds is not None or boundaries is not None: # Add a forth plot that shows the binarized predictions
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1)
-    else:
-        fig, (ax1, ax2, ax3) = plt.subplots(3,1)
-        
-    #new_features = np.flipud(10*np.log10(features).T)
-    # TODO: Delete above line?
-    # For some reason it requires things in shape freq x timeseries
-    new_features = features.T
-    min_dbfs = new_features.flatten().mean()
-    max_dbfs = new_features.flatten().mean()
-    min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-    max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
-
-    if times is not None:
-        # Adjust the x and y axis ticks to have time on the x axis and freq on the y axis (Note we have freq up to 150)!
-        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
-                interpolation='none', origin="lower", aspect="auto", extent=[times[0], times[times.shape[0] - 1], 0, 150])
-    else:
-        ax1.imshow(new_features, cmap="magma_r", vmin=min_dbfs, vmax=max_dbfs, 
-                interpolation='none', origin="lower", aspect="auto")
-    
-    if outputs is not None:
-        if times is not None:
-            ax2.plot(times, outputs)
-        else:
-            ax2.plot(np.arange(outputs.shape[0]), outputs)
-        ax2.set_ylim([0,1])
-        ax2.axhline(y=0.5, color='r', linestyle='-')
-        # Include vertical lines if we want to show what
-        # call we are focusing on
-        if vert_lines is not None:
-            if times is not None:
-                ax2.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
-                ax2.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
-            else:
-                ax2.axvline(x=vert_lines[0], color='r', linestyle=':')
-                ax2.axvline(x=vert_lines[1], color='r', linestyle=':')
-
-    if binary_preds is not None:
-        if times is not None:
-            ax3.plot(times, binary_preds)
-        else:
-            ax3.plot(np.arange(binary_preds.shape[0]), binary_preds)
-        ax3.set_ylim([0,1])
-
-        # Include vertical lines if we want to show what
-        # call we are focusing on
-        if vert_lines is not None:
-            if times is not None:
-                ax3.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
-                ax3.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
-            else:
-                ax3.axvline(x=vert_lines[0], color='r', linestyle=':')
-                ax3.axvline(x=vert_lines[1], color='r', linestyle=':')
-
-    if labels is not None:
-        gt_ax = ax3 if binary_preds is None else ax4
-        if times is not None:
-            gt_ax.plot(times, labels)
-        else:
-            gt_ax.plot(np.arange(labels.shape[0]), labels)
-
-        gt_ax.set_ylim([0,1])
-
-        if vert_lines is not None:
-            if times is not None:
-                gt_ax.axvline(x=times[vert_lines[0]], color='r', linestyle=':')
-                gt_ax.axvline(x=times[vert_lines[1]], color='r', linestyle=':')
-            else:
-                gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
-                gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
-
-    if boundaries is not None:
-        bound_ax = None 
-        # Note will either have binary labels and labels or
-        # only one of the two
-        if binary_preds is not None and labels is not None:
-            bound_ax = ax5
-        else:
-            bound_ax = ax4
-
-        bound_ax.plot(np.arange(boundaries.shape[0]), boundaries)
-        if vert_lines is not None:
-            gt_ax.axvline(x=vert_lines[0], color='r', linestyle=':')
-            gt_ax.axvline(x=vert_lines[1], color='r', linestyle=':')
-
-    
-    # Make the plot appear in a specified location on the screen
-    if plt.get_backend() == "TkAgg":
-        mngr = plt.get_current_fig_manager()
-        geom = mngr.window.geometry()  
-        mngr.window.wm_geometry("+400+150")
-
-    if title is not None:
-        ax1.set_title(title)
-
-    plt.show()
-'''
 
 def visualize(features, model_predictions, ground_truth, title=None, vert_lines=None, times=None):
     """
@@ -292,6 +180,7 @@ def visualize_predictions(calls, spectrogram, model_predictions, gt_labels, chun
         window_end = min(end + padding, spectrogram.shape[0])
         print (spectrogram.shape)
         # Only include times if provided
+        window_time = None
         if times is not None:
             window_time = times[window_start:window_end]
 
