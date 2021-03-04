@@ -339,6 +339,8 @@ class DataCoordinator:
         for interval in intervals:
             self.prediction_interval_recorder.write_interval(interval)
 
+    # TODO: may need input lock on dataCoordinator now
+
     def _setup_signal_handler(self):
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
