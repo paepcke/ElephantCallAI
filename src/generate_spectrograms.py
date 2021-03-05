@@ -163,6 +163,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     data_dirs = args.data_dirs
     outputDir = args.outputDir
+    # Make sure this exists
+    if not os.path.exist(outputDir):
+        os.mkdir(outputDir)
+        
     spectrogram_info = {'NFFT': args.NFFT,
                         'hop': args.hop,
                         'max_freq': args.max_freq,
