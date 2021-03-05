@@ -9,12 +9,12 @@ from embedded.DataCoordinator import DataCoordinator
 
 
 CHUNK_SIZE = 256*8
-SLEEP_BETWEEN_CHUNKS_IN_SECONDS = 0.01
+INPUT_LOCK_TIMEOUT_IN_SECONDS = 0.01
 MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
 
 # TODO: actually, this should be writing into a buffer that empties into the dataCoordinator in a separate thread
-class SpectrogramStream:
+class FileSpectrogramStream:
     max_time_steps: Optional[int]
     spectrogram_data: np.ndarray
     stream_thread: Thread
@@ -44,7 +44,14 @@ class SpectrogramStream:
         i = 0
 
         while i < max_chunks:
-            sleep(SLEEP_BETWEEN_CHUNKS_IN_SECONDS)
+            if not data_coordinator.space_available_for_input_lock.acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS):
+                if self.drop_data:
+                    i += 1
+                    need_new_timestamp = True
+                    print("Dropped a chunk", file=sys.stderr)
+                continue
+            else:
+                data_coordinator.space_available_for_input_lock.release()
             if need_new_timestamp:
                 now = datetime.now(timezone.utc)
             else:

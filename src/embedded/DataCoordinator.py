@@ -26,9 +26,14 @@ class DataCoordinator:
     # It is computed as 'min_appendable_time_steps - jump'.
     overlap_allowance: int
     prediction_load: float  # If predictions take up at least this proportion of the buffer, allow them to be collected
+    min_free_space_for_input: int
 
 
     # Thread synchronization states
+
+    # This will be unlocked if and only if there is enough available space in the buffer for input.
+    # It allows an input-buffering thread to sleep until such time.
+    space_available_for_input_lock: Lock
 
     # This will be unlocked if and only if there is enough available data in the buffer for a prediction to be made.
     # It allows a prediction-making thread to sleep until such time.
@@ -38,11 +43,17 @@ class DataCoordinator:
     # It allows a prediction-collecting thread to sleep until such time.
     predictions_available_for_collection_lock: Lock
 
+    # A small piece of state that determines whether the data_coordinator thread that produces this data is expected to unlock the input lock
+    _holding_input_lock: bool
+
     # A small piece of state that determines whether the data_coordinator thread that produces this data is expected to unlock the prediction lock
     _holding_prediction_lock: bool
 
     # A small piece of state that determines whether the data_coordinator thread that produces this data is expected to unlock the collection lock
     _holding_collection_lock: bool
+
+    # manipulating the input lock inside the DataCoordinator logic must be done while holding this
+    input_sync_lock: Lock
 
     # manipulating the prediction lock inside the DataCoordinator logic must be done while holding this
     prediction_sync_lock: Lock
@@ -57,7 +68,11 @@ class DataCoordinator:
                  blackout_interval_output_path: str,
                  jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
                  # We assume that 'min_appendable_time_steps' is sufficient to make a prediction.
-                 min_appendable_time_steps: Optional[int] = None, prediction_load: float = 0.005):
+                 min_appendable_time_steps: Optional[int] = None,
+                 # Do not accept input if fewer than this number of rows are unallocated
+                 min_free_space_for_input: Optional[int] = None,
+                 # TODO: explain prediction load
+                 prediction_load: float = 0.005):
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
@@ -65,6 +80,10 @@ class DataCoordinator:
         self.prediction_transition_state = non_detected_transition_state()
 
         self.blackout_interval_recorder = IntervalRecorder(blackout_interval_output_path)
+
+        self.min_free_space_for_input = min_free_space_for_input
+        if min_free_space_for_input is None or self.min_free_space_for_input < self.spectrogram_buffer.min_appendable_time_steps:
+            self.min_free_space_for_input = self.spectrogram_buffer.min_appendable_time_steps
 
         if jump is None:
             print("WARNING: DataCoordinator overlap_allowance parameter is 0. There will not be any overlap between "
@@ -84,12 +103,15 @@ class DataCoordinator:
         self.prediction_load = prediction_load
 
         # Initialize thread synchronization resources
+        self.space_available_for_input_lock = Lock()
         self.data_available_for_prediction_lock = Lock()
         self.predictions_available_for_collection_lock = Lock()
         self.data_available_for_prediction_lock.acquire()
         self.predictions_available_for_collection_lock.acquire()
+        self._holding_input_lock = False
         self._holding_prediction_lock = True
         self._holding_collection_lock = True
+        self.input_sync_lock = Lock()
         self.prediction_sync_lock = Lock()
         self.collection_sync_lock = Lock()
 
@@ -113,6 +135,7 @@ class DataCoordinator:
         self.spectrogram_buffer.append_data(spectrogram, time=timestamp)
 
         # Update thread synchronization states
+        self.update_input_lock()
         self.update_prediction_lock()
 
         if most_recent_timestamp_entry is not None:
@@ -241,6 +264,7 @@ class DataCoordinator:
         self.spectrogram_buffer.mark_post_processing_complete(time_window)
 
         # update thread synchronization states
+        self.update_input_lock()
         self.update_collection_lock()
 
         # create time intervals for detection events, save them to a file
@@ -287,6 +311,21 @@ class DataCoordinator:
                 self.prediction_transition_state = TransitionState(start_time, 1)
 
         return intervals
+
+    def update_input_lock(self):
+        with self.input_sync_lock:
+            metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
+            available_space = self.spectrogram_buffer.buffer.shape[0] - metadata_snapshot.rows_allocated
+            if available_space >= self.min_free_space_for_input:
+                # unlock it if possible
+                if self._holding_input_lock:
+                    self._holding_prediction_lock = False
+                    self.space_available_for_input_lock.release()
+            else:
+                # make sure it's locked
+                if not self._holding_input_lock:
+                    self.space_available_for_input_lock.acquire()
+                    self._holding_prediction_lock = True
 
     def update_prediction_lock(self):
         with self.prediction_sync_lock:
@@ -338,8 +377,6 @@ class DataCoordinator:
     def save_detection_intervals(self, intervals: List[Tuple[datetime, datetime]]):
         for interval in intervals:
             self.prediction_interval_recorder.write_interval(interval)
-
-    # TODO: may need input lock on dataCoordinator now
 
     def _setup_signal_handler(self):
         signal.signal(signal.SIGTERM, self._handle_signal)

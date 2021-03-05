@@ -7,20 +7,21 @@ from datetime import datetime, timezone
 
 
 # defaults
-NUM_SAMPLES_IN_TIME_WINDOW = 256  #TODO: update this with knowledge of STFT parameters
+NUM_SAMPLES_IN_TIME_WINDOW = 4096
 BUFFER_SIZE_MB = 4  # This is configurable, it's how much dedicated storage space we want for our audio buffer
 
-BYTES_PER_ELEMENT = 8  # We're using int16
+BYTES_PER_ELEMENT = 2  # We're using int16
 BUFFER_SIZE_IN_TIME_STEPS = BUFFER_SIZE_MB * 1024 * 1024 // BYTES_PER_ELEMENT
 
 # It won't make sense to run the model on spectrogram data with fewer than this number of time steps.
 # This means that appending fewer than this number of contiguous time steps is disallowed.
 # This constant is the default value, but other values can be configured in the constructor.
-MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW  # TODO: update this with knowledge of STFT parameters
+MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 
 
-"""A thread-safe audio buffer."""
 class AudioBuffer:
+    """A thread-safe audio buffer."""
+
     buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
 
     # an index into the first dimension of the buffer indicating the data between 'processed' and this has not been evaluated by the model
@@ -33,6 +34,9 @@ class AudioBuffer:
     # The number of rows currently allocated to storing data
     rows_allocated: int
 
+    # The minimum number of rows that can be consumed at a time
+    min_consumable_rows: int
+
     # A queue of tuples that allow us to keep track of the timestamps corresponding to unprocessed examples in the queue.
     timestamp_deque: Deque[Tuple[int, datetime]]
 
@@ -44,9 +48,19 @@ class AudioBuffer:
     # A synchronization object that synchronizes changes to the timestamp deques
     timestamp_mutex: Lock
 
-    def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None):
+    # Thread synchronization
+
+    input_sync_lock: Lock
+
+    output_available_lock: Lock
+
+    _holding_output_lock: bool
+
+    output_sync_lock: Lock
+
+    def __init__(self, min_consumable_rows: Optional[int] = None, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None):
         buf_size = BUFFER_SIZE_IN_TIME_STEPS if override_buffer_size is None else override_buffer_size
-        self.buffer = np.zeros((buf_size,))
+        self.buffer = np.zeros((buf_size,), dtype=np.int16)
         self.unprocessed_end = 0
         self.pending_post_processing_end = 0
         self.allocated_begin = 0
@@ -56,8 +70,18 @@ class AudioBuffer:
             self.min_appendable_time_steps = MIN_APPENDABLE_TIME_STEPS
         else:
             self.min_appendable_time_steps = min_appendable_time_steps
+        self.min_consumable_rows = min_consumable_rows
+        if self.min_consumable_rows is None:
+            self.min_consumable_rows = 2*self.min_appendable_time_steps
         self.metadata_mutex = Lock()
         self.timestamp_mutex = Lock()
+
+        # Thread synchronization
+        self.input_sync_lock = Lock()  # TODO: should this be a member of this class?
+        self.output_sync_lock = Lock()
+        self.output_available_lock = Lock()
+        self.output_available_lock.acquire()
+        self._holding_output_lock = True
 
     def get_metadata_snapshot(self):
         with self.metadata_mutex:
@@ -80,12 +104,12 @@ class AudioBuffer:
 
         if self.unprocessed_end + new_data_time_len > self.buffer.shape[0]:
             first_len = self.buffer.shape[0] - metadata_snapshot.unprocessed_end
-            self.buffer[metadata_snapshot.unprocessed_end:self.buffer.shape[0], :] = new_data[0:first_len, :]
+            self.buffer[metadata_snapshot.unprocessed_end:self.buffer.shape[0]] = new_data[0:first_len]
             second_len = new_data_time_len - first_len
-            self.buffer[0:second_len, :] = new_data[first_len:new_data_time_len, :]
+            self.buffer[0:second_len] = new_data[first_len:new_data_time_len]
             next_unprocessed_end = second_len
         else:
-            self.buffer[metadata_snapshot.unprocessed_end:(metadata_snapshot.unprocessed_end + new_data_time_len), :] = new_data
+            self.buffer[metadata_snapshot.unprocessed_end:(metadata_snapshot.unprocessed_end + new_data_time_len)] = new_data
             next_unprocessed_end = metadata_snapshot.unprocessed_end + new_data_time_len
 
         with self.metadata_mutex:
@@ -101,6 +125,7 @@ class AudioBuffer:
                 self.timestamp_deque.append((data_start_idx, time))
             # If time is None, this class assumes that the recording of this data occurred immediately after
             # the recording of the previous data, without interruption.
+        self.update_output_lock()
 
     def _assert_sufficient_time_steps(self, new_data: np.ndarray, time: Optional[datetime]):
         if new_data.shape[0] < self.min_appendable_time_steps:
@@ -116,21 +141,22 @@ class AudioBuffer:
             self.rows_allocated -= num_rows_to_free
             self.allocated_begin = next_allocated_begin
             self._free_rows_update_timestamp(old_allocated_begin)
+        self.update_output_lock()
 
     # data should always be accessed from the *return value* of this method
     def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None) -> Tuple[np.ndarray, int]:
-        """Read unprocessed data from the buffer. By default, this read marks the data as 'processed'."""
+        """Read unprocessed data from the buffer. This method does not free any data."""
         with self.metadata_mutex:
             metadata_snapshot = AudioBufferMetadata(self)
         data_start_idx = metadata_snapshot.allocated_begin
-        data, new_begin_idx = self.consume_data(time_steps, False, target=target, force_copy=False)
+        data, new_begin_idx = self.consume_data(time_steps, target=target, force_copy=False)
         return data, data_start_idx
 
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
     # Call this method while holding the metadata_mutex
     def _free_rows_update_timestamp(self, old_allocated_begin: int):
         """Updates the timestamp deque after a region of the buffer is deallocated"""
-        if (self.rows_allocated) == 0:
+        if self.rows_allocated == 0:
             with self.timestamp_mutex:
                 self.timestamp_deque.clear()
             return
@@ -144,7 +170,7 @@ class AudioBuffer:
             next_timestamp_distance = 0
             if len(self.timestamp_deque) != 0:
                 next_timestamp_distance = self.circular_distance(self.timestamp_deque[0][0], old_allocated_begin)
-            while len(self.timestamp_deque) != 0 and next_timestamp_distance <= max_distance:
+            while len(self.timestamp_deque) != 0 and next_timestamp_distance < max_distance:
                 self.timestamp_deque.popleft()
                 if len(self.timestamp_deque) == 0:
                     break
@@ -174,13 +200,13 @@ class AudioBuffer:
             if target is None:
                 target = np.zeros((time_steps,))
             first_len = self.buffer.shape[0] - begin_idx
-            target[0:first_len, :] = self.buffer[begin_idx:(begin_idx + first_len), :]
+            target[0:first_len] = self.buffer[begin_idx:(begin_idx + first_len)]
             second_len = time_steps - first_len
-            target[first_len:time_steps, :] = self.buffer[0:second_len, :]
+            target[first_len:time_steps] = self.buffer[0:second_len]
             return target, second_len
         else:
             # return a view of the array to avoid making a copy
-            view = self.buffer[begin_idx:(begin_idx + time_steps), :]
+            view = self.buffer[begin_idx:(begin_idx + time_steps)]
             if force_copy:
                 if target is None:
                     target = np.zeros((time_steps,))
@@ -189,8 +215,30 @@ class AudioBuffer:
             new_starting_idx = begin_idx + time_steps
             return view, new_starting_idx
 
+    def update_output_lock(self):
+        with self.output_sync_lock:
+            metadata_snapshot = self.get_metadata_snapshot()
+
+            with self.timestamp_mutex:
+                follow_up_interval = False
+                if len(self.timestamp_deque) > 0:
+                    if metadata_snapshot.allocated_begin != self.timestamp_deque[0][0]:
+                        follow_up_interval = True
+                    else:
+                        follow_up_interval = len(self.timestamp_deque) > 1
+            if metadata_snapshot.rows_allocated >= self.min_consumable_rows or follow_up_interval:
+                # unlock it if possible
+                if self._holding_output_lock:
+                    self._holding_output_lock = False
+                    self.output_available_lock.release()
+            else:
+                if not self._holding_output_lock:
+                    self.output_available_lock.acquire()
+                    self._holding_output_lock = True
+
     def clear(self):
         """Overwrites the entire buffer with 0 and deallocates all of it."""
+        # TODO: reset locks on clear?
         with self.metadata_mutex:
             with self.timestamp_mutex:
                 self.buffer[:] = 0

@@ -2,7 +2,7 @@ import os
 import numpy as np
 from datetime import datetime, timezone
 
-from embedded import DataCoordinator, SpectrogramStream, PredictionManager, PredictionCollector
+from embedded import DataCoordinator, FileSpectrogramStream, PredictionManager, PredictionCollector
 from embedded.predictors import ModelPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
@@ -32,7 +32,7 @@ def integration_test_with_model(small_buffer: bool = False):
             PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump)
         drop_data = True
 
-    spec_stream = SpectrogramStream.SpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)
+    spec_stream = FileSpectrogramStream.FileSpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)
     pred_mgr = PredictionManager.PredictionManager(predictor)
     pred_collector = PredictionCollector.PredictionCollector()
 

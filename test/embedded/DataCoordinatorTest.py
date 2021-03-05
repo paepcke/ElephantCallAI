@@ -216,6 +216,30 @@ class DataCoordinatorTest(unittest.TestCase):
 
         self.assertTrue(got_lock)
 
+    def test_prediction_lock_disallows_entry_when_appropriate_when_not_enough_available_space(self):
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
+                                      min_free_space_for_input=8, jump=2)
+        data = np.zeros((10, FREQ_BINS))
+
+        coordinator.write(data)
+
+        got_lock = coordinator.space_available_for_input_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
+        coordinator.wrap_up()
+
+        self.assertFalse(got_lock)
+
+    def test_prediction_lock_allows_entry_when_appropriate_when_enough_available_space(self):
+        coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
+                                      jump=2)
+        data = np.zeros((10, FREQ_BINS))
+
+        coordinator.write(data)
+
+        got_lock = coordinator.space_available_for_input_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
+        coordinator.wrap_up()
+
+        self.assertTrue(got_lock)
+
     def test_get_detection_intervals(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
