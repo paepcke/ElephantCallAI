@@ -1,0 +1,72 @@
+README
+    This is the README for the 'Inference_pipeline.py' script used for processing data and running 
+    the 2-stage model for elephant call prediction. 
+
+    This script runs the inferance prediction pipeline.
+    The prediction pipeline consists of 2 main components:
+
+        1) Data processing. Given a directory with .wav files,
+        generate the corresponding spectrogram representations.
+
+        2) Generate 2-stage model predictions:
+
+            2a) Generate 2-stage model segmentation. Predict 
+            the 0/1 time segmentation given the 2-stage model.
+
+            2b) Elephant call prediction. Output the models
+            predictions for start / end times of calls 
+            in csv formatt.
+
+    The script allows for complete and partial runs of the 2 steps above:
+
+        - Flag '--process_data': Process the '.wav' files (step 1).
+
+        - Flag '--make_predictions': Generate elephant call predictions (step 2). 
+    
+    For each part of the pipeline, command line arguments are used to properly 
+    specify necessary data.
+
+KEY FILES
+    This folder contains all of the python scripts needed to run the primary script
+    'Inference_pipeline.py'. Additionally, the folder '2_Stage_Model/' contains
+    the components of the 2-stage model. 
+
+    When you run the script, unless otherwise specified, the default location for 
+    outputed values are as follows:
+
+        - Processed Spectrograms: By default a folder 'Spectrograms/' will be 
+        created in this directory containing the processed spectrograms. Specifically,
+        these processed spectrograms will exist in a sub-directory of 'Spectrograms/'
+        with name based on the folder containing the original '.wav' files. To change
+        this default data location use the flag '--spect_out'
+
+        - Model 0/1 segmentations: You will not need to use this data! This is just
+        used for the model to save its segmentations before post processing to 
+        get the actual start/end times. This will be saved in a folder called
+        'Predictions/'.
+
+        - Model start/end elephant predictions: This folder called 'Call_Predictions/'
+        will contain the csv prediction files for each of the recording days!
+
+    Lastly, the data folder with the '.wav' files does not need to exist in this folder!
+
+EXAMPLE RUNS
+
+Help:
+python Inference_pipeline.py --help
+
+------------------------------------
+
+Full Pipeline:
+python Inference_pipeline.py --process_data --data_dir <data directory> --spect_out <output directory> --make_predictions --model_0 2_Stage_Model/first_stage.pt --model_1 2_Stage_Model/second_stage.pt
+
+------------------------------------
+
+Data Generation:
+python Inference_pipeline.py --process_data --data_dir <data directory> --spect_out <output directory> 
+
+------------------------------------
+
+Model Predictions:
+python Inference_pipeline.py --make_predictions --model_0 2_Stage_Model/first_stage.pt --model_1 2_Stage_Model/second_stage.pt --spect_path <directory with processed spectrograms>
+
