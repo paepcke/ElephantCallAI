@@ -606,7 +606,7 @@ class FileFamily(object):
         elif filetype == AudioType.LABEL:
             return os.path.join(self.path, self.label)
         elif filetype == AudioType.MASK:
-            return os.path.join(self.path, self.label_mask)
+            return os.path.join(self.path, self.mask)
         elif filetype == AudioType.TIME:
             return os.path.join(self.path, self.time_labels)
 

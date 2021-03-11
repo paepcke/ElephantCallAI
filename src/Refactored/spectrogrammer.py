@@ -27,9 +27,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # See which of these we actually need!
-from Refactored.data_utils import FileFamily
-from Refactored.data_utils import DATAUtils
-from Refactored.data_utils import AudioType
+from data_utils import FileFamily
+from data_utils import DATAUtils
+from data_utils import AudioType
 
 
 # We can do better logging later!
@@ -59,6 +59,7 @@ class Spectrogrammer(object):
     HOP_LENGTH = 800 # Want second resolution of 0.1 seconds
     # Maximum frequency retained in spectrograms 
     MAX_FREQ = 150 # This we can honestly consider decreasing. But let us leave it for now!
+    MIN_FREQ = 0
     # Primarily taken from reading in a .wav file!
     DEFAULT_FRAMERATE = 8000
     # We should not be using these!!
@@ -143,59 +144,32 @@ class Spectrogrammer(object):
                                       msg_identifier="spectrogrammer")
         
         
-        
         if type(infiles) != list:
             infiles = [infiles]
         
-        
-        # Depending on what caller wants us to do,
-        # different arguments must be passed. Make
-        # all those checks to avoid caller waiting a long
-        # time for processing to be done only to fail
-        # at the end: - Should update this later as thing
-        # come up!
 
-        # Prerequisites:
-        '''
-        Skip for now!
-        if not self._ensure_prerequisites(infiles,
-                                          actions,
-                                          framerate,
-                                          nfft,
-                                          outdir):
-            return
-        '''
-
-        '''
-        What I want to do here is as follows
-        - If the action includes spectro or melspectro
-        we need to collect the .wav files and then process them.
-        Additionally output the time-labels for the spect columns.
-
-        - If the action includes labelmask generate the 0/1 labels
-        for the spectrogram. NOTE: assume that we have generated
-        the spect time-label file for this! If not output a warning.
-        '''
-
+        # Step through the input files and process them depending on
+        # their file signature and actions specified as args.
         for infile in infiles:
             # Super basic file checking
             if not os.path.exists(infile):
                 print(f"File {infile} does not exist.")
                 continue
 
-            # Get a dict with the file_root and 
-            # names related to the infile in our
-            # file naming scheme:
+            # Get a dict with the file_root and names related to 
+            # the infile in our file naming scheme:
             # Note this is useful for associating 
             # .wav and .txt files
             file_family = FileFamily(infile)
-
 
             # Output the files to the same path as input
             # Note this allows self.outdir to change for each file
             if outdir is None:
                 self.outdir = file_family.path
-            
+
+            # Make sure the outdir exists!!
+            if not os.path.exists(outdir):
+                os.mkdir(outdir)
 
             # Process wav file if spectro / melspectro in actions
             if infile.endswith('.wav') and ('spectro' in actions or 'melspectro' in actions):
@@ -245,51 +219,6 @@ class Spectrogrammer(object):
 
                 if 'copyraven' in actions:
                     print ("TODO")
-
-                
-
-    #------------------------------------
-    # _ensure_prerequisites 
-    #-------------------
-    
-    def _ensure_prerequisites(self,
-                              infiles,
-                              actions,
-                              framerate,
-                              nfft,
-                              outdir
-                              ):
-        # Prerequisites:
-        if outdir is not None and not os.path.exists(outdir):
-                os.makedirs(outdir)
-
-        if 'labelmask' in actions:
-            # Need true framerate and spectrogram bin size
-            # to compute time ranges in spectrogram:
-            if nfft is None:
-                self.log.warn(f"Assuming default time bin nfft of {self.NFFT}!\n" 
-                              "If this is wrong, label allignment will be wrong")
-            if framerate is None:
-                self.log.warn(f"Assuming default framerate of {self.DEFAULT_FRAMERATE}!\n"
-                              "If this is wrong, label allignment will be wrong")
-            
-        if 'spectro' in actions or 'melspectro' in actions:
-            if not any(filename.endswith('.wav') for filename in infiles):
-                self.log.err("For creating a spectrogram, a .wav file must be provided")
-                return False
-            
-            if framerate is not None:
-                self.log.warn(f"Framerate was provided, but will be ignore: using framerate from .wav file.")
-
-
-        if framerate is None:
-            self.framerate = self.DEFAULT_FRAMERATE
-            
-        if type(infiles) != list:
-            infiles = [infiles]
-
-        return True
-
 
 
     #------------------------------------
@@ -541,111 +470,6 @@ class Spectrogrammer(object):
                 end_bin_idx = post_end_indices[0] - 1
 
             yield (start_bin_idx, end_bin_idx)
-
-
-    
-    #------------------------------------
-    # plot
-    #------------------- 
-    # Move this to a visualization class!
-    def plot(self, 
-            times, 
-            spectrum, 
-            label_mask,
-            vert_lines,
-            title='My Title'
-            ):
-        new_features = 10*np.log10(spectrum).T
-        min_dbfs = new_features.flatten().mean()
-        max_dbfs = new_features.flatten().mean()
-        min_dbfs = np.maximum(new_features.flatten().min(),min_dbfs-2*new_features.flatten().std())
-        max_dbfs = np.minimum(new_features.flatten().max(),max_dbfs+6*new_features.flatten().std())
-
-        fig = plt.figure()
-        ax  = fig.add_subplot(1,1,1)
-        ax2 = fig.add_subplot(2, 1, 1)
-        frequencies = np.arange(new_features.shape[0])
-        #ax.pcolormesh(times, frequencies, new_features)
-        ax.imshow(new_features,
-                  cmap="magma_r", 
-                  vmin=min_dbfs, 
-                  vmax=max_dbfs, 
-                  interpolation='none', 
-                  origin="lower", 
-                  aspect="auto",
-                  extent=[times[0], times[times.shape[0] - 1], 0, 150]
-                  )
-        print (times[vert_lines[0]], times[vert_lines[1]])
-        ax.axvline(x=times[vert_lines[0]], color='r', linestyle='-')
-        ax.axvline(x=times[vert_lines[1]], color='r', linestyle='-')
-        ax.set_title(title)
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Frequency')
-
-        ax2.plot(times, label_mask)
-
-
-        # Make the plot appear in a specified location on the screen
-        mngr = plt.get_current_fig_manager()
-        geom = mngr.window.geometry()  
-        mngr.window.wm_geometry("+400+150")
-        plt.show()
-        
-    #------------------------------------
-    # make_time_freq_seqs 
-    #-------------------
-    
-    def make_time_freq_seqs(self, max_freq, spect):
-        
-        # Num rows is num of frequency bands.
-        # Num cols is number of time ticks:
-        (num_freqs, num_times) = spect.shape
-        # Ex: if max freq is 150Hz, and the number of
-        # freq ticks on the y axis is 77, then each
-        # tick is worth 150Hz/77 = 1.95Hz
-
-        freq_band = max_freq / num_freqs
-        freq_scale = list(np.arange(0,max_freq,freq_band))
-        time_scale = list(np.arange(num_times))
-        return(freq_scale, time_scale)
-
-                        
-    #------------------------------------
-    # get_label_filename 
-    #-------------------
-    
-    def get_label_filename(self, spect_numpy_filename):
-        '''
-        Given the file name of a numpy spectrogram 
-        file of the forms:
-           nn03a_20180817_neg-features_10.npy
-           nn03a_20180817_features_10.npy
-           
-        create the corresponding numpy label mask file
-        name:
-           nn03a_20180817_label_10.npy
-           
-        
-           
-        @param spect_numpy_filename:
-        @type spect_numpy_filename:
-        '''
-        # Check extension:
-        (_fullname, ext) = os.path.splitext(spect_numpy_filename)
-        if ext != '.npy':
-            raise ValueError("File needs to be a .npy file.")
-        
-        # Maybe a dir is included, maybe not:
-        dirname  = os.path.dirname(spect_numpy_filename)
-        filename = os.path.basename(spect_numpy_filename)
-
-        try:
-            (loc_code, date, _file_content_type, id_num_plus_rest) = filename.split('_')
-        except ValueError:
-            raise ValueError(f"File name {spect_numpy_filename} does not have exactly four components.")
-        label_filename = f"{loc_code}_{date}_labels_{id_num_plus_rest}"
-        full_new_name = os.path.join(dirname, label_filename)
-        return full_new_name
 
 
 # ---------------------------- Main ---------------------
