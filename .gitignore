@@ -31,6 +31,7 @@ Images/Jupyter_Visualizations/*
 Call_Predictions/*
 Writeups/*.pptx
 Curriculum_profiling/*
+Peter_Scripts/2_Stage_Model/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

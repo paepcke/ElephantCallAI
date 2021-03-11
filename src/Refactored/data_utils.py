@@ -354,71 +354,40 @@ class DATAUtils(object):
     
     @classmethod
     def time_ticks_from_wav(cls, 
-                            wav_or_sig, 
+                            wav, 
                             hop_length=800, 
-                            framerate=None,
                             nfft=4096):
         '''
-        Given either the file name of a .wav recording,
-        or a wav signal array, compute the time tick labels
+        Given the file name of a .wav recording, compute the time tick labels
         that would go with a spectrogram. Return an array
         of (fractional) seconds that indicate the time
         at each spectrogram x-timeslice.
         
         To compute, we need to know how the spectrogram
         would be computed. Among all the related parameters
-        we need framerate and hop size. Here is how the
-        various quantities interact:
-        
-          NFFT = 4096 # Number of wav samples in one spectrogram
-                      # column. Corresponds to a frequency resolution 
-                      # of 1.95 Hz
-          WIN_LENGTH  # Synonym for NFFT
-          OVERLAP = 1/2 # How much successive time windows are to 
-                      # overlap to avoid edge artifacts in the spectro.
-                      # 
-          HOP_LENGTH = int(NFFT * OVERLAP) # wav samples from start of
-                      # a window to the start of the overlapping next
-                      # window
-                      
-        If wav_or_sig is a file name, the framerate is retrieved
+        we need NFFT and hop size. Note, the framerate is retrieved
         from the .wav file. 
 
-        @param wav_or_sig: file name of a .wav recording, or
-            an array of signal values loaded from a .wav recording
-        @type wav_or_sig: {str|[float]}
-        @param framerate: sample rate of the recording. If wav_or_sig
-            is a filename, this method finds the framerate from that
-            file. But it is an error to have wav_or_sig be an array
-            of signal values and also have framerate be None.
-        @type framerate: {None|int}
+        @param wav: file name of a .wav recording
+        @type wav_or_sig: {str}
         @param hop_length: distance in samples from start of a window
             to the start of the usually overlapping next window.
         @type hop_length: {int|float}
-        @raises ValueError if wav_or_sig is a signal array,
-            but framerate is not provided.
+        @return (time ticks array or None if failed to read .wav)
         '''
 
-        if type(wav_or_sig) == str:
-            # Name of a .wav file:
-            (framerate, sig) = wavfile.read(wav_or_sig)
-        else:
-            # Array of .wav signals:
-            if framerate is None:
-                raise ValueError("If wav_or_sig not a filename, then framerate must be provided")
-            sig = wav_or_sig
+        try:
+            # Read wave file
+            (framerate, sig) = wavfile.read(wav)
+        except Exception as e:
+            print (f"Cannot process .wav file: {repr(e)}")
+            return None
 
         # Number of voltage readings in the
         # recording: 
         num_wav_samples = len(sig)
-
-        # Total recording time in seconds:
-        # In case needed for some other purpose
-        # later:
-        _rec_len_secs    = len(sig) / framerate
         
-        # Number of columns in the spectrogram. I.e. 
-        # time bins in the spectrogram:
+        # Number of columns in the spectrogram (time bins in the spectrogram)
         num_spectro_ticks = int(math.floor((num_wav_samples - (nfft - hop_length)) / hop_length))
         
         # We are labeling w/r to the center of columns
@@ -637,7 +606,7 @@ class FileFamily(object):
         elif filetype == AudioType.LABEL:
             return os.path.join(self.path, self.label)
         elif filetype == AudioType.MASK:
-            return os.path.join(self.path, self.label_mask)
+            return os.path.join(self.path, self.mask)
         elif filetype == AudioType.TIME:
             return os.path.join(self.path, self.time_labels)
 
