@@ -21,9 +21,26 @@ class Subsampled_ElephantDataset(data.Dataset):
         By default we use random majority class undersampling!
 
         Also allows for manual setting of the negative or positive data!
+
+        THINGS THAT A SUBSAMPLED DATSET SHOULD DO!!!!!
+        - This dataset is meant to be used to train the model and evaluate the model DURING TRAINING
+        - Takes in the directory that has all of the windows!
+        - Collect all of the positive samples
+        - Sample a set of negative samples:
+            - By default sub-sample from the full set of negatives.
+            - If passed a set of negatives use those!!!!!
+        - Allow for changing the positive and negative features (this allows for updating the dataset we are on!)
+            - Here we should assume that we are passed an array of tuples with (feat_file, label_file,...). Basically,
+            each tuple contains what we need to generate the necessary new neg or pos features
+            - In this way we can avoid this glob stuff! Except in the very beginning
+
+        - Then that should be everything!!!!!
+
+
     """
-    def __init__(self, data_path, neg_ratio=1, neg_features=None, normalization="norm", log_scale=True, transform=None, 
-            shift_windows=False, seed=8):
+    def __init__(self, data_path, neg_ratio=1, neg_features=None, normalization="norm", 
+                log_scale=True, transform=None, 
+                shift_windows=False, seed=8):
 
         # Should look into this with Vrinda about how we want to deal with data augmentation transforms!
         self.user_transforms = transform
@@ -158,6 +175,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         return data
 
 
+# THis class is just for the full dataset!!!!
 class Subsampled_ElephantDataset(data.Dataset):
     """
         Dataset used for training or testing a subsampled elephant dataset.
