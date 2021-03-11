@@ -50,8 +50,6 @@ class AudioBuffer:
 
     # Thread synchronization
 
-    input_sync_lock: Lock
-
     output_available_lock: Lock
 
     _holding_output_lock: bool
@@ -77,7 +75,6 @@ class AudioBuffer:
         self.timestamp_mutex = Lock()
 
         # Thread synchronization
-        self.input_sync_lock = Lock()  # TODO: should this be a member of this class?
         self.output_sync_lock = Lock()
         self.output_available_lock = Lock()
         self.output_available_lock.acquire()
@@ -118,10 +115,7 @@ class AudioBuffer:
 
         with self.timestamp_mutex:
             # handle the timestamp
-            if time is None and len(self.timestamp_deque) == 0:
-                now = datetime.now(timezone.utc)
-                self.timestamp_deque.append((data_start_idx, now))
-            elif time is not None:
+            if time is not None:
                 self.timestamp_deque.append((data_start_idx, time))
             # If time is None, this class assumes that the recording of this data occurred immediately after
             # the recording of the previous data, without interruption.

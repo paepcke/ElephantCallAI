@@ -229,6 +229,15 @@ class AudioBufferTest(unittest.TestCase):
 
         self.assertEqual(0, len(buffer.timestamp_deque))
 
+    def test_can_append_data_without_creating_timestamp(self):
+        buffer = AudioBuffer(override_buffer_size=16, min_appendable_time_steps=1)
+
+        data = np.arange(2)
+
+        buffer.append_data(data)
+
+        self.assertEqual(0, len(buffer.timestamp_deque))
+
 
 if __name__ == '__main__':
     unittest.main()

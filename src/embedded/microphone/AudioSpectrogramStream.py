@@ -2,7 +2,6 @@ from threading import Thread
 from datetime import datetime
 from typing import Optional, Tuple
 import numpy as np
-import math
 
 from embedded.DataCoordinator import DataCoordinator
 from embedded.microphone.AudioBuffer import AudioBuffer
@@ -10,8 +9,8 @@ from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 
 GIVE_UP_THRESHOLD = 100
 INPUT_LOCK_TIMEOUT_IN_SECONDS = 1
-AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS = 0.05
-N_OVERLAPS_PER_CHUNK = 16
+AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS = 0.3
+DEFAULT_N_OVERLAPS_PER_CHUNK = 256
 
 
 class AudioSpectrogramStream:
@@ -19,10 +18,13 @@ class AudioSpectrogramStream:
     spectrogram_extractor: SpectrogramExtractor
     stream_thread: Thread
     prev_timestamp: Optional[datetime]
+    n_overlaps_per_chunk: int
 
-    def __init__(self, audio_buffer: AudioBuffer, spect_extractor: SpectrogramExtractor):
+    def __init__(self, audio_buffer: AudioBuffer, spect_extractor: SpectrogramExtractor,
+                 n_overlaps_per_chunk: int = DEFAULT_N_OVERLAPS_PER_CHUNK):
         self.audio_buf = audio_buffer
         self.spectrogram_extractor = spect_extractor
+        self.n_overlaps_per_chunk = n_overlaps_per_chunk
 
     def start(self, data_coordinator: DataCoordinator):
         self.stream_thread = Thread(target=self.stream, args=(data_coordinator,))
@@ -48,18 +50,22 @@ class AudioSpectrogramStream:
                 num_consecutive_times_audio_buf_empty = 0
             data, timestamp = self._read_audio_data()
 
-            spectrogram = self.spectrogram_extractor.extract_spectrogram(data)
+            if data is not None:
+                spectrogram = self.spectrogram_extractor.extract_spectrogram(data)
 
-            # step 4: append input
-            data_coordinator.write(spectrogram, timestamp)
+                # step 4: append input
+                data_coordinator.write(spectrogram, timestamp)
         # TODO: print something about how much data we processed before giving up
 
     def join(self):
         self.stream_thread.join()
 
-    def _read_audio_data(self) -> Tuple[np.ndarray, Optional[datetime]]:
-        n_rows_to_read = 0
-        n_windows_to_free = 0
+    '''
+    TODO: to comply with SpectrogramBuffer input requirements, *Throw away excess audiodata* if it's not large enough
+    to make 256 + k*jump time steps of spectral data (provided there's a follow-up timestamp).
+    For now, it's slightly less efficient than this, only keeping integer multiples of 256 time steps.
+    '''
+    def _read_audio_data(self) -> Tuple[Optional[np.ndarray], Optional[datetime]]:
         free_all = False
         new_timestamp = None
 
@@ -84,27 +90,21 @@ class AudioSpectrogramStream:
                 else:
                     cur_interval_dist_remaining = self.audio_buf.rows_allocated
 
-                if cur_interval_dist_remaining >= nfft + N_OVERLAPS_PER_CHUNK * hop:
+                if cur_interval_dist_remaining >= nfft + (self.n_overlaps_per_chunk - 1) * hop:
                     # read the max
-                    n_windows_to_free = N_OVERLAPS_PER_CHUNK
+                    n_windows_to_free = self.n_overlaps_per_chunk
                     n_rows_to_read = hop * (n_windows_to_free - 1) + nfft
                 elif not follow_up_interval:
-                    # read everything except the last nfft samples (they'll be padded if need be)
-                    if cur_interval_dist_remaining <= nfft:
-                        # This should not happen with a good locking scheme
-                        n_windows_to_free = 0
-                        n_rows_to_read = 0
-                    else:
-                        n_windows_to_free = math.ceil((cur_interval_dist_remaining - nfft)/hop)
-                        n_rows_to_read = hop * (n_windows_to_free - 1) + nfft
+                    # Don't read anything; hope that next time this method is called, there's enough data to use
+                    return None, None
                 else:
-                    # read and free the remaining contents of the time interval
-                    n_rows_to_read = cur_interval_dist_remaining
+                    # free the remaining contents of the time interval without reading them. This data is effectively dropped.
                     free_all = True
 
-        data, _ = self.audio_buf.get_unprocessed_data(n_rows_to_read)
         if free_all:
-            self.audio_buf.free_rows(n_rows_to_read)
-        else:
-            self.audio_buf.free_rows(n_windows_to_free*hop)
+            self.audio_buf.free_rows(cur_interval_dist_remaining)
+            return None, None
+
+        data, _ = self.audio_buf.get_unprocessed_data(n_rows_to_read)
+        self.audio_buf.free_rows(n_windows_to_free*hop)
         return data, new_timestamp

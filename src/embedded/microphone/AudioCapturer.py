@@ -35,7 +35,7 @@ class AudioCapturer:
         self.dropped_prev_segment = True
 
     def _stream_callback(self, in_data, frame_count, time_info, status_flags):
-        if frame_count != self.frames_per_buffer:  # don't do this to me PyAudio, I've done nothing to you
+        if frame_count != self.frames_per_buffer:
             raise ValueError("Frame_count and frames_per_buffer not equal")
 
         metadata_snapshot = self.audio_buf.get_metadata_snapshot()
@@ -47,6 +47,7 @@ class AudioCapturer:
                 absolute_time_seconds = time_info[TIME_KEY]
                 timestamp = self._compute_timestamp(absolute_time_seconds)
             self.audio_buf.append_data(new_data, timestamp)
+            self.dropped_prev_segment = False
         else:
             self.dropped_prev_segment = True
 

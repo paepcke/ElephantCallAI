@@ -11,7 +11,7 @@ class SpectrogramExtractor:
     pad_to: int  # Determines the padded window size that we want to give a particular grid spacing (e.g., 1.95hz)
 
     def __init__(self, nfft: int = 4096, hop: int = 800, window: int = 256,
-                 max_freq: int = 150, sampling_freq: int = 14400, pad_to: int = 4096):
+                 max_freq: int = 150, sampling_freq: int = 8000, pad_to: int = 4096):
         self.nfft = nfft
         self.hop = hop
         self.window = window
@@ -26,4 +26,4 @@ class SpectrogramExtractor:
                                            pad_to=self.pad_to)
         # Cut out the high frequencies that are not of interest
         spectrum = spectrum[(freqs <= self.max_freq)]
-        return spectrum
+        return spectrum.T
