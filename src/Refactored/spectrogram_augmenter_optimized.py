@@ -46,6 +46,8 @@ class SpectrogramAugmenter(object):
 		
 		for label_file, wav_file in infiles:
 			sr, samples = wavfile.read(wav_file)
+			if not os.path.exists(label_file):
+				continue
 			fd = open(label_file, 'r')
 			reader = csv.DictReader(fd, delimiter='\t')
 			#start_end_times = {} # maps (start, end)
