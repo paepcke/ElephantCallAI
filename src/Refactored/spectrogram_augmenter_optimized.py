@@ -93,7 +93,8 @@ class SpectrogramAugmenter(object):
 							valid_index = False
 							break
 					found_index = valid_index
-				non_call_segments.append(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])
+				non_call_segments.append(list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]))
+		print(non_call_segments)
 		np.random.shuffle(non_call_segments)
 		print(f"Got {len(non_call_segments)} non call segments")
 		return non_call_segments
