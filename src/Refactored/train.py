@@ -88,7 +88,7 @@ class Train_Pipeline(object):
         epoch_name = "Train" if train else "Val"
 
         # Make sure model is in correct mode!
-        model.train(train)
+        self.model.train(train)
 
         epoch_stats = {
                        'running_loss': 0.0,
@@ -103,7 +103,7 @@ class Train_Pipeline(object):
         for idx, batch in enumerate(dataloader):
             # Training specific settings
             if train:
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
             # Help track the training pipeline
             if (idx % 250 == 0) and parameters.VERBOSE:
@@ -117,11 +117,11 @@ class Train_Pipeline(object):
             labels = labels.to(parameters.device)
 
             # Forward pass
-            logits = model(inputs).squeeze(-1)
+            logits = self.model(inputs).squeeze(-1)
             loss = self.loss_func(logits, labels)
 
             if train:
-                self.loss.backward()
+                loss.backward()
                 self.optimizer.step()
 
             self.update_epoch_stats(epoch_stats, loss=loss.item(), logits=logits, labels=labels)
@@ -131,7 +131,7 @@ class Train_Pipeline(object):
         if train:
             self.scheduler.step()
         
-        return self.epoch_summary(epoch_stats, len(dataloader), name=epoch_name):
+        return self.epoch_summary(epoch_stats, len(dataloader), name=epoch_name)
 
     #-----------------------------
     # train 
@@ -154,7 +154,7 @@ class Train_Pipeline(object):
                             }
 
         # Use early stopping module
-        early_stopping = EarlyStopping(larger_is_better=True, patience=patience, verbose=True, path=self.save_path)
+        early_stopping = EarlyStopping(larger_is_better=True, verbose=True, path=self.save_path)
 
         # Include a try catch loop to allow for 'ctrl C' early stopping
         try:
@@ -165,7 +165,7 @@ class Train_Pipeline(object):
                 train_epoch_results = self.run_epoch(self.train_dataloader, train=True)
 
                 ## Write train metrics to tensorboard
-                self.update_writer(train_epoch_results, epoch, lr=scheduler.lr())
+                self.update_writer(train_epoch_results, epoch, lr=self.scheduler.get_lr())
 
                 # Evaluate the model
                 if Model_Utils.is_eval_epoch(epoch):
@@ -178,7 +178,7 @@ class Train_Pipeline(object):
                     self.track_best_performance(val_epoch_results, best_valid_stats)
 
                     # Check if we should stop early!
-                    early_stopping(best_valid_stats[early_stop_criteria_map[self.early_stop_criteria]], model)
+                    early_stopping(best_valid_stats[Train_Pipeline.early_stop_criteria_map[self.early_stop_criteria]], self.model)
                     if early_stopping.early_stop:
                         print("Early stopping")
                         break
@@ -241,19 +241,19 @@ class Train_Pipeline(object):
                 f'{name}_epoch_recall': epoch_recall} 
 
 
-    def update_writer(self, stats, epochs, lr=None):
+    def update_writer(self, stats, epoch, lr=None):
         """
             Given a dict with keys representing tensorboard fields,
             output to the tensorboard writer the stats!
 
             @TODO update this
         """
-        for key, value in stats.item():
-            writer.add_scalar(key, value, epoch)
+        for key, value in stats.items():
+            self.writer.add_scalar(key, value, epoch)
 
         # Add the learning rate as well if lr is not None
         if lr:
-            writer.add_scalar('learning_rate', lr, epoch)
+            self.writer.add_scalar('learning_rate', lr, epoch)
 
     def track_best_performance(self, epoch_stats, best_stats):
         """
@@ -261,18 +261,18 @@ class Train_Pipeline(object):
             a recent epoch
         """
         # Update the best accuracy
-        if epoch_stats['valid_epoch_acc'] > best_stats['best_valid_acc']:
-            best_stats['best_valid_acc'] = epoch_stats['valid_epoch_acc']
+        if epoch_stats['Val_epoch_acc'] > best_stats['best_valid_acc']:
+            best_stats['best_valid_acc'] = epoch_stats['Val_epoch_acc']
         
         # Update the best f_score and save corresponding P and R
-        if epoch_stats['valid_epoch_fscore'] > best_stats['best_valid_fscore']:
-            best_stats['best_valid_fscore'] = epoch_stats['valid_epoch_fscore']
-            best_stats['best_valid_precision'] = epoch_stats['valid_epoch_precision']
-            best_stats['best_valid_recall'] = epoch_stats['valid_epoch_recall']
+        if epoch_stats['Val_epoch_fscore'] > best_stats['best_valid_fscore']:
+            best_stats['best_valid_fscore'] = epoch_stats['Val_epoch_fscore']
+            best_stats['best_valid_precision'] = epoch_stats['Val_epoch_precision']
+            best_stats['best_valid_recall'] = epoch_stats['Val_epoch_recall']
             
         # Update the best loss function
-        if epoch_stats['valid_epoch_loss'] < best_stats['best_valid_loss']:
-            best_stats['best_valid_loss'] = epoch_stats['valid_epoch_loss'] 
+        if epoch_stats['Val_epoch_loss'] < best_stats['best_valid_loss']:
+            best_stats['best_valid_loss'] = epoch_stats['Val_epoch_loss'] 
 
         
 
@@ -299,7 +299,7 @@ class EarlyStopping:
             trace_func (function): trace print function.
                             Default: print            
         """
-        self.larger_equal_better = larger_equal_better
+        self.larger_is_better = larger_is_better
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -327,7 +327,7 @@ class EarlyStopping:
             self.counter = 0
 
         # Want criteria to be larger (e.g. acc)
-        elif (self.larger_is_better) and criteria > self.best_criteria + self.delta
+        elif (self.larger_is_better) and criteria > self.best_criteria + self.delta:
             self.save_checkpoint(criteria, model)
             self.best_criteria = criteria
             self.counter = 0
@@ -343,7 +343,7 @@ class EarlyStopping:
     def save_checkpoint(self, new_best, model):
         '''Saves model when validation loss decrease.'''
         if self.verbose:
-            self.trace_func(f'Validation criteria improved ({self.best_criteria:.6f} --> {new_best:.6f}).  Saving model ...')
+            self.trace_func(f'Validation criteria improved ({self.best_criteria} --> {new_best}).  Saving model ...')
         
         self.best_model_wts = model.state_dict()
 

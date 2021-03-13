@@ -26,6 +26,7 @@ elephant_dataset/Train_Old_1/*
 elephant_dataset/Test_Old_1/*
 elephant_dataset/Train_Old_2/*
 elephant_dataset/Test_Old_2/*
+elephant_dataset/*
 Predictions/*
 Images/Jupyter_Visualizations/*
 Call_Predictions/*

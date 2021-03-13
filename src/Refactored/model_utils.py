@@ -17,7 +17,7 @@ class Model_Utils(object):
         """
             Return train and test data paths
         """
-        if args.local_files:
+        if local_files:
             train_data_path = parameters.LOCAL_TRAIN_FILES
             test_data_path = parameters.LOCAL_TEST_FILES
         else:
@@ -58,7 +58,7 @@ class Model_Utils(object):
         - valid_loader: validation set iterator.
         """
         # Set the dataloader seed
-        set_seed(parameters.DATA_LOADER_SEED)
+        Model_Utils.set_seed(parameters.DATA_LOADER_SEED)
         print('Size of dataset is {} samples'.format(len(dataset)))
 
         # Set the data_loader random seed for reproducibility.

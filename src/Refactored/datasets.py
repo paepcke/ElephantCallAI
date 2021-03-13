@@ -53,11 +53,12 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.log_scale = log_scale 
         self.shift_windows = shift_windows
         self.neg_ratio = neg_ratio
+        self.data_path = data_path
 
         # Step 1) Initialize the positive examples
         self.pos_features = None
         self.pos_labels = None
-        self.init_positive_examples()
+        self.init_positive_examples(data_path)
 
         # Step 2) Initialize the negative examples, 
         # either through direct assignment or through
@@ -68,9 +69,10 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.set_neg_examples(neg_features)
         # By default randomly undersample to get the negative features
         else: 
-            self.undersample_negative_features()
+            self.undersample_negative_features(data_path)
         
         # Step 3) Combine the pos and neg features to get the complete data
+        self.data = None
         self.combine_data()
 
         # Check for consistancy
@@ -84,7 +86,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         print("Number of positive examples {}".format(len(self.pos_features)))
         print("Number of negative examples {}".format(len(self.neg_features)))
         print("Total number of negative examples {}.".format(len(self.all_neg_features)))
-        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+        print('Normalizing with {} and scaling {}'.format(normalization, log_scale))
 
 
     def init_positive_examples(self, data_path):
@@ -93,7 +95,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
             @TODO: Make this more clear later
         """
-        self.pos_features = glog.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
+        self.pos_features = glob.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
         # Now collect the corresponding labels!
         self.pos_labels = []
         for feature_path in self.pos_features:
@@ -101,7 +103,7 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.pos_labels.append(feature_parts[0] + "pos-labels" + feature_parts[1])
 
 
-    def undersample_negative_features(self):
+    def undersample_negative_features(self, data_path):
         """
             Perform majority class random undersampling
         """
@@ -109,11 +111,16 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         # Collect all of the negative features and sample a random set of them.
         # For now let us just keep them around! (MAY CHANGE!!)
-        self.all_neg_features = glog.glob(os.path.join(data_path, "*_neg-features_*"), recursive=True)
+        self.all_neg_features = glob.glob(os.path.join(data_path, "*_neg-features_*"), recursive=True)
         # Sample without replacement
         sampled_idxs = np.random.choice(len(self.all_neg_features), num_neg_samples, replace=False)
 
-        self.neg_features = self.all_neg_features[sampled_idxs]
+        self.neg_features = [self.all_neg_features[idx] for idx in sampled_idxs]
+        # Set the corresponding negative labels
+        self.neg_labels = []
+        for feature_path in self.neg_features:
+            feature_parts = feature_path.split("neg-features")
+            self.neg_labels.append(feature_parts[0] + "neg-labels" + feature_parts[1])
 
     
     def undersample_negative_features_to_balance(self):
@@ -134,7 +141,11 @@ class Subsampled_ElephantDataset(data.Dataset):
         sampled_idxs = np.random.choice(len(neg_features_to_sample), num_neg_samples, replace=False)
 
         # Step 4) Append these new negative features
-        self.neg_features += neg_features_to_sample[sampled_idxs]
+        self.neg_features += [neg_features_to_sample[idx] for idx in sampled_idxs]
+        # Set the corresponding negative labels
+        for feature_path in self.neg_features:
+            feature_parts = feature_path.split("neg-features")
+            self.neg_labels.append(feature_parts[0] + "neg-labels" + feature_parts[1])
     
 
     def combine_data(self):
@@ -165,7 +176,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.pos_features = []
         self.pos_labels = []
         for feature, label in pos_examples:
-            self.pos_features.append(features)
+            self.pos_features.append(feature)
             self.pos_labels.append(label)
         
         self.combine_data()
@@ -177,7 +188,8 @@ class Subsampled_ElephantDataset(data.Dataset):
             (e.g. generated calls!!)
         """
         # Graph the postive features
-        pos_feature_paths = glog.glob(os.path.join(data_dir, "*_spectro.npy"), recursive=True)
+        pos_feature_paths = glob.glob(os.path.join(data_dir, "*_spectro.npy"), recursive=True)
+        print (len(pos_feature_paths))
         pos_examples = []
         for feature_path in pos_feature_paths:
             # Get the corresponding label file
@@ -205,7 +217,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(self.pos_features) + len(pos_examples)))
         print("Length of neg_features is {}".format(len(self.neg_features)))
         for feature, label in pos_examples:
-            self.pos_features.append(features)
+            self.pos_features.append(feature)
             self.pos_labels.append(label)
         
         self.combine_data()
@@ -224,7 +236,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.neg_features = []
         self.neg_labels = []
         for feature, label in neg_examples:
-            self.neg_features.append(features)
+            self.neg_features.append(feature)
             self.neg_labels.append(label)
         
         self.combine_data() 
@@ -243,7 +255,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         print("Length of neg_features was {} and is now {} ".format(len(self.neg_features), len(self.neg_features) + len(neg_examples)))
         print("Length of pos_features is {}".format(len(self.pos_features)))
         for feature, label in pos_examples:
-            self.neg_features.append(features)
+            self.neg_features.append(feature)
             self.neg_labels.append(label)
         
         self.combine_data()
@@ -266,21 +278,24 @@ class Subsampled_ElephantDataset(data.Dataset):
             feature = self.user_transforms(feature)
 
         # Honestly may be worth pre-process this
-        feature = torch.from_numpy(feature).float()  
+        feature = torch.from_numpy(feature).float() 
+        # DO FOR NOW 
+        if feature.shape[0] == 77:
+            feature = feature.T
         label = torch.from_numpy(label).float()
 
-        return feature, label, (self.features[index], self.labels[index]) # Include the data files!
+        return feature, label, (self.data[index], self.labels[index]) # Include the data files!
 
 
     def apply_transforms(self, data):
         # Apply a log transform to the spectrogram! This is equivalent to the convert to db
-        if self.scale:
+        if self.log_scale:
             data = 10 * np.log10(data)
 
         # Normalize Features
-        if self.preprocess == "norm":
+        if self.normalization == "norm":
             data = (data - np.mean(data)) / np.std(data)
-        elif self.preprocess == "feature": # Look into the normalize we used in CS224S
+        elif self.normalization == "feature": # Look into the normalize we used in CS224S
             data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
 
         return data
@@ -334,13 +349,13 @@ class Full_ElephantDataset(data.Dataset):
 
             @TODO be more specificc
         """
-        self.pos_features = self.pos_features = glog.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
+        self.pos_features = self.pos_features = glob.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
         self.pos_labels = []
         for feature_path in self.pos_features:
             feature_parts = feature_path.split("pos-features")
             self.pos_labels.append(feature_parts[0] + "pos-labels" + feature_parts[1])
 
-        self.neg_features = glog.glob(os.path.join(data_path, "*_neg-features_*"), recursive=True)
+        self.neg_features = glob.glob(os.path.join(data_path, "*_neg-features_*"), recursive=True)
         self.neg_labels = []
         for feature_path in self.neg_features:
             feature_parts = feature_path.split("neg-features")
@@ -372,18 +387,18 @@ class Full_ElephantDataset(data.Dataset):
         feature = torch.from_numpy(feature).float()  
         label = torch.from_numpy(label).float()
 
-        return feature, label, (self.features[index], self.labels[index]) # Include the data files!
+        return feature, label, (self.data[index], self.labels[index]) # Include the data files!
 
 
     def apply_transforms(self, data):
         # Apply a log transform to the spectrogram! This is equivalent to the convert to db
-        if self.scale:
+        if self.log_scale:
             data = 10 * np.log10(data)
 
         # Normalize Features
-        if self.preprocess == "norm":
+        if self.normalization == "norm":
             data = (data - np.mean(data)) / np.std(data)
-        elif self.preprocess == "feature":
+        elif self.normalization == "feature":
             data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
 
         return data

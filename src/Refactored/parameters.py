@@ -127,8 +127,9 @@ DATASET_SEED = 8
 DATA_LOADER_SEED = 8
 
 
-LOCAL_TRAIN_FILES = '../elephant_dataset/Train/'
-LOCAL_TEST_FILES = '../elephant_dataset/Test/'
+# This is adhoc for now!
+LOCAL_TRAIN_FILES = '../../elephant_dataset/Train_chop/'
+LOCAL_TEST_FILES = '../../elephant_dataset/Train_chop/'
 LOCAL_FULL_TRAIN = '../elephant_dataset/Train/Full_24_hrs'
 LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs'
 
@@ -144,7 +145,8 @@ REMOTE_FULL_TEST_BAI = '/home/data/elephants/processed_data/Test_bai/Full_24_hrs
 
 #Local
 #SAVE_PATH = '../models/'
-LOCAL_SAVE_PATH = '../models/'
+# For the refactored
+LOCAL_SAVE_PATH = '../../models/'
 REMOTE_SAVE_PATH = '/home/data/elephants/models/'
 
 INPUT_SIZE = 77

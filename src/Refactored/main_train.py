@@ -29,6 +29,7 @@ from models import get_model
 from loss import get_loss
 from train import Train_Pipeline
 from model_utils import Model_Utils
+from datasets import Subsampled_ElephantDataset
 
 
 parser = argparse.ArgumentParser()
@@ -41,7 +42,7 @@ parser.add_argument('--save_local', dest='save_local', action='store_true',
     'The default is to save to the quatro data directory.')
 parser.add_argument('--pre_train', type=str, 
     help='Specifies the model path for the pre-trained model')
-parser.add_argument('--use_generated', actions='store_true', 
+parser.add_argument('--use_generated', action='store_true', 
     help="Use generated positive data in addition to just the positive data")
 parser.add_argument('--generated_path', type=str,
     help="Path to generated positive data")
