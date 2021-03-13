@@ -43,7 +43,7 @@ class SpectrogramAugmenter(object):
 
 	def get_elephant_calls(self, infiles):
 		call_indices = {} # maps wav file to array of indices we can sample from
-		
+		counter = 0
 		for label_file, wav_file in infiles:
 			sr, samples = wavfile.read(wav_file)
 			if not os.path.exists(label_file):
@@ -73,8 +73,8 @@ class SpectrogramAugmenter(object):
 					raise IOError(f"Raven label file {label_txt_file} does not contain one "
 								  f"or both of keys '{begin_time_key}', {end_time_key}'")
 				
-			print("finished a wav file")
-			break
+			print(f"finished wav file #{counter}")
+			counter += 1
 			fd.close()
 		return call_indices
 
