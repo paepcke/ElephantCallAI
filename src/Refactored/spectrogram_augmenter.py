@@ -50,7 +50,8 @@ class SpectrogramAugmenter(object):
 			sr, samples = wavfile.read(wav_file)
 			fd = open(label_file, 'r')
 			reader = csv.DictReader(fd, delimiter='\t')
-			start_end_times = {} # maps (start, end)
+			#start_end_times = {} # maps (start, end)
+			start_end_times = []
 			# get portion of sample where label_mask = 1
 			file_offset_key = 'File Offset (s)'
 			begin_time_key = 'Begin Time (s)'
@@ -61,7 +62,8 @@ class SpectrogramAugmenter(object):
 					begin_time = float(label_dict[file_offset_key])
 					call_length = float(label_dict[end_time_key]) - float(label_dict[begin_time_key])
 					end_time = begin_time + call_length
-					set_of_curr_times = set(range(int(begin_time), int(end_time)))
+					start_end_times.append((begin_time, end_time))
+					'''set_of_curr_times = set(range(int(begin_time), int(end_time)))
 					intersections = [set_of_curr_times.intersection(set(time_range)) for time_range in start_end_times]
 
 					if intersections == [] or all(len(intersection) == 0 for intersection in intersections):
@@ -74,13 +76,14 @@ class SpectrogramAugmenter(object):
 							new_value = (min(new_key), max(new_key))
 							start_end_times[tuple(new_key)] = new_value
 							# remove old keys
-							start_end_times.pop(list(start_end_times.keys())[idx])
+							start_end_times.pop(list(start_end_times.keys())[idx])'''
 
 				except KeyError:
 					raise IOError(f"Raven label file {label_txt_file} does not contain one "
 								  f"or both of keys '{begin_time_key}', {end_time_key}'")
 			# Get each el call time range spec in the labels:
-			for (begin_time, end_time) in start_end_times.values():
+			#for (begin_time, end_time) in start_end_times.values():
+			for (begin_time, end_time) in start_end_times:
 				begin_index = int(begin_time * sr)
 				end_index = int(end_time * sr)
 				if wav_file in call_indices:
