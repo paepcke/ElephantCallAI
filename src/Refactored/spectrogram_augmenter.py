@@ -63,6 +63,12 @@ class SpectrogramAugmenter(object):
 					call_length = float(label_dict[end_time_key]) - float(label_dict[begin_time_key])
 					end_time = begin_time + call_length
 					start_end_times.append((begin_time, end_time))
+					begin_index = int(begin_time * sr)
+					end_index = int(end_time * sr)
+					if wav_file not in call_indices:
+						call_indices[wav_file] = [(begin_index, end_index)]
+					call_indices[wav_file].append((begin_index, end_index))
+					elephant_calls.append(samples[begin_index:end_index])
 					'''set_of_curr_times = set(range(int(begin_time), int(end_time)))
 					intersections = [set_of_curr_times.intersection(set(time_range)) for time_range in start_end_times]
 
@@ -83,17 +89,20 @@ class SpectrogramAugmenter(object):
 								  f"or both of keys '{begin_time_key}', {end_time_key}'")
 			# Get each el call time range spec in the labels:
 			#for (begin_time, end_time) in start_end_times.values():
-			for (begin_time, end_time) in start_end_times:
+			'''for (begin_time, end_time) in start_end_times:
 				begin_index = int(begin_time * sr)
 				end_index = int(end_time * sr)
 				if wav_file in call_indices:
-					call_indices[wav_file] += [index for index in range(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index)]
+					call_indices[wav_file] = np.concatenate((np.arange(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index), call_indices[wav_file]))
+					#call_indices[wav_file] += [index for index in range(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index)]
 				else:
-					call_indices[wav_file] = [index for index in range(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index)]
+					call_indices[wav_file] = np.arange(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index)
+					#call_indices[wav_file] = [index for index in range(begin_index - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, end_index)]
 				if call_length > SpectrogramAugmenter.ELEPHANT_CALL_LENGTH: # TODO fix this
-					continue
-				elephant_calls.append(samples[begin_index:end_index])
+					continue'''
+				
 			print("finished a wav file")
+			fd.close()
 		return elephant_calls, call_indices
 
 	def get_non_call_segments(self, infiles, call_indices):
@@ -106,8 +115,12 @@ class SpectrogramAugmenter(object):
 				found_index = False
 				while found_index == False:
 					start_index = randint(0, len(samples) - SpectrogramAugmenter.ELEPHANT_CALL_LENGTH)
-					if start_index not in call_index:
-						found_index = True
+					valid_index = True
+					for begin, end in call_index:
+						if start_index > begin and start_index < end:
+							valid_index = False
+							break
+					found_index = valid_index
 				non_call_segments.append(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])
 		np.random.shuffle(non_call_segments)
 		print(f"Got {len(non_call_segments)} non call segments")
