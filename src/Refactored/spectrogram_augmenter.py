@@ -29,11 +29,12 @@ class SpectrogramAugmenter(object):
 		self.pad_to=4096
 		self.hop=800
 		self.framerate=8000
+		self.ratio=ratio
 
 		elephant_calls, call_indices = self.get_elephant_calls(infiles)
 		print(f"Got {len(elephant_calls)} elephant calls")
 		print(f"Max elephant call length: {max([len(call) for call in elephant_calls])}")
-		self.negs_per_wav_file = int(round(len(elephant_calls)/len(infiles)))
+		self.negs_per_wav_file = int(round(len(elephant_calls)*ratio/len(infiles)))
 		print(f"Getting {self.negs_per_wav_file} negatives")
 		non_call_segments = self.get_non_call_segments(infiles, call_indices)
 		combined_calls, combined_call_indices = self.combine_segments(elephant_calls, non_call_segments, ratio)
@@ -72,7 +73,8 @@ class SpectrogramAugmenter(object):
 							new_key = set_of_curr_times.union(set(list(start_end_times.keys())[idx]))
 							new_value = (min(new_key), max(new_key))
 							start_end_times[tuple(new_key)] = new_value
-
+							# remove old keys
+							start_end_times.pop(list(start_end_times.keys())[idx])
 
 				except KeyError:
 					raise IOError(f"Raven label file {label_txt_file} does not contain one "
@@ -114,14 +116,20 @@ class SpectrogramAugmenter(object):
 		for call in elephant_calls:
 			padded_call = np.zeros_like(non_call_segments[non_call_counter])
 			rand_start_ind = randint(0, padded_call.shape[0] - call.shape[0])
-			padded_call[rand_start_ind: rand_start_ind + call.shape[0]] = call
-			overlap_call = non_call_segments[non_call_counter]
-			overlap_call = np.add(overlap_call, padded_call)
-			non_call_counter += 1
-			combined_calls.append(overlap_call)
-			start_time = rand_start_ind/8000
-			end_time = start_time + call.shape[0]/8000
-			combined_call_indices.append((start_time, end_time))
+
+
+			padded_call[rand_start_ind: rand_start_ind + call.shape[0]] = call * 0.5
+			for i in range(ratio):
+				overlap_call = non_call_segments[non_call_counter]
+				overlap_call = np.add(overlap_call, padded_call)
+				
+				start_time = rand_start_ind/8000
+				end_time = start_time + call.shape[0]/8000
+				overlap_call[int(start_time):int(end_time)] = overlap_call[int(start_time):int(end_time)] * 0.5
+				combined_call_indices.append((start_time, end_time))
+				combined_calls.append(overlap_call)
+				non_call_counter += 1
+			
 		return combined_calls, combined_call_indices
 
 
@@ -129,7 +137,7 @@ class SpectrogramAugmenter(object):
 		for num, call in enumerate(combined_calls):
 			raw_audio = call
 			# visualize elephant call
-			elephant_call = elephant_calls[num]
+			elephant_call = elephant_calls[int(num/self.ratio)]
 			[spectrum, freqs, t] = ml.specgram(elephant_call, 
 					NFFT=self.nfft, Fs=self.framerate, noverlap=(self.nfft - self.hop), 
 					window=ml.window_hanning, pad_to=self.pad_to)
@@ -139,7 +147,7 @@ class SpectrogramAugmenter(object):
 			spectrum = np.concatenate((pad, spectrum, pad), axis=1)
 			#visualize(spectrum.T, [np.zeros(spectrum.shape[1])], np.zeros(spectrum.shape[1]))
 
-			# visualize and save combined call
+			#visualize and save combined call
 			[spectrum, freqs, t] = ml.specgram(raw_audio, 
 					NFFT=self.nfft, Fs=self.framerate, noverlap=(self.nfft - self.hop), 
 					window=ml.window_hanning, pad_to=self.pad_to)
