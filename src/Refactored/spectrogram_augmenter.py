@@ -51,7 +51,7 @@ class SpectrogramAugmenter(object):
 			fd = open(label_file, 'r')
 			reader = csv.DictReader(fd, delimiter='\t')
 			#start_end_times = {} # maps (start, end)
-			start_end_times = []
+			#start_end_times = []
 			# get portion of sample where label_mask = 1
 			file_offset_key = 'File Offset (s)'
 			begin_time_key = 'Begin Time (s)'
@@ -62,13 +62,14 @@ class SpectrogramAugmenter(object):
 					begin_time = float(label_dict[file_offset_key])
 					call_length = float(label_dict[end_time_key]) - float(label_dict[begin_time_key])
 					end_time = begin_time + call_length
-					start_end_times.append((begin_time, end_time))
+					#start_end_times.append((begin_time, end_time))
 					begin_index = int(begin_time * sr)
 					end_index = int(end_time * sr)
 					if wav_file not in call_indices:
 						call_indices[wav_file] = [(begin_index, end_index)]
 					call_indices[wav_file].append((begin_index, end_index))
-					elephant_calls.append(samples[begin_index:end_index])
+					#elephant_calls.append(samples[begin_index:end_index])
+					
 					'''set_of_curr_times = set(range(int(begin_time), int(end_time)))
 					intersections = [set_of_curr_times.intersection(set(time_range)) for time_range in start_end_times]
 
@@ -104,6 +105,7 @@ class SpectrogramAugmenter(object):
 			print("finished a wav file")
 			print(sum([len(call) for call in elephant_calls]))
 			fd.close()
+			print(samples.shape)
 			del samples
 		return elephant_calls, call_indices
 
