@@ -81,6 +81,8 @@ class SpectrogramAugmenter(object):
 	def get_non_call_segments(self, infiles, call_indices):
 		non_call_segments = []
 		for label_file, wav_file in infiles:
+			if not os.path.exists(label_file):
+				continue
 			sr, samples = wavfile.read(wav_file)
 			call_index = call_indices[wav_file]
 			for i in range(self.negs_per_wav_file):
