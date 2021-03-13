@@ -80,6 +80,7 @@ class SpectrogramAugmenter(object):
 
 	def get_non_call_segments(self, infiles, call_indices):
 		non_call_segments = []
+		counter = 0
 		for label_file, wav_file in infiles:
 			if not os.path.exists(label_file):
 				continue
@@ -97,7 +98,7 @@ class SpectrogramAugmenter(object):
 							break
 					found_index = valid_index
 				non_call_segments.append(list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]))
-		
+			print(f"finished wav file #{counter}")
 		np.random.shuffle(non_call_segments)
 		print(f"Got {len(non_call_segments)} non call segments")
 		return non_call_segments
