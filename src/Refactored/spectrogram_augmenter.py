@@ -93,6 +93,7 @@ class SpectrogramAugmenter(object):
 				if call_length > SpectrogramAugmenter.ELEPHANT_CALL_LENGTH: # TODO fix this
 					continue
 				elephant_calls.append(samples[begin_index:end_index])
+			print("finished a wav file")
 		return elephant_calls, call_indices
 
 	def get_non_call_segments(self, infiles, call_indices):
