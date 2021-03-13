@@ -74,6 +74,7 @@ class SpectrogramAugmenter(object):
 								  f"or both of keys '{begin_time_key}', {end_time_key}'")
 				
 			print("finished a wav file")
+			break
 			fd.close()
 		return call_indices
 
@@ -94,7 +95,7 @@ class SpectrogramAugmenter(object):
 							break
 					found_index = valid_index
 				non_call_segments.append(list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]))
-		print(non_call_segments)
+		
 		np.random.shuffle(non_call_segments)
 		print(f"Got {len(non_call_segments)} non call segments")
 		return non_call_segments
