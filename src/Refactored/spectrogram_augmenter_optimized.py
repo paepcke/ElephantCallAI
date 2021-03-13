@@ -5,6 +5,7 @@ import numpy as np
 import argparse
 import os
 import csv
+import math
 import sys
 from matplotlib import mlab as ml
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
@@ -34,8 +35,8 @@ class SpectrogramAugmenter(object):
 		call_indices = self.get_elephant_calls(infiles)
 		self.num_calls = sum([len(value) for key, value in call_indices.items()])
 		print(f"Got {self.num_calls} elephant calls")
-		self.negs_per_wav_file = int(self.num_calls*ratio/len(infiles))
-		print(f"Getting {self.negs_per_wav_file} negatives")
+		self.negs_per_wav_file = math.ceil(self.num_calls*ratio/len(infiles))
+		print(f"Getting {self.negs_per_wav_file} negatives per file, upwards of {self.num_calls*ratio} negatives total")
 		non_call_segments = self.get_non_call_segments(infiles, call_indices)
 		self.combine_segments(non_call_segments, call_indices, ratio, infiles, outdir)
 		print(f"Saved spectrograms to {outdir}")
