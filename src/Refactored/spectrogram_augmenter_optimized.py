@@ -99,6 +99,8 @@ class SpectrogramAugmenter(object):
 					found_index = valid_index
 				non_call_segments.append(list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]))
 			print(f"finished wav file #{counter}")
+			counter += 1
+			del samples
 		np.random.shuffle(non_call_segments)
 		print(f"Got {len(non_call_segments)} non call segments")
 		return non_call_segments
@@ -109,6 +111,8 @@ class SpectrogramAugmenter(object):
 		#combined_call_indices = []
 		#for idx, call in elephant_calls:
 		for label_file, wav_file in infiles:
+			if not os.path.exists(label_file):
+				continue
 		#for idx, (label_file, wav_file) in enumerate(self.infiles):
 			sr, samples = wavfile.read(wav_file)
 			for call_index in call_indices[wav_file]:
