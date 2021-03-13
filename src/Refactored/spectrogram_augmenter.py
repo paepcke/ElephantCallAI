@@ -104,6 +104,7 @@ class SpectrogramAugmenter(object):
 			print("finished a wav file")
 			print(sum([len(call) for call in elephant_calls]))
 			fd.close()
+			del samples
 		return elephant_calls, call_indices
 
 	def get_non_call_segments(self, infiles, call_indices):
