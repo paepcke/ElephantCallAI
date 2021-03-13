@@ -102,6 +102,7 @@ class SpectrogramAugmenter(object):
 					continue'''
 				
 			print("finished a wav file")
+			print(sum([len(call) for call in elephant_calls]))
 			fd.close()
 		return elephant_calls, call_indices
 
