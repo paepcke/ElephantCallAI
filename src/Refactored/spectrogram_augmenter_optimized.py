@@ -32,12 +32,11 @@ class SpectrogramAugmenter(object):
 		self.ratio=ratio
 
 		call_indices = self.get_elephant_calls(infiles)
-		num_calls = sum([len(value) for key, value in call_indices.items()])
-		print(f"Got {num_calls} elephant calls")
-		self.negs_per_wav_file = int(num_calls*ratio/len(infiles))
+		self.num_calls = sum([len(value) for key, value in call_indices.items()])
+		print(f"Got {self.num_calls} elephant calls")
+		self.negs_per_wav_file = int(self.num_calls*ratio/len(infiles))
 		print(f"Getting {self.negs_per_wav_file} negatives")
 		non_call_segments = self.get_non_call_segments(infiles, call_indices)
-		print("Combined segments")
 		self.combine_segments(non_call_segments, call_indices, ratio, infiles, outdir)
 		print(f"Saved spectrograms to {outdir}")
 
@@ -79,7 +78,7 @@ class SpectrogramAugmenter(object):
 		return call_indices
 
 	def get_non_call_segments(self, infiles, call_indices):
-		non_call_segments = []
+		non_call_segments = np.zeros(0)
 		counter = 0
 		for label_file, wav_file in infiles:
 			if not os.path.exists(label_file):
@@ -97,33 +96,32 @@ class SpectrogramAugmenter(object):
 							valid_index = False
 							break
 					found_index = valid_index
-				non_call_segments.append(list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]))
+				non_call_segments = np.concatenate([non_call_segments,list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])])
 			print(f"finished wav file #{counter}")
 			counter += 1
 			del samples
-		np.random.shuffle(non_call_segments)
-		print(f"Got {len(non_call_segments)} non call segments")
+		print(f"Got {len(non_call_segments)/SpectrogramAugmenter.ELEPHANT_CALL_LENGTH} non call segments")
 		return non_call_segments
 
 	def combine_segments(self, non_call_segments, call_indices, ratio, infiles, outdir):
 		non_call_counter = 0
-		#combined_calls = []
-		#combined_call_indices = []
-		#for idx, call in elephant_calls:
+		# generate random list of indices to index into non_call_segments with
+		non_call_indices = np.random.randint(0, len(non_call_segments)/SpectrogramAugmenter.ELEPHANT_CALL_LENGTH, self.num_calls*ratio)
 		for label_file, wav_file in infiles:
 			if not os.path.exists(label_file):
 				continue
-		#for idx, (label_file, wav_file) in enumerate(self.infiles):
 			sr, samples = wavfile.read(wav_file)
 			for call_index in call_indices[wav_file]:
 				call = samples[call_index[0]:call_index[1]]
-				padded_call = np.zeros_like(non_call_segments[non_call_counter])
+				padded_call = np.zeros_like(non_call_segments[0:SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])
 				rand_start_ind = randint(0, padded_call.shape[0] - call.shape[0])
 
 
 				padded_call[rand_start_ind: rand_start_ind + call.shape[0]] = call * 0.5
 				for i in range(ratio):
-					overlap_call = non_call_segments[non_call_counter]
+					curr_index = non_call_indices[non_call_counter]
+					overlap_call = non_call_segments[curr_index*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH:curr_index*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH+SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]
+					#overlap_call = non_call_segments[non_call_counter]
 					overlap_call = np.add(overlap_call, padded_call)
 					
 					start_time = rand_start_ind/8000
