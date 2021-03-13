@@ -32,6 +32,7 @@ Call_Predictions/*
 Writeups/*.pptx
 Curriculum_profiling/*
 Peter_Scripts/2_Stage_Model/*
+src/Neg_Samples_x4.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
