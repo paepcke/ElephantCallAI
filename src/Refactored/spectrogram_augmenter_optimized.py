@@ -36,7 +36,6 @@ class SpectrogramAugmenter(object):
 		self.num_calls = sum([len(value) for key, value in call_indices.items()])
 		print(f"Got {self.num_calls} elephant calls")
 		self.negs_per_wav_file = math.ceil(self.num_calls*ratio*1.0/len(infiles))
-		print(len(infiles))
 		print(f"Getting {self.negs_per_wav_file} negatives per file, upwards of {self.num_calls*ratio} negatives total")
 		non_call_segments = self.get_non_call_segments(infiles, call_indices)
 		self.combine_segments(non_call_segments, call_indices, ratio, infiles, outdir)
@@ -76,8 +75,6 @@ class SpectrogramAugmenter(object):
 				
 			print(f"finished wav file #{counter}")
 			counter += 1
-			if counter == 5:
-				break
 			fd.close()
 		return call_indices
 
@@ -103,7 +100,6 @@ class SpectrogramAugmenter(object):
 				non_call_segments = np.concatenate([non_call_segments,list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])])
 			print(f"finished wav file #{counter}")
 			counter += 1
-
 			del samples
 
 		print(f"Got {len(non_call_segments)/SpectrogramAugmenter.ELEPHANT_CALL_LENGTH} non call segments")
