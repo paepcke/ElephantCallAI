@@ -282,7 +282,7 @@ class Train_Pipeline(object):
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self, larger_is_better=True, patience=30, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
+    def __init__(self, larger_is_better=True, patience=15, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
         """
         Args:
             larger_is_better (bool): Indicates whether having a larger objective value is

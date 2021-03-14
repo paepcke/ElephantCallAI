@@ -660,11 +660,11 @@ class ElephantDatasetFull(data.Dataset):
             
         # Honestly may be worth pre-process this
         #spectrogram = torch.from_numpy(spectrogram)
-        #label = torch.from_numpy(label)
 
         if self.only_preds:
             return spectrogram, None, gt_call_path
         else:   
+            label = torch.from_numpy(label)
             return spectrogram, label, gt_call_path
 
 

@@ -293,6 +293,8 @@ class Subsampled_ElephantDataset(data.Dataset):
 
 
     def apply_transforms(self, data):
+        # Look into librosa.utils.normalize!
+        
         # Apply a log transform to the spectrogram! This is equivalent to the convert to db
         if self.log_scale:
             data = 10 * np.log10(data)
