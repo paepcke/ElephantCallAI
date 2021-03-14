@@ -114,8 +114,8 @@ class Spectrogram_Generator(object):
         for(dirpath, dirnames, filenames) in os.walk(data_dir):
             for file in filenames:
                 # Make sure that we don't get garbage files
-                file_type = file.split('.')[1]
-                if (file_type not in ['wav', 'txt']):
+                file_type = file.split('.')
+                if len(file_type) == 1 or (file_type[1] not in ['wav', 'txt']):
                     continue
 
                 data_paths.append(os.path.join(dirpath, file))

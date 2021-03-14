@@ -13,6 +13,17 @@ class Model_Utils(object):
     """
 
     @classmethod
+    def join_paths(cls, path, new_dir):
+        """
+            Basic method for joinging paths and making sure they exits
+        """
+        combined_path = os.path.join(path, new_dir)
+        if not os.path.exists(combined_path):
+                os.makedirs(combined_path)
+
+        return combined_path
+
+    @classmethod
     def get_dataset_paths(cls, local_files=True):
         """
             Return train and test data paths
@@ -69,6 +80,7 @@ class Model_Utils(object):
             shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory, worker_init_fn=_init_fn)
 
         return data_loader
+
 
     @classmethod
     def set_seed(cls, seed):
@@ -162,7 +174,7 @@ class Model_Utils(object):
         return save_path
 
     @classmethod
-    def hierarchical_model_1_path(cls):
+    def stage_2_model_path(cls):
         model_name = "Model_1_Type-" + str(parameters.HIERARCHICAL_MODEL) + "_"
 
         if parameters.HIERARCHICAL_PRE_TRAIN:
