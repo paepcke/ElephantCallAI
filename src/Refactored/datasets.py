@@ -146,6 +146,11 @@ class Subsampled_ElephantDataset(data.Dataset):
         for feature_path in self.neg_features:
             feature_parts = feature_path.split("neg-features")
             self.neg_labels.append(feature_parts[0] + "neg-labels" + feature_parts[1])
+
+        # Make sure to combine the data to reflect the added negative features
+        self.combine_data()
+        print("Undersampling more negative features to match ratio!")
+        print ("New number of negative features is {}".format(len(self.neg_features)))
     
 
     def combine_data(self):
@@ -188,8 +193,8 @@ class Subsampled_ElephantDataset(data.Dataset):
             (e.g. generated calls!!)
         """
         # Graph the postive features
+        print ("Adding generated data!")
         pos_feature_paths = glob.glob(os.path.join(data_dir, "*_spectro.npy"), recursive=True)
-        print (len(pos_feature_paths))
         pos_examples = []
         for feature_path in pos_feature_paths:
             # Get the corresponding label file
@@ -340,7 +345,7 @@ class Full_ElephantDataset(data.Dataset):
         print("Number of total examples".format(len(self.data)))
         print("Number of positive examples {}".format(len(self.pos_features)))
         print("Number of negative examples {}".format(len(self.neg_features)))
-        print('Normalizing with {} and scaling {}'.format(preprocess, scale))
+        print('Normalizing with {} and scaling {}'.format(normalization, log_scale))
 
 
     def init_data(self, data_path):

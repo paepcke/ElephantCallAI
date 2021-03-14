@@ -17,12 +17,6 @@ import torch.nn.functional as F
 import argparse
 
 
-#import torchvision.models as models
-#from torchvision import transforms
-#import matplotlib
-#import matplotlib.pyplot as plt
-#from collections import deque
-
 # Local file imports
 import parameters
 from models import get_model
@@ -44,8 +38,8 @@ parser.add_argument('--pre_train', type=str,
     help='Specifies the model path for the pre-trained model')
 parser.add_argument('--use_generated', action='store_true', 
     help="Use generated positive data in addition to just the positive data")
-parser.add_argument('--generated_path', type=str,
-    help="Path to generated positive data")
+parser.add_argument('--generated_path', type=str, default=None,
+    help="Path to generated positive data if we want to use it!")
 
 
 """

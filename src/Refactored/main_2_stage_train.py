@@ -8,12 +8,15 @@ import time
 import os
 import argparse
 
+# Local file imports
 import parameters
-from data import get_loader, get_loader_fuzzy
-from utils import create_save_path, create_dataset_path, hierarchical_model_1_path
-from models import * # Note for some reason we need to import the models as well
+
+# from models import * # Note for some reason we need to import the models as well
+from models import get_model
 from loss import get_loss
-from train import train
+from train import Train_Pipeline
+from model_utils import Model_Utils
+from datasets import Subsampled_ElephantDataset, Full_ElephantDataset
 
 
 parser = argparse.ArgumentParser()
@@ -26,14 +29,13 @@ parser.add_argument('--save_local', dest='save_local', action='store_true',
     'The default is to save to the quatro data directory.')
 
 # Running Flages
-parser.add_argument('--full', dest='full_pipeline', action='store_true',
-    help='Flag specifying to run the full hierarchical model pipeline.')
-parser.add_argument('--adversarial', dest='adversarial', action='store_true',
-    help='Flag specifying to generate a new set of adversarial_examples.')
-parser.add_argument('--model_1', dest='model1', action='store_true',
-    help='Flag specifying to just train Model_1.')
-parser.add_argument('--visualize', action='store_true',
-    help='Visualize the adversarial examples and Model_0 and Model_1 predictions on them')
+parser.add_argument('--run_type', type=str,
+    help="Specify what parts we want to run [full, adversarial, stage_2]")
+
+parser.add_argument('--generated_path', type=str, default=None,
+    help="Path to generated positive data if we want to use it!")
+
+# NEED TO ADD THESE BELOW LATER
 
 # Model Paths
 parser.add_argument('--path', type=str,
@@ -101,7 +103,7 @@ class TwoStage_Model(object):
         # Step 1) Unpack the dataloaders
         self.train_loader = dataloaders['train_loader']
         self.test_loader = dataloaders['test_loader']
-        self.full_train_loader = dataloaders['full_loader']
+        self.full_train_loader = dataloaders['full_train_loader']
         self.full_test_loader = dataloaders['full_test_loader']
 
         # Step 2) Save other model information
@@ -119,13 +121,13 @@ class TwoStage_Model(object):
         self.stage_one = None
         self.stage_two = None
         # Figure out the run type! Assume for now that we run the full pipelines
-        if run_type == "Full":
+        if run_type == "full":
             # Step 1) Train the first model stage
             self.train_stage_1()
 
             # Step 1b) 
             # This is where we would want to add the generated positves!!
-            if self.add_generated_data is not None:
+            if add_generated_data is not None:
                 self.train_loader.dataset.add_positive_examples_from_dir(add_generated_data)
                 self.train_loader.dataset.undersample_negative_features_to_balance()
 
@@ -171,7 +173,7 @@ class TwoStage_Model(object):
             print ("Invalid running mode!")
    
 
-    def create_and_train(self, model_id, dataloaders, save_path):
+    def create_and_train(self, model_id, save_path):
         """
             This represents the generic process of creating a model given a certain
             model type, getting the optimizer, etc. and then training it on a given 
@@ -222,7 +224,7 @@ class TwoStage_Model(object):
         if model_wts:
             model.load_state_dict(model_wts)
             model_save_path = os.path.join(save_path, "model.pt")
-            torch.save(model_0, model_save_path)
+            torch.save(model, model_save_path)
             print('Saved best Model 0 based on {} to path {}'.format(parameters.TRAIN_MODEL_SAVE_CRITERIA.upper(), save_path))
         else:
             print('For some reason I don\'t have a model to save!!')
@@ -258,31 +260,6 @@ class TwoStage_Model(object):
         self.stage_two = self.create_and_train(self.stage_two_id, stage_two_save_path)
 
 
-    def discover_adversarial(self, dataloader, data_weightings, adversarial_neg_ratio):
-        """
-            For a given dataset, do:
-                - Compute the number of adversarials to sample
-                - Sample the k largest weighted samples
-                - Save and return these adversarial examples
-        """
-        # Step 1) Compute k adversarial examples to sample
-        num_sample = len(dataloader.dataset) * adversarial_neg_ratio
-
-        # Step 2) Get a sorted version of the data_weighting with the corresponding
-        # indeces so we can sample these indeces from the dataset!
-        sorted_weight_indeces = np.argsort(data_weightings)
-
-        # Step 2a) From the dataset, sample a list of tuples of form:
-        # [(feature_file, label_file)]
-        adversarial_examples = []
-        for idx in range(1, num_sample + 1):
-            data_file_idx = sorted_weight_indeces[-idx]
-            adversarial_examples.append((dataloader.dataset.data[data_file_idx], dataloader.dataset.labels[data_file_idx]))
-
-        # Step 3) We should save this but let us do this later!!
-
-        return adversarial_examples
-
     def update_datasets(self, train_adversarial_examples, test_adversarial_examples):
         """
             @TODO Add comment
@@ -296,6 +273,30 @@ class TwoStage_Model(object):
         """
         dataloader.dataset.set_neg_examples(adversarial_examples)
 
+    def discover_adversarial(self, model_dataloader, full_dataloader, data_weightings, adversarial_neg_ratio):
+        """
+            For a given dataset, do:
+                - Compute the number of adversarials to sample
+                - Sample the k largest weighted samples
+                - Save and return these adversarial examples
+        """
+        # Step 1) Compute k adversarial examples to sample
+        num_sample = len(model_dataloader.dataset.pos_features) * adversarial_neg_ratio
+
+        # Step 2) Get a sorted version of the data_weighting with the corresponding
+        # indeces so we can sample these indeces from the dataset!
+        sorted_weight_indeces = np.argsort(data_weightings)
+
+        # Step 2a) From the dataset, sample a list of tuples of form:
+        # [(feature_file, label_file)]
+        adversarial_examples = []
+        for idx in range(1, num_sample + 1):
+            data_file_idx = sorted_weight_indeces[-idx]
+            adversarial_examples.append((full_dataloader.dataset.data[data_file_idx], full_dataloader.dataset.labels[data_file_idx]))
+
+        # Step 3) We should save this but let us do this later!!
+
+        return adversarial_examples
 
     def adversarial_discovery_helper(self, dataloader, model, threshold=0.5):
         """
@@ -314,7 +315,7 @@ class TwoStage_Model(object):
         print ("Num batches:", len(dataloader))
         for idx, batch in enumerate(dataloader):
             # Do basic logging
-            if idx % 1000 == 0:
+            if idx % 10 == 0:
                 print("Adversarial search has gotten through {} batches".format(idx))
         
             # Step 1) Evaluate model on data
@@ -341,7 +342,7 @@ class TwoStage_Model(object):
             pred_counts[gt_calls] = 0 # Zero the adversarial weight for these windows
 
             # Set the weights for the corresponding examples
-            curr_batch_size = pred_counts.shape
+            curr_batch_size = pred_counts.shape[0]
             adversarial_rankings[idx * parameters.BATCH_SIZE: idx * parameters.BATCH_SIZE + curr_batch_size] = pred_counts
         
         return adversarial_rankings
@@ -371,19 +372,21 @@ class TwoStage_Model(object):
         # Step 2a) Later maybe we want to save these rankings???
 
         # Step 3) Use these rankings to extract and save the adversarial examples we will use for training the second stage model
-        adversarial_train_files = self.discover_adversarial(self.train_loader, adversarial_train_weighting, adversarial_neg_ratio)
-        adversarial_test_files = self.discover_adversarial(self.test_loader, adversarial_test_weighting, adversarial_neg_ratio)
+        adversarial_train_files = self.discover_adversarial(self.train_loader, self.full_train_loader, 
+                                                        adversarial_train_weighting, adversarial_neg_ratio)
+        adversarial_test_files = self.discover_adversarial(self.test_loader, self.full_test_loader, 
+                                                        adversarial_test_weighting, adversarial_neg_ratio)
 
         # Step 4) Save the files that we were generated!! Note, save with some information
         # about them. Basically just include the ratio and whether we included generated data!
         # Read in the adversarial files
         # Save the training data
-        with open(self.train_adversarial_file, 'w') as f:
+        with open(self.train_adversarial_files, 'w') as f:
             for data, label in adversarial_train_files:
                 f.write('{}, {}\n'.format(data, label))
 
         # Save the test data
-        with open(self.test_adversarial_file, 'w') as f:
+        with open(self.test_adversarial_files, 'w') as f:
             for data, label in adversarial_test_files:
                 f.write('{}, {}\n'.format(data, label))
     
@@ -474,7 +477,7 @@ def main():
 
     # Step 6) Instantiate the 2_Stage model class and let it do its thing!
     TwoStage_Model(dataloaders, save_path, stage_one_id=parameters.MODEL_ID, stage_two_id=parameters.HIERARCHICAL_MODEL,
-                    adversarial_neg_ratio=1, run_type="Full")
+                    add_generated_data=args.generated_path, adversarial_neg_ratio=1, run_type=args.run_type)
 
 
 if __name__ == "__main__":
