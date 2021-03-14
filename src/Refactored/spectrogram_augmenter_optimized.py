@@ -76,10 +76,12 @@ class SpectrogramAugmenter(object):
 			print(f"finished wav file #{counter}")
 			counter += 1
 			fd.close()
+		self.valid_wav_files = counter
 		return call_indices
 
 	def get_non_call_segments(self, infiles, call_indices):
-		non_call_segments = np.zeros(0)
+		#non_call_segments = np.zeros(0)
+		non_call_segments = np.zeros(self.negs_per_wav_file*self.valid_wav_files*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH)
 		counter = 0
 		for label_file, wav_file in infiles:
 			if not os.path.exists(label_file):
@@ -97,9 +99,11 @@ class SpectrogramAugmenter(object):
 							valid_index = False
 							break
 					found_index = valid_index
-				non_call_segments = np.concatenate([non_call_segments,list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])])
+				non_call_segments[counter*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH:(counter+1)*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH] = samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]
+				#non_call_segments = np.concatenate([non_call_segments, list(samples[start_index:start_index + SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])])
+				counter += 1
 			print(f"finished wav file #{counter}")
-			counter += 1
+			
 			del samples
 
 		print(f"Got {len(non_call_segments)/SpectrogramAugmenter.ELEPHANT_CALL_LENGTH} non call segments")
@@ -115,12 +119,12 @@ class SpectrogramAugmenter(object):
 			sr, samples = wavfile.read(wav_file)
 			for call_index in call_indices[wav_file]:
 				call = samples[call_index[0]:call_index[1]]
-				padded_call = np.zeros_like(non_call_segments[0:SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])
-				rand_start_ind = randint(0, padded_call.shape[0] - call.shape[0])
-
-
-				padded_call[rand_start_ind: rand_start_ind + call.shape[0]] = call * 0.5
+				
 				for i in range(ratio):
+					padded_call = np.zeros_like(non_call_segments[0:SpectrogramAugmenter.ELEPHANT_CALL_LENGTH])
+					rand_start_ind = randint(0, padded_call.shape[0] - call.shape[0])
+					padded_call[rand_start_ind: rand_start_ind + call.shape[0]] = call * 0.5
+
 					curr_index = non_call_indices[non_call_counter]
 					overlap_call = non_call_segments[curr_index*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH:curr_index*SpectrogramAugmenter.ELEPHANT_CALL_LENGTH+SpectrogramAugmenter.ELEPHANT_CALL_LENGTH]
 					#overlap_call = non_call_segments[non_call_counter]
