@@ -243,7 +243,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--actions',
                         nargs='+',
-                        choices=['spectro', 'melspectro','labelmask', 'copyraven'],
+                        choices=['spectro', 'melspectro','labelmask', 'copyraven', 'marginal_labelmask'],
                         help="Which tasks to accomplish (repeatable)"
                         )
 

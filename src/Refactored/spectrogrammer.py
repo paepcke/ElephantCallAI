@@ -100,7 +100,7 @@ class Spectrogrammer(object):
         @param infiles: List of files to process (containing potentially .wav and .txt)
         @type infiles: [str]
         @param actions: the tasks to accomplish: 
-            {spectro|melspectro|labelmask|copyraven}
+            {spectro|melspectro|labelmask|copyraven|marginal_labelmask}
             NOTE: copy raven is used simply to copy over the raven gt label .txt
             file if we are moving the spectrogram to a new location
         @type actions: [str] 
@@ -219,6 +219,21 @@ class Spectrogrammer(object):
 
                 if 'copyraven' in actions:
                     print ("TODO")
+
+            elif infile.endswith('_marginal.txt') and 'marginal_labelmask':
+                # Generate the 0/1 sprectrogam labels where we now
+                # exclude marginal calls!!!
+                wav_file = file_family.fullpath(AudioType.WAV) 
+                if not os.path.exists(wav_file):
+                    print(f"File {wav_file} does not exist so we cannot generate label mask")
+                    continue
+
+                label_mask = self.create_label_mask_from_raven_table(wav_file, infile, exclude_marginal=True)
+                if label_mask is None:
+                    print(f"Issue generating {infile} due to error in .wav file")
+                    continue
+
+                np.save(os.path.join(self.outdir, file_family.marginal_mask), label_mask)
 
 
     #------------------------------------
@@ -354,7 +369,8 @@ class Spectrogrammer(object):
     
     def create_label_mask_from_raven_table(self,
                                            wav_file,
-                                           label_file):
+                                           label_file,
+                                           exclude_marginal=False):
         '''
         Given a .wav recording, plus a manually created 
         selection table as produced by the Raven program,  
@@ -371,6 +387,9 @@ class Spectrogrammer(object):
         @type wav_file_or_sig: {str}
         @param label_file: label file as produced with Raven
         @type label_file: {str}
+        @param exclude_marginal: Flag indicating we want to exclude calls
+            labeled as marginal.
+        @type exclude_marginal: bool
         '''
             
         # The x-axis time labels that a spectrogram would have:
@@ -390,7 +409,8 @@ class Spectrogrammer(object):
             reader = csv.DictReader(fd, delimiter='\t')
             for (start_bin_idx, end_bin_idx) in self._get_label_indices(reader, 
                                                                         time_tick_secs_labels,
-                                                                        label_file):
+                                                                        label_file,
+                                                                        exclude_marginal):
             
                 # Fill the mask with 1s in the just-computed range:
                 label_mask[start_bin_idx:end_bin_idx] = 1
@@ -412,7 +432,8 @@ class Spectrogrammer(object):
     def _get_label_indices(self, 
                            reader,
                            label_times,
-                           label_txt_file):
+                           label_txt_file,
+                           exclude_marginal=False):
 
         if type(label_times) != np.ndarray:
             label_times = np.array(label_times)
@@ -420,11 +441,18 @@ class Spectrogrammer(object):
         file_offset_key = 'File Offset (s)'
         begin_time_key = 'Begin Time (s)'
         end_time_key   = 'End Time (s)'
+        marginal_key = "Marginal"
 
         # Get each el call time range spec in the labels:
+        num_marginal_calls = 1
         for label_dict in reader:
+            # Check if we want to skip this call
+            if exclude_marginal and label_dict[marginal_key] == "yes":
+                print ("Skipping marginal call number:", num_marginal_calls)
+                num_marginal_calls += 1
+                continue
+
             try:
-                #start_time = float(row['File Offset (s)'])
                 begin_time = float(label_dict[file_offset_key])
                 call_length = float(label_dict[end_time_key]) - float(label_dict[begin_time_key])
                 end_time = begin_time + call_length
