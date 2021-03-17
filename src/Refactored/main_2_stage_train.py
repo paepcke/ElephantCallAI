@@ -315,7 +315,7 @@ class TwoStage_Model(object):
         print ("Num batches:", len(dataloader))
         for idx, batch in enumerate(dataloader):
             # Do basic logging
-            if idx % 10 == 0:
+            if idx % 1000 == 0:
                 print("Adversarial search has gotten through {} batches".format(idx))
         
             # Step 1) Evaluate model on data

@@ -664,7 +664,7 @@ class ElephantDatasetFull(data.Dataset):
         if self.only_preds:
             return spectrogram, None, gt_call_path
         else:   
-            label = np.loade(label_path)
+            label = np.load(label_path)
             return spectrogram, label, gt_call_path
 
 
