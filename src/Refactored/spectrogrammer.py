@@ -156,6 +156,7 @@ class Spectrogrammer(object):
                 print(f"File {infile} does not exist.")
                 continue
 
+            print ("Processing file:", infile, " - With actions:", actions)
             # Get a dict with the file_root and names related to 
             # the infile in our file naming scheme:
             # Note this is useful for associating 
