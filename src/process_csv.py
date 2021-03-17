@@ -88,7 +88,7 @@ for i in range(1, len(lines)):
     file_lines.append(line)
 
 # Do the last wav file
-out_path = wav_path + current_file[:-4] + '.txt'
+out_path = os.path.join(wav_path, current_file[:-4] + '_marginal.txt')
 with open(out_path, 'w') as write_file:
     writer = csv.writer(write_file, delimiter='\t')
     # Fix the numbering of the lines
