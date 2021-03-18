@@ -319,13 +319,13 @@ class DataCoordinator:
             if available_space >= self.min_free_space_for_input:
                 # unlock it if possible
                 if self._holding_input_lock:
-                    self._holding_prediction_lock = False
+                    self._holding_input_lock = False
                     self.space_available_for_input_lock.release()
             else:
                 # make sure it's locked
                 if not self._holding_input_lock:
                     self.space_available_for_input_lock.acquire()
-                    self._holding_prediction_lock = True
+                    self._holding_input_lock = True
 
     def update_prediction_lock(self):
         with self.prediction_sync_lock:

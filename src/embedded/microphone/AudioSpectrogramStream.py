@@ -54,8 +54,11 @@ class AudioSpectrogramStream:
                 spectrogram = self.spectrogram_extractor.extract_spectrogram(data)
 
                 # step 4: append input
-                data_coordinator.write(spectrogram, timestamp)
+                data_coordinator.write(self.transform(spectrogram), timestamp)
         # TODO: print something about how much data we processed before giving up
+
+    def transform(self, spectrogram_data: np.ndarray):
+        return 10*np.log10(spectrogram_data)
 
     def join(self):
         self.stream_thread.join()
