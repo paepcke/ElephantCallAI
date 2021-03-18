@@ -615,9 +615,9 @@ class FileFamily(object):
         elif filetype == AudioType.TIME:
             return os.path.join(self.path, self.time_labels)
         elif filetype == AudioType.MARGINAL_LABEL:
-            return os.paht.join(self.path, self.marginal_label)
+            return os.path.join(self.path, self.marginal_label)
         elif filetype == AudioType.MARGINAL_MASK:
-            return os.paht.join(self.path, self.marginal_mask)
+            return os.path.join(self.path, self.marginal_mask)
 
 
     #------------------------------------
