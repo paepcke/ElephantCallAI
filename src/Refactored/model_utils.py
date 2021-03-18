@@ -151,6 +151,10 @@ class Model_Utils(object):
             save_path += 'DataSeed-' + str(parameters.DATASET_SEED) + '_'
             save_path += 'ModelSeed-' + str(parameters.MODEL_SEED) + '_'
 
+        # Indicate if we are smoothing the labels
+        if parameters.LABEL_SMOOTH != 0:
+            save_path += "Label-Smooth-" + str(parameters.LABEL_SMOOTH) + "_"
+
         save_path += "Norm-" + parameters.NORM + "_"
         save_path += "NegFactor-x" + str(parameters.NEG_SAMPLES) + "_"
         save_path += "CallRepeats-" + str(parameters.CALL_REPEATS) + "_"
