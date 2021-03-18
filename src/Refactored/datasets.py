@@ -41,7 +41,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
     """
     def __init__(self, data_path, neg_ratio=1, neg_features=None, normalization="norm", 
-                log_scale=True, gaussian_smooth=False, transform=None, 
+                log_scale=True, gaussian_smooth=0, transform=None, 
                 shift_windows=False, seed=8):
         """
             @TODO: add comments for these!!!
@@ -338,13 +338,15 @@ class Full_ElephantDataset(data.Dataset):
 
     """
     def __init__(self, data_path, normalization="norm", log_scale=True, transform=None, 
-            shift_windows=False, seed=8):
+            shift_windows=False, gaussian_smooth=0, seed=8):
 
         # Should look into this with Vrinda about how we want to deal with data augmentation transforms!
         self.user_transforms = transform
         self.normalization = normalization
         self.log_scale = log_scale 
         self.shift_windows = shift_windows
+        # Apply gaussian smoothing to the labels
+        self.gaussian_smooth = gaussian_smooth
 
         # Init positive and negative data complete data
         self.init_data(data_path)
@@ -397,6 +399,7 @@ class Full_ElephantDataset(data.Dataset):
         label = np.load(self.labels[index])
 
         feature = self.apply_data_transforms(feature)
+        label = self.apply_label_transforms(label)
 
         if self.user_transforms:
             feature = self.user_transforms(feature)

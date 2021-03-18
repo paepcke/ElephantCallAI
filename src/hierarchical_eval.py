@@ -987,7 +987,7 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
                 i += 1
 
 
-def get_spectrogram_paths(test_files_path, spectrogram_path):
+def get_spectrogram_paths(test_files_path, spectrogram_path, exclude_marginals=False):
     """
         In the test set folder, there is a file that includes
         all of the recording files used for the test set. Based
@@ -1012,7 +1012,11 @@ def get_spectrogram_paths(test_files_path, spectrogram_path):
         # the test file with the path to the folder
         # containing the spectrogram files
         paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
-        paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+        if exclude_marginals:
+            paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+        else:
+            paths['labels'].append(spectrogram_path + '/' + file + '_marginal_label_mask.npy')
+
         paths['gts'].append(spectrogram_path + '/' + file + '_gt.txt')             
 
     return paths
@@ -1042,7 +1046,7 @@ def main(args):
             os.mkdir(args.call_predictions_path)
 
     
-    full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
+    full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path, exclude_marginals=parameters.EXCLUDE_MARGINALS)
     # Include flag indicating if we are just making predictions with no labels
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
                  full_test_spect_paths['labels'], full_test_spect_paths['gts'], only_preds=args.only_predictions)    

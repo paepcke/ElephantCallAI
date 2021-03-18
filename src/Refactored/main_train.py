@@ -72,13 +72,15 @@ def main():
     #   - Function to include new set of positive data!
     #   - Potentially re-randomly sample negative data to match ratio!
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, seed=8)
+                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     if args.use_generated:
         train_dataset.add_positive_examples_from_dir(args.generated_path)
         train_dataset.undersample_negative_features_to_balance()
 
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, seed=8)
+                                        normalization=parameters.NORM, log_scale=parameters.SCALE,
+                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
 
     # Step 3) Create the dataloaders
     train_loader = Model_Utils.get_loader(train_dataset, parameters.BATCH_SIZE, shuffle=True)

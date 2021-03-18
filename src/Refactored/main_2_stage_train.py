@@ -448,15 +448,19 @@ def main():
 
     # Step 2) Get the initial subsampled train/test datasets
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, seed=8)
+                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, seed=8)
+                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
 
     # Step 3) Get the complete datasets for adversarial discovery
     full_train_dataset = Full_ElephantDataset(train_data_path, normalization=parameters.NORM, 
-                                                        log_scale=parameters.SCALE, seed=8)
+                                                        log_scale=parameters.SCALE, 
+                                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     full_test_dataset = Full_ElephantDataset(test_data_path, normalization=parameters.NORM, 
-                                                        log_scale=parameters.SCALE, seed=8)
+                                                        log_scale=parameters.SCALE, 
+                                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
 
     # Step 4) Get the dataloaders
     train_loader = Model_Utils.get_loader(train_dataset, parameters.BATCH_SIZE, shuffle=True)
