@@ -95,7 +95,10 @@ class SpectrogramAugmenter(object):
             if not os.path.exists(label_file):
                 continue
             sr, samples = wavfile.read(wav_file)
-            call_index = call_indices[wav_file]
+            if wav_file not in call_indices:
+                call_index = []
+            else:
+                call_index = call_indices[wav_file]
             for i in range(self.negs_per_wav_file):
                 # randomly sample outside of call_indices
                 found_index = False
