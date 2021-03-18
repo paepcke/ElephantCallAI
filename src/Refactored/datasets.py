@@ -7,6 +7,8 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import glob
 import parameters
+from scipy.ndimage import gaussian_filter1d
+
 
 class Subsampled_ElephantDataset(data.Dataset):
     """

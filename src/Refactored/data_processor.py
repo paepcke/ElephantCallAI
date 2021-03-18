@@ -137,7 +137,8 @@ class LaunchChopper(object):
 
         The output file is to be likely a Train or Test dir!
     """
-    def __init__(self, data, output_dir, window_size=256, data_path=None):
+    def __init__(self, data, output_dir, window_size=256, 
+                data_path=None, exclude_marginal=False):
         '''
         @param data: Either a data directory with the processed spectrogram files and
             corresponding mask files or a file with the '_spectro.npy' files that we 
@@ -162,7 +163,7 @@ class LaunchChopper(object):
 
             spect_file_pairs = self.extract_from_file(data, data_path)
         else:
-            spect_file_pairs = self.extract_from_dir(data)
+            spect_file_pairs = self.extract_from_dir(data, exclude_marginal=exclude_marginal)
 
         for spect_file, mask_file in spect_file_pairs:
             SpectrogramChopper(spect_file,
@@ -183,6 +184,8 @@ class LaunchChopper(object):
             so that they can be read!
 
             @return list of ('_spectro.npy', '_label_mask.npy') tuples
+
+            MAY NEED TO ADD EXCLUDE MARGINALS FLAG!
         """
         with open(data_file, "r") as f:
             lines = f.readlines()
@@ -202,7 +205,7 @@ class LaunchChopper(object):
 
         return spect_file_pairs
 
-    def extract_from_dir(self, data_dir):
+    def extract_from_dir(self, data_dir, exclude_marginal=False):
         """
             Given a data directory, extract a list of (spect, mask) file
             tuples that are to be chopped.
@@ -221,7 +224,10 @@ class LaunchChopper(object):
                     file_family = FileFamily(full_file)
 
                     # Append tuple with (spect_file, label_mask_file)
-                    spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MASK)))
+                    if exclude_marginal:
+                        spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MARGINAL_MASK)))
+                    else:
+                        spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MASK)))
 
         return spect_file_pairs
 
@@ -329,6 +335,12 @@ if __name__ == '__main__':
     parser.add_argument('--spect_data_path', 
                         default=None, 
                         help='If "spect_data" is a file, then we need this to specify the data path to append to these files'
+                        )
+
+    parser.add_argument('--exclude_marginal',
+                        action='store_true',
+                        default=False,
+                        help='Flag indicating to exclude elephant calls marked as marginal (i.e. use the MARGINAL_MASK for chopping)'
                         )
 
 
