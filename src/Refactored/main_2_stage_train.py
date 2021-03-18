@@ -35,11 +35,12 @@ parser.add_argument('--run_type', type=str,
 parser.add_argument('--generated_path', type=str, default=None,
     help="Path to generated positive data if we want to use it!")
 
-# NEED TO ADD THESE BELOW LATER
-
 # Model Paths
 parser.add_argument('--path', type=str,
-    help='When running \'adversarial\' or \'model1\' we must provide the folder with model_0 and other models')
+    help='When running \'adversarial\' or \'stage_2\' we must provide the folder with stage_1 and other models')
+
+# NEED TO ADD THESE BELOW LATER
+
 # Note this pre-loads model_0
 parser.add_argument('--model_0', type=str,
     help='Provide a path to a pre-trained model_0 that will be saved to model_0 and used for adversarial discovery')

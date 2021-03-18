@@ -41,7 +41,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
     """
     def __init__(self, data_path, neg_ratio=1, neg_features=None, normalization="norm", 
-                log_scale=True, transform=None, 
+                log_scale=True, gaussian_smooth=False, transform=None, 
                 shift_windows=False, seed=8):
         """
             @TODO: add comments for these!!!
@@ -54,6 +54,8 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.shift_windows = shift_windows
         self.neg_ratio = neg_ratio
         self.data_path = data_path
+        # Apply gaussian smoothing to the labels
+        self.gaussian_smooth = gaussian_smooth
 
         # Step 1) Initialize the positive examples
         self.pos_features = None
@@ -277,7 +279,8 @@ class Subsampled_ElephantDataset(data.Dataset):
         label = np.load(self.labels[index])
 
         # This we need to update more!
-        feature = self.apply_transforms(feature)
+        feature = self.apply_data_transforms(feature)
+        label = self.apply_label_transforms(label)
 
         if self.user_transforms:
             feature = self.user_transforms(feature)
@@ -291,10 +294,17 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         return feature, label, (self.data[index], self.labels[index]) # Include the data files!
 
+    def apply_label_transforms(self, label):
+        # Gaussian smooth the labels!
+        if self.gaussian_smooth != 0:
+            label = gaussian_filter1d(label,sigma=self.gaussian_smooth)
 
-    def apply_transforms(self, data):
+        return label
+
+
+    def apply_data_transforms(self, data):
         # Look into librosa.utils.normalize!
-        
+
         # Apply a log transform to the spectrogram! This is equivalent to the convert to db
         if self.log_scale:
             data = 10 * np.log10(data)
@@ -304,6 +314,7 @@ class Subsampled_ElephantDataset(data.Dataset):
             data = (data - np.mean(data)) / np.std(data)
         elif self.normalization == "feature": # Look into the normalize we used in CS224S
             data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
+
 
         return data
 
@@ -385,7 +396,7 @@ class Full_ElephantDataset(data.Dataset):
         feature = np.load(self.data[index])
         label = np.load(self.labels[index])
 
-        feature = self.apply_transforms(feature)
+        feature = self.apply_data_transforms(feature)
 
         if self.user_transforms:
             feature = self.user_transforms(feature)
@@ -396,8 +407,15 @@ class Full_ElephantDataset(data.Dataset):
 
         return feature, label, (self.data[index], self.labels[index]) # Include the data files!
 
+    def apply_label_transforms(self, label):
+        # Gaussian smooth the labels!
+        if self.gaussian_smooth != 0:
+            label = gaussian_filter1d(label,sigma=self.gaussian_smooth)
 
-    def apply_transforms(self, data):
+        return label
+
+
+    def apply_data_transforms(self, data):
         # Apply a log transform to the spectrogram! This is equivalent to the convert to db
         if self.log_scale:
             data = 10 * np.log10(data)
