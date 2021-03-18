@@ -1,13 +1,15 @@
 from threading import Thread
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 import numpy as np
+import sys
 
 from embedded.DataCoordinator import DataCoordinator
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 
-GIVE_UP_THRESHOLD = 100
+GIVE_UP_THRESHOLD_FOR_AUDIO_BUF = 100
+GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR = 200
 INPUT_LOCK_TIMEOUT_IN_SECONDS = 1
 AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS = 0.3
 DEFAULT_N_OVERLAPS_PER_CHUNK = 256
@@ -32,14 +34,16 @@ class AudioSpectrogramStream:
 
     def stream(self, data_coordinator: DataCoordinator):
         num_consecutive_times_audio_buf_empty = 0
-        # TODO: some debug/failsafe logic about long-term datacoordinator blockages
-        while num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD:
+        num_consecutive_times_locked_out_of_data_coordinator = 0
+        while num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD_FOR_AUDIO_BUF \
+                and num_consecutive_times_locked_out_of_data_coordinator < GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR:
             # step 1: block on datacoordinator availability
             if not data_coordinator.space_available_for_input_lock.acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS):
-                # TODO: failsafe logic
+                num_consecutive_times_locked_out_of_data_coordinator += 1
                 continue
             else:
                 data_coordinator.space_available_for_input_lock.release()
+                num_consecutive_times_locked_out_of_data_coordinator = 0
 
             # step 2: block on an audio buffer lock, receive input, process it into spectrogram
             if not self.audio_buf.output_available_lock.acquire(timeout=AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS):
@@ -47,15 +51,29 @@ class AudioSpectrogramStream:
                 continue
             else:
                 self.audio_buf.output_available_lock.release()
-                num_consecutive_times_audio_buf_empty = 0
             data, timestamp = self._read_audio_data()
 
             if data is not None:
+                num_consecutive_times_audio_buf_empty = 0
+
                 spectrogram = self.spectrogram_extractor.extract_spectrogram(data)
 
                 # step 4: append input
                 data_coordinator.write(self.transform(spectrogram), timestamp)
-        # TODO: print something about how much data we processed before giving up
+            else:
+                num_consecutive_times_audio_buf_empty += 1
+
+        now = datetime.now(timezone.utc)
+        error_msg: str
+        if num_consecutive_times_locked_out_of_data_coordinator >= GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR:
+            error_msg = "Spectrogram Buffer too full for additional input for {} consecutive seconds." \
+                        " Spectrogram stream giving up at {}.".format(
+                num_consecutive_times_locked_out_of_data_coordinator * INPUT_LOCK_TIMEOUT_IN_SECONDS, now)
+        else:
+            error_msg = "Audio input unavailable for {} consecutive seconds." \
+                        " Spectrogram stream giving up at {}.".format(
+                num_consecutive_times_audio_buf_empty * AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS, now)
+        print(error_msg, file=sys.stderr)
 
     def transform(self, spectrogram_data: np.ndarray):
         return 10*np.log10(spectrogram_data)
@@ -64,9 +82,10 @@ class AudioSpectrogramStream:
         self.stream_thread.join()
 
     '''
-    TODO: to comply with SpectrogramBuffer input requirements, *Throw away excess audiodata* if it's not large enough
+    To comply with SpectrogramBuffer input requirements, *Throw away excess audiodata* if it's not large enough
     to make 256 + k*jump time steps of spectral data (provided there's a follow-up timestamp).
-    For now, it's slightly less efficient than this, only keeping integer multiples of 256 time steps.
+    For now, it's slightly less efficient than this, only keeping integer multiples of 256 time steps. This is not
+    expected to have much practical impact, but it can be changed.
     '''
     def _read_audio_data(self) -> Tuple[Optional[np.ndarray], Optional[datetime]]:
         free_all = False
