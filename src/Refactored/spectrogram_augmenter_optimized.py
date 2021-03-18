@@ -128,6 +128,8 @@ class SpectrogramAugmenter(object):
             if not os.path.exists(label_file):
                 continue
             sr, samples = wavfile.read(wav_file)
+            if wav_file not in call_index:
+                continue
             for call_index in call_indices[wav_file]:
                 call = samples[call_index[0]:call_index[1]]
                 
