@@ -220,7 +220,7 @@ if __name__ == '__main__':
                 else:
                 # Append tuple with (label file, wav file
                     label_wav_pairs.append((file_family.fullpath(AudioType.LABEL), full_file))
-
+    print(label_wav_pairs)
     SpectrogramAugmenter(label_wav_pairs, args.ratio, args.outdir, args.remove_marginals)
 
 
