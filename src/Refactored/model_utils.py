@@ -33,8 +33,12 @@ class Model_Utils(object):
             test_data_path = parameters.LOCAL_TEST_FILES
         else:
             if parameters.DATASET.lower() == "noab":
-                train_data_path = parameters.REMOTE_TRAIN_FILES
-                test_data_path = parameters.REMOTE_TEST_FILES
+                if parameters.EXCLUDE_MARGINALS:
+                    train_data_path = parameters.REMOTE_MARGINAL_TRAIN_FILES
+                    test_data_path = parameters.REMOTE_MARGINAL_TEST_FILES
+                else:
+                    train_data_path = parameters.REMOTE_TRAIN_FILES
+                    test_data_path = parameters.REMOTE_TEST_FILES
             else:
                 train_data_path = parameters.REMOTE_BAI_TRAIN_FILES
                 test_data_path = parameters.REMOTE_BAI_TEST_FILES
@@ -112,6 +116,9 @@ class Model_Utils(object):
         # 'AdversarialTraining_' or 'Hierarchical_'
         if save_prefix is not None:
             save_path += save_prefix
+
+        if parameters.EXCLUDE_MARGINALS:
+            save_path += "EXCLUDE-MARGINALS_"
 
         if parameters.DATASET.lower() == 'bai':
             save_path += 'BAI-Pre-Train_'
