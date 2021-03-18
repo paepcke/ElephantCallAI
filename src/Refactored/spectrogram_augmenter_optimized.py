@@ -21,7 +21,7 @@ class SpectrogramAugmenter(object):
 	def __init__(self, 
 				 infiles,
 				 ratio=1,
-				 outdir=None):
+				 outdir=None, remove_marginals=True):
 		self.infiles = infiles # list of tuple of label_file, wav_file
 		self.outdir = outdir
 		self.min_freq=0       # Hz 
@@ -31,6 +31,7 @@ class SpectrogramAugmenter(object):
 		self.hop=800
 		self.framerate=8000
 		self.ratio=ratio
+		self.remove_marginals = remove_marginals
 
 		call_indices = self.get_elephant_calls(infiles)
 		self.num_calls = sum([len(value) for key, value in call_indices.items()])
@@ -44,6 +45,7 @@ class SpectrogramAugmenter(object):
 	def get_elephant_calls(self, infiles):
 		call_indices = {} # maps wav file to array of indices we can sample from
 		counter = 0
+		
 		for label_file, wav_file in infiles:
 			sr, samples = wavfile.read(wav_file)
 			if not os.path.exists(label_file):
@@ -56,9 +58,15 @@ class SpectrogramAugmenter(object):
 			file_offset_key = 'File Offset (s)'
 			begin_time_key = 'Begin Time (s)'
 			end_time_key   = 'End Time (s)'
+			marginal_key = 'Marginal'
+			num_marginal_calls = 0
 			# preprocess to allow for overlapping calls
 			for label_dict in reader:
 				try:
+		            if self.remove_marginals and label_dict[marginal_key] == "yes":
+		                print ("Skipping marginal call number:", num_marginal_calls)
+		                num_marginal_calls += 1
+		                continue
 					begin_time = float(label_dict[file_offset_key])
 					call_length = float(label_dict[end_time_key]) - float(label_dict[begin_time_key])
 					end_time = begin_time + call_length
@@ -195,6 +203,9 @@ if __name__ == '__main__':
 						default=None, 
 						help='Ratio for non-calls to calls',type=int
 						)
+	parser.add_argument('-m', '--remove_marginals', 
+						help='Set to false if we dont want to use marginals',action='store_true'
+						)
 	args = parser.parse_args();
 	label_wav_pairs = []
 	args.infiles = args.infiles[0]
@@ -204,11 +215,13 @@ if __name__ == '__main__':
 			full_file = os.path.join(dirpath, file)
 			if file.endswith('.wav'):
 				file_family = FileFamily(full_file)
-
+				if args.remove_marginals:
+					label_wav_pairs.append((file_family.fullpath(AudioType.MARGINAL_LABEL), full_file))
+				else:
 				# Append tuple with (label file, wav file
-				label_wav_pairs.append((file_family.fullpath(AudioType.LABEL), full_file))
+					label_wav_pairs.append((file_family.fullpath(AudioType.LABEL), full_file))
 
-	SpectrogramAugmenter(label_wav_pairs, args.ratio, args.outdir)
+	SpectrogramAugmenter(label_wav_pairs, args.ratio, args.outdir, args.use_marginals)
 
 
 
