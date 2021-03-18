@@ -158,7 +158,7 @@ class TwoStage_Model(object):
             # Just run the second stage!
             # This involves reading in the adversarial generated files!
             # LET US FIRST FIGURE OUT WHERE TO SAVE THESE!!
-            if self.add_generated_data is not None:
+            if add_generated_data is not None:
                 self.train_loader.dataset.add_positive_examples_from_dir(add_generated_data)
                 self.train_loader.dataset.undersample_negative_features_to_balance()
 
@@ -414,7 +414,7 @@ class TwoStage_Model(object):
         """
         # Step 1) Read in the training adversarial files
         adversarial_train_files = []
-        with open(self.train_adversarial_file, 'r') as f:
+        with open(self.train_adversarial_files, 'r') as f:
             files = f.readlines()
             for file_pair in files:
                 # Split by ', ' to get the data and the label
@@ -424,7 +424,7 @@ class TwoStage_Model(object):
         
         # Step 2) Read in the test adversarial files
         adversarial_test_files = []
-        with open(self.test_adversarial_file, 'r') as f:
+        with open(self.test_adversarial_files, 'r') as f:
             files = f.readlines()
             for file_pair in files:
                 # Split by ', ' to get the data and the label
