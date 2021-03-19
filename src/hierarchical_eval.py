@@ -28,7 +28,7 @@ parser.add_argument('--call_preds_path', type=str, dest='call_predictions_path',
 
 # Defaults based on quatro
 parser.add_argument('--test_files', type=str, default='/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt')
-parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_general_test/", 
+parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_test/", 
     help='Path to the processed spectrogram files')
 
 # Special flag to specify that we are just making predictoins and not comparing against ground truth!
@@ -1011,11 +1011,11 @@ def get_spectrogram_paths(test_files_path, spectrogram_path, exclude_marginals=F
         # Create the spectrogram path by concatenating
         # the test file with the path to the folder
         # containing the spectrogram files
-        paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
+        paths['specs'].append(spectrogram_path + '/' + file + '_spectro.npy')
         if  exclude_marginals:
             paths['labels'].append(spectrogram_path + '/' + file + '_marginal_label_mask.npy')
         else:
-            paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+            paths['labels'].append(spectrogram_path + '/' + file + '_label_mask.npy')
 
             
 
