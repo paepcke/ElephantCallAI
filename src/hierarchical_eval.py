@@ -1012,10 +1012,12 @@ def get_spectrogram_paths(test_files_path, spectrogram_path, exclude_marginals=F
         # the test file with the path to the folder
         # containing the spectrogram files
         paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
-        if exclude_marginals:
-            paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
-        else:
+        if not exclude_marginals:
             paths['labels'].append(spectrogram_path + '/' + file + '_marginal_label_mask.npy')
+        else:
+            paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+
+            
 
         paths['gts'].append(spectrogram_path + '/' + file + '_gt.txt')             
 
