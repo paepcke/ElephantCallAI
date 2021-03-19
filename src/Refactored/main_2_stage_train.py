@@ -455,12 +455,15 @@ def main():
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
 
     # Step 3) Get the complete datasets for adversarial discovery
+    # Because the full dataset is just used for adversarial discovery where
+    # we want to just know if the window is a negative window, we do not need 
+    # to smooth the labels
     full_train_dataset = Full_ElephantDataset(train_data_path, normalization=parameters.NORM, 
                                                         log_scale=parameters.SCALE, 
-                                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
+                                                        gaussian_smooth=False, seed=8)
     full_test_dataset = Full_ElephantDataset(test_data_path, normalization=parameters.NORM, 
                                                         log_scale=parameters.SCALE, 
-                                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
+                                                        gaussian_smooth=False, seed=8)
 
     # Step 4) Get the dataloaders
     train_loader = Model_Utils.get_loader(train_dataset, parameters.BATCH_SIZE, shuffle=True)
