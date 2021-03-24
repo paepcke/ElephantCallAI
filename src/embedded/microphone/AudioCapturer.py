@@ -2,6 +2,7 @@ import pyaudio
 from datetime import datetime, timezone, timedelta
 import numpy as np
 
+from embedded.Closeable import Closeable
 from embedded.microphone.AudioBuffer import AudioBuffer
 
 
@@ -11,7 +12,7 @@ DEFAULT_FRAMES_PER_BUFFER = 4096  # about half a second of audio
 TIME_KEY = "input_buffer_adc_time"
 
 
-class AudioCapturer:
+class AudioCapturer(Closeable):
     audio_buf: AudioBuffer
     sampling_freq: int
     stream: pyaudio.Stream
@@ -21,6 +22,7 @@ class AudioCapturer:
     dropped_prev_segment: bool
 
     def __init__(self, audio_buf: AudioBuffer, sampling_freq: int = DEFAULT_SAMPLE_FREQ, frames_per_buffer: int = DEFAULT_FRAMES_PER_BUFFER):
+        super().__init__()
         self.audio_buf = audio_buf
         self.sampling_freq = sampling_freq
         self.frames_per_buffer = frames_per_buffer
@@ -57,6 +59,5 @@ class AudioCapturer:
         relative_time = absolute_time - self.start_time_seconds
         return self.start_timestamp + timedelta(seconds=relative_time)
 
-    # TODO: invoke this in signal handler
     def close(self):
         self.stream.close()

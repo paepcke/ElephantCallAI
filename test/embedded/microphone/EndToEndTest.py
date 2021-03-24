@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, timezone
 from time import sleep
 
-from embedded import DataCoordinator, PredictionManager, PredictionCollector
+from embedded import DataCoordinator, PredictionManager, PredictionCollector, SignalUtils
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.AudioCapturer import AudioCapturer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
@@ -44,7 +44,11 @@ def integration_test_with_model_and_audio(small_buffer: bool = False):
     audio_capturer = AudioCapturer(audio_buffer, frames_per_buffer=4096)
     spec_stream = AudioSpectrogramStream(audio_buffer, spec_extractor, timeout=True)
     pred_mgr = PredictionManager.PredictionManager(predictor, timeout=True, verbose=True, give_up_threshold=100)
-    pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, give_up_threshold=100)
+    pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, give_up_threshold=100,
+                                                             keep_predictions=True)
+
+    SignalUtils.set_signal_handler([audio_capturer, spec_stream, pred_mgr, pred_collector, data_coordinator],
+                                   start_time=start, timeout=True)
 
     audio_capturer.start()
     sleep(27)
@@ -57,14 +61,8 @@ def integration_test_with_model_and_audio(small_buffer: bool = False):
     pred_mgr.join()
     preds = pred_collector.join()
 
-    data_coordinator.wrap_up()
-
     preds_cat = np.concatenate(preds, 0)
     np.save(PREDS_SAVE_PATH, preds_cat)
-
-    finish = datetime.now(timezone.utc)
-
-    print("Done in {}".format(finish - start))
 
 
 if __name__ == "__main__":

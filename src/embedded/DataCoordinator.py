@@ -2,9 +2,10 @@ from typing import Optional, Deque, Tuple, List
 import numpy as np
 from datetime import datetime
 from collections import deque
-import sys, signal
+import sys
 from threading import Lock
 
+from embedded.Closeable import Closeable
 from embedded.IntervalRecorder import IntervalRecorder
 from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
 from embedded.PredictionBuffer import PredictionBuffer
@@ -14,7 +15,7 @@ from embedded.predictors import Predictor
 PREDICTION_THRESHOLD = 0.5
 
 
-class DataCoordinator:
+class DataCoordinator(Closeable):
     """An object that abstracts out the unsightly ring-buffer indexing used when storing spectrograms and predictions.
     Extracts intervals of continuously-detected positive predictions and saves these intervals to a file."""
     spectrogram_buffer: SpectrogramBuffer
@@ -73,6 +74,7 @@ class DataCoordinator:
                  min_free_space_for_input: Optional[int] = None,
                  # Predictions will not be collected unless at least the following proportion of the prediction buffer is full
                  prediction_load: float = 0.005):
+        super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
@@ -114,9 +116,6 @@ class DataCoordinator:
         self.input_sync_lock = Lock()
         self.prediction_sync_lock = Lock()
         self.collection_sync_lock = Lock()
-
-        # set up signal handler to close interval files in the event the process is TERM'd or INT'd
-        self._setup_signal_handler()
 
     # Appends new spectrogram data to the spectrogram buffer
     def write(self, spectrogram: np.ndarray, timestamp: Optional[datetime] = None):
@@ -378,15 +377,6 @@ class DataCoordinator:
         for interval in intervals:
             self.prediction_interval_recorder.write_interval(interval)
 
-    def _setup_signal_handler(self):
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
-
-    def _handle_signal(self, signum, frame):
-        self.wrap_up()
-        print("Received SIGTERM or SIGINT, closing interval files and terminating prediction...", file=sys.stderr)
-        sys.exit(0)
-
-    def wrap_up(self):
+    def close(self):
         self.prediction_interval_recorder.close()
         self.blackout_interval_recorder.close()

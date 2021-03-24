@@ -41,7 +41,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.make_predictions(zeros_predictor, 4)
         coordinator.make_predictions(zeros_predictor, 3)
         coordinator.finalize_predictions(9)
-        coordinator.wrap_up()
+        coordinator.close()
 
         # Does the internal state of the spectrogram buffer look right?
         self.assertEqual(8, coordinator.spectrogram_buffer.unprocessed_end)
@@ -68,7 +68,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         processed = coordinator.make_predictions(predictor, 6)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(0, processed)
 
@@ -80,7 +80,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         processed = coordinator.make_predictions(predictor, 4)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(4, processed)
         self.assertEqual(2, coordinator.spectrogram_buffer.rows_allocated - coordinator.spectrogram_buffer.rows_unprocessed)
@@ -95,9 +95,9 @@ class DataCoordinatorTest(unittest.TestCase):
         try:
             coordinator.make_predictions(predictor, 5)
         except ValueError:
-            coordinator.wrap_up()
+            coordinator.close()
             return
-        coordinator.wrap_up()
+        coordinator.close()
         self.fail("Expected exception but none thrown")
 
     def test_time_window_must_be_a_multiple_of_min_appendable_if_no_overlap_allowance(self):
@@ -110,9 +110,9 @@ class DataCoordinatorTest(unittest.TestCase):
         try:
             coordinator.make_predictions(predictor, 5)
         except ValueError:
-            coordinator.wrap_up()
+            coordinator.close()
             return
-        coordinator.wrap_up()
+        coordinator.close()
         self.fail("Expected exception but none thrown")
 
     def test_can_make_fewer_predictions_than_requested_to_allow_future_predictions(self):
@@ -123,7 +123,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         processed = coordinator.make_predictions(predictor, 12)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(9, processed)
 
@@ -138,7 +138,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 4)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(5, processed)
 
@@ -153,7 +153,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 2)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(2, processed)
 
@@ -174,9 +174,9 @@ class DataCoordinatorTest(unittest.TestCase):
         try:
             coordinator.make_predictions(predictor, 2)
         except ValueError:
-            coordinator.wrap_up()
+            coordinator.close()
             return
-        coordinator.wrap_up()
+        coordinator.close()
         self.fail("Expected exception but none thrown. Should not be able to predict less than min_appendable_time_steps at once.")
 
     def test_prediction_lock_allows_entry_when_appropriate_without_discontinuity(self):
@@ -186,7 +186,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertTrue(got_lock)
 
@@ -197,7 +197,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertFalse(got_lock)
 
@@ -212,7 +212,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((4, now + 40 * TIME_DELTA_PER_TIME_STEP))
 
         got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertTrue(got_lock)
 
@@ -224,7 +224,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         got_lock = coordinator.space_available_for_input_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertFalse(got_lock)
 
@@ -236,7 +236,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data)
 
         got_lock = coordinator.space_available_for_input_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertTrue(got_lock)
 
@@ -258,7 +258,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.prediction_transition_state = TransitionState(now, 2)
 
         intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(4, len(intervals))
         self.assertEqual((now, now + 5*TIME_DELTA_PER_TIME_STEP), intervals[0])
@@ -280,7 +280,7 @@ class DataCoordinatorTest(unittest.TestCase):
         finalized_predictions[9] = 0
 
         intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
-        coordinator.wrap_up()
+        coordinator.close()
 
         self.assertEqual(1, len(intervals))
         self.assertEqual((now, now + 9*TIME_DELTA_PER_TIME_STEP), intervals[0])
@@ -297,7 +297,7 @@ class DataCoordinatorTest(unittest.TestCase):
         end = now + 2*TIME_DELTA_PER_TIME_STEP
         intervals = [(start, end)]
         coordinator.save_detection_intervals(intervals)
-        coordinator.wrap_up()
+        coordinator.close()
 
         lines = get_lines_of_prediction_file()
 
@@ -319,7 +319,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.write(data, time1)
         coordinator.write(data, time2)
 
-        coordinator.wrap_up()
+        coordinator.close()
 
         lines = get_lines_of_blackout_file()
 

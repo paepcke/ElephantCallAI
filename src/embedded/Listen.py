@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from time import sleep
 
 from embedded.args import get_embedded_listening_args
-from embedded import DataCoordinator, PredictionManager, PredictionCollector
+from embedded import DataCoordinator, PredictionManager, PredictionCollector, SignalUtils
 from embedded.microphone import AudioBuffer
 from embedded.microphone.AudioCapturer import AudioCapturer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
@@ -21,8 +21,6 @@ def main():
     """This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
             run it through the model, and it will do so indefinitely."""
     args = get_embedded_listening_args()
-
-    print(args)
 
     start = datetime.now(timezone.utc)
 
@@ -53,6 +51,9 @@ def main():
     pred_mgr = PredictionManager.PredictionManager(predictor, timeout=args.timeout, verbose=args.verbose)
     pred_collector = PredictionCollector.PredictionCollector(timeout=args.timeout, verbose=args.verbose)
 
+    SignalUtils.set_signal_handler([audio_capturer, spec_stream, pred_mgr, pred_collector, data_coordinator],
+                                   start_time=start, timeout=args.timeout)
+
     audio_capturer.start()
     if args.timeout:
         # allow time to gather initial batch of data so as not to trigger early timeouts
@@ -65,13 +66,6 @@ def main():
     spec_stream.join()
     pred_mgr.join()
     pred_collector.join()
-
-    data_coordinator.wrap_up()
-
-    finish = datetime.now(timezone.utc)
-
-    # TODO: make sure that SIGINT/SIGKILL actually terminates this process
-    print("Listening process finished: Total duration was {} to {}".format(start, finish))
 
 
 def convert_mb_to_num_elements(mb: int, bytes_per_element: int) -> int:

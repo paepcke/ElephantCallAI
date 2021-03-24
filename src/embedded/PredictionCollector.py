@@ -2,6 +2,7 @@ from threading import Thread
 from typing import List, Optional
 import numpy as np
 
+from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 
 GIVE_UP_THRESHOLD = 250
@@ -9,15 +10,18 @@ TIME_WINDOW = 256
 LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
-class PredictionCollector:
+class PredictionCollector(Closeable):
     collector_thread: Thread
     timeout: bool
     verbose: bool
     predictions_list: Optional[List[np.ndarray]]
     give_up_threshold: int
+    closed: bool
 
     def __init__(self, timeout: bool = False, verbose: bool = False, keep_predictions: bool = False,
                  give_up_threshold: int = GIVE_UP_THRESHOLD):
+        super().__init__()
+        self.closed = False
         self.timeout = timeout
         self.verbose = verbose
         if keep_predictions:
@@ -27,7 +31,8 @@ class PredictionCollector:
         self.give_up_threshold = give_up_threshold
 
     def start(self, data_coordinator: DataCoordinator):
-        self.collector_thread = Thread(target=self.collect_predictions, args=(data_coordinator,))
+        # 'daemon' threads are killed when the parent process dies
+        self.collector_thread = Thread(target=self.collect_predictions, args=(data_coordinator,), daemon=True)
         self.collector_thread.start()
         self.predictions_list = []
 
@@ -35,8 +40,9 @@ class PredictionCollector:
         num_consecutive_times_buffer_empty = 0
         total_time_steps_collected = 0
 
-        while not self.timeout or num_consecutive_times_buffer_empty < self.give_up_threshold:
-            if not data_coordinator.predictions_available_for_collection_lock.acquire(timeout=LOCK_TIMEOUT_IN_SECONDS):
+        while not self.closed and (not self.timeout or num_consecutive_times_buffer_empty < self.give_up_threshold):
+            if not data_coordinator.predictions_available_for_collection_lock\
+                    .acquire(timeout=LOCK_TIMEOUT_IN_SECONDS if self.timeout else -1):
                 num_consecutive_times_buffer_empty += 1
                 continue
             else:
@@ -55,6 +61,9 @@ class PredictionCollector:
 
         if self.verbose:
             print("Total time steps collected by collector thread: {}".format(total_time_steps_collected))
+
+    def close(self):
+        self.closed = True
 
     def join(self) -> List[np.ndarray]:
         self.collector_thread.join()

@@ -1,10 +1,10 @@
 from threading import Thread
 import numpy as np
 from typing import Optional
-from time import sleep
 from datetime import datetime, timezone
 import sys
 
+from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 
 
@@ -13,8 +13,7 @@ INPUT_LOCK_TIMEOUT_IN_SECONDS = 0.01
 MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
 
-# TODO: actually, this should be writing into a buffer that empties into the dataCoordinator in a separate thread
-class FileSpectrogramStream:
+class FileSpectrogramStream(Closeable):
     max_time_steps: Optional[int]
     spectrogram_data: np.ndarray
     stream_thread: Thread
@@ -22,6 +21,7 @@ class FileSpectrogramStream:
     drop_data: bool
 
     def __init__(self, path_to_spectrogram_file: str, max_time_steps: Optional[int] = None, drop_data: bool = True):
+        super().__init__()
         self.spectrogram_data = np.load(path_to_spectrogram_file)
         if self.spectrogram_data.shape[0] < MIN_EXPECTED_SHAPE:
             self.spectrogram_data = self.spectrogram_data.T
@@ -29,7 +29,8 @@ class FileSpectrogramStream:
         self.drop_data = drop_data
 
     def start(self, data_coordinator: DataCoordinator):
-        self.stream_thread = Thread(target=self.stream, args=(data_coordinator,))
+        # 'daemon' threads are killed when the parent process dies
+        self.stream_thread = Thread(target=self.stream, args=(data_coordinator,), daemon=True)
         self.stream_thread.start()
 
     def stream(self, data_coordinator: DataCoordinator):
@@ -62,7 +63,6 @@ class FileSpectrogramStream:
                 i += 1
             except ValueError:
                 if self.drop_data:
-                    # TODO: implement a more clever mechanism for deciding when to drop data
                     i += 1
                     need_new_timestamp = True
                     print("Dropped a chunk", file=sys.stderr)

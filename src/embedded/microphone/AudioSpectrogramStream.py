@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import numpy as np
 import sys
 
+from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
@@ -15,32 +16,38 @@ AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS = 0.3
 DEFAULT_N_OVERLAPS_PER_CHUNK = 256
 
 
-class AudioSpectrogramStream:
+class AudioSpectrogramStream(Closeable):
     audio_buf: AudioBuffer
     spectrogram_extractor: SpectrogramExtractor
     stream_thread: Thread
     prev_timestamp: Optional[datetime]
     n_overlaps_per_chunk: int
     timeout: bool
+    closed: bool
 
     def __init__(self, audio_buffer: AudioBuffer, spect_extractor: SpectrogramExtractor,
                  n_overlaps_per_chunk: int = DEFAULT_N_OVERLAPS_PER_CHUNK, timeout: bool = False):
+        super().__init__()
+        self.closed = False
         self.audio_buf = audio_buffer
         self.spectrogram_extractor = spect_extractor
         self.n_overlaps_per_chunk = n_overlaps_per_chunk
         self.timeout = timeout
 
     def start(self, data_coordinator: DataCoordinator):
-        self.stream_thread = Thread(target=self.stream, args=(data_coordinator,))
+        # 'daemon' threads are killed when the parent process dies
+        self.stream_thread = Thread(target=self.stream, args=(data_coordinator,), daemon=True)
         self.stream_thread.start()
 
     def stream(self, data_coordinator: DataCoordinator):
         num_consecutive_times_audio_buf_empty = 0
         num_consecutive_times_locked_out_of_data_coordinator = 0
-        while not self.timeout or (num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD_FOR_AUDIO_BUF
-                and num_consecutive_times_locked_out_of_data_coordinator < GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR):
+        while not self.closed and (not self.timeout or
+                (num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD_FOR_AUDIO_BUF
+                    and num_consecutive_times_locked_out_of_data_coordinator < GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR)):
             # step 1: block on datacoordinator availability
-            if not data_coordinator.space_available_for_input_lock.acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS):
+            if not data_coordinator.space_available_for_input_lock\
+                    .acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS if self.timeout else -1):
                 num_consecutive_times_locked_out_of_data_coordinator += 1
                 continue
             else:
@@ -48,7 +55,8 @@ class AudioSpectrogramStream:
                 num_consecutive_times_locked_out_of_data_coordinator = 0
 
             # step 2: block on an audio buffer lock, receive input, process it into spectrogram
-            if not self.audio_buf.output_available_lock.acquire(timeout=AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS):
+            if not self.audio_buf.output_available_lock\
+                    .acquire(timeout=AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS if self.timeout else -1):
                 num_consecutive_times_audio_buf_empty += 1
                 continue
             else:
@@ -80,6 +88,9 @@ class AudioSpectrogramStream:
 
     def transform(self, spectrogram_data: np.ndarray):
         return 10*np.log10(spectrogram_data)
+
+    def close(self):
+        self.closed = True
 
     def join(self):
         self.stream_thread.join()
