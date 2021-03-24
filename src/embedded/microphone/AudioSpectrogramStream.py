@@ -21,12 +21,14 @@ class AudioSpectrogramStream:
     stream_thread: Thread
     prev_timestamp: Optional[datetime]
     n_overlaps_per_chunk: int
+    timeout: bool
 
     def __init__(self, audio_buffer: AudioBuffer, spect_extractor: SpectrogramExtractor,
-                 n_overlaps_per_chunk: int = DEFAULT_N_OVERLAPS_PER_CHUNK):
+                 n_overlaps_per_chunk: int = DEFAULT_N_OVERLAPS_PER_CHUNK, timeout: bool = False):
         self.audio_buf = audio_buffer
         self.spectrogram_extractor = spect_extractor
         self.n_overlaps_per_chunk = n_overlaps_per_chunk
+        self.timeout = timeout
 
     def start(self, data_coordinator: DataCoordinator):
         self.stream_thread = Thread(target=self.stream, args=(data_coordinator,))
@@ -35,8 +37,8 @@ class AudioSpectrogramStream:
     def stream(self, data_coordinator: DataCoordinator):
         num_consecutive_times_audio_buf_empty = 0
         num_consecutive_times_locked_out_of_data_coordinator = 0
-        while num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD_FOR_AUDIO_BUF \
-                and num_consecutive_times_locked_out_of_data_coordinator < GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR:
+        while not self.timeout or (num_consecutive_times_audio_buf_empty < GIVE_UP_THRESHOLD_FOR_AUDIO_BUF
+                and num_consecutive_times_locked_out_of_data_coordinator < GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR):
             # step 1: block on datacoordinator availability
             if not data_coordinator.space_available_for_input_lock.acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS):
                 num_consecutive_times_locked_out_of_data_coordinator += 1
@@ -63,17 +65,18 @@ class AudioSpectrogramStream:
             else:
                 num_consecutive_times_audio_buf_empty += 1
 
-        now = datetime.now(timezone.utc)
-        error_msg: str
-        if num_consecutive_times_locked_out_of_data_coordinator >= GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR:
-            error_msg = "Spectrogram Buffer too full for additional input for {} consecutive seconds." \
-                        " Spectrogram stream giving up at {}.".format(
-                num_consecutive_times_locked_out_of_data_coordinator * INPUT_LOCK_TIMEOUT_IN_SECONDS, now)
-        else:
-            error_msg = "Audio input unavailable for {} consecutive seconds." \
-                        " Spectrogram stream giving up at {}.".format(
-                num_consecutive_times_audio_buf_empty * AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS, now)
-        print(error_msg, file=sys.stderr)
+        if self.timeout:
+            now = datetime.now(timezone.utc)
+            error_msg: str
+            if num_consecutive_times_locked_out_of_data_coordinator >= GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR:
+                error_msg = "Spectrogram Buffer too full for additional input for {} consecutive seconds." \
+                            " Spectrogram stream giving up at {}.".format(
+                    num_consecutive_times_locked_out_of_data_coordinator * INPUT_LOCK_TIMEOUT_IN_SECONDS, now)
+            else:
+                error_msg = "Audio input unavailable for {} consecutive seconds." \
+                            " Spectrogram stream giving up at {}.".format(
+                    num_consecutive_times_audio_buf_empty * AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS, now)
+            print(error_msg, file=sys.stderr)
 
     def transform(self, spectrogram_data: np.ndarray):
         return 10*np.log10(spectrogram_data)

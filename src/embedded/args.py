@@ -1,0 +1,47 @@
+import argparse
+
+
+def get_embedded_listening_args():
+    parser = argparse.ArgumentParser()
+
+    # I/O arguments
+    parser.add_argument('--predicted-intervals-output-path', type=str, default="/tmp/predicted_intervals.txt",
+                        help="the location of the file that prediction intervals will be recorded to")
+    parser.add_argument('--blackout-intervals-output-path', type=str, default="/tmp/blackout_intervals.txt",
+                    help="the location of the file that blackout intervals will be recorded to")
+    parser.add_argument('--model-path', type=str, required=True,
+                        help="a path to a PyTorch model for audio classification")
+
+    # TODO: implement this
+    parser.add_argument('--spectrogram-directory', type=str, default=None,
+                        help="A directory to save positively-labeled spectrograms to." +
+                             " Spectrograms will not be saved if this argument is not specified.")
+
+    # Prediction configuration arguments
+    parser.add_argument('--batch-size', type=int, default=4,
+                        help="How many spectrogram frames the model should be run on in parallel. More powerful " +
+                             "hardware can benefit from larger values, but it may cause slowdown past a certain point.")
+    parser.add_argument('--jump', type=int, default=64,
+                        help="The offset in time-steps of adjacent predicted spectrogram frames. Must be an even " +
+                             "divisor of the model input's time dimension.")
+    parser.add_argument('--spectrogram-buffer-size-mb', type=int, default=16,
+                        help="The size of the spectrogram buffer, in MB. This will be statically allocated. The " +
+                             " optimal value will be hardware-dependent.")
+    parser.add_argument('--audio-buffer-size-mb', type=int, default=16,
+                        help="The size of the audio buffer, in MB. This will be statically allocated. The " +
+                             " optimal value will be hardware-dependent.")
+
+    # Debugging arguments
+    parser.add_argument('--verbose', action='store_true', help="Prints information for debugging.")
+    parser.add_argument('--timeout', action='store_true',
+                        help="Causes the pipeline to terminate after a while if no new data is getting in. For " +
+                        "debugging and testing.")
+
+    # STFT configuration (this is model-specific): see SpectrogramExtractor.py for explanations
+    parser.add_argument('--nfft', type=int, default=4096)
+    parser.add_argument('--hop', type=int, default=800)
+    parser.add_argument('--window', type=int, default=256)
+    parser.add_argument('--sampling-freq', type=int, default=8000)
+    parser.add_argument('--max-freq', type=int, default=150)
+
+    return parser.parse_args()

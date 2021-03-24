@@ -33,8 +33,8 @@ def integration_test_with_model(small_buffer: bool = False):
         drop_data = True
 
     spec_stream = FileSpectrogramStream.FileSpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)
-    pred_mgr = PredictionManager.PredictionManager(predictor)
-    pred_collector = PredictionCollector.PredictionCollector()
+    pred_mgr = PredictionManager.PredictionManager(predictor, timeout=True, verbose=True, give_up_threshold=100)
+    pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, give_up_threshold=100)
 
     spec_stream.start(data_coordinator)
     pred_mgr.start(data_coordinator)

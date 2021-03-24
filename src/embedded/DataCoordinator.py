@@ -71,7 +71,7 @@ class DataCoordinator:
                  min_appendable_time_steps: Optional[int] = None,
                  # Do not accept input if fewer than this number of rows are unallocated
                  min_free_space_for_input: Optional[int] = None,
-                 # TODO: explain prediction load
+                 # Predictions will not be collected unless at least the following proportion of the prediction buffer is full
                  prediction_load: float = 0.005):
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
