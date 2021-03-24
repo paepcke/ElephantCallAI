@@ -22,6 +22,8 @@ def get_embedded_listening_args():
     parser.add_argument('--jump', type=int, default=64,
                         help="The offset in time-steps of adjacent predicted spectrogram frames. Must be an even " +
                              "divisor of the model input's time dimension.")
+    parser.add_argument('--prediction-threshold', type=float, default=0.5,
+                        help="If a prediction is greater than or equal to this value, it will be classified as positive")
     parser.add_argument('--spectrogram-buffer-size-mb', type=int, default=16,
                         help="The size of the spectrogram buffer, in MB. This will be statically allocated. The " +
                              " optimal value will be hardware-dependent.")
@@ -41,5 +43,7 @@ def get_embedded_listening_args():
     parser.add_argument('--window', type=int, default=256)
     parser.add_argument('--sampling-freq', type=int, default=8000)
     parser.add_argument('--max-freq', type=int, default=150)
+
+    # TODO: add arguments that allow variation in model input shape?
 
     return parser.parse_args()

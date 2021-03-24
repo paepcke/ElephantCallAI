@@ -19,7 +19,7 @@ BYTES_PER_MB = 1024*1024
 
 def main():
     """This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
-            run it through the model, and it will do so indefinitely."""
+            run it through the provided model, and it will do so indefinitely."""
     args = get_embedded_listening_args()
 
     start = datetime.now(timezone.utc)
@@ -36,6 +36,7 @@ def main():
 
     data_coordinator = DataCoordinator.DataCoordinator(
         args.predicted_intervals_output_path, args.blackout_intervals_output_path, jump=jump,
+        prediction_threshold=args.prediction_threshold,
         spectrogram_capture_dir=args.spectrogram_capture_dir,
         override_buffer_size=convert_mb_to_num_elements(args.spectrogram_buffer_size_mb,
                                                         MODEL_INPUT_FREQUENCY_BINS * SpectrogramBuffer.BYTES_PER_ELEMENT))

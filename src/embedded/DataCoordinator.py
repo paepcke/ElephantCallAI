@@ -35,6 +35,9 @@ class DataCoordinator(Closeable):
     # A piece of state that corresponds to a potentially unfinished positively-detected interval.
     current_spectrogram_capture: Optional[np.ndarray]
 
+    # If a prediction is greater than or equal to this value, it is classified as positive.
+    prediction_threshold: float
+
 
     # Thread synchronization states
 
@@ -81,13 +84,17 @@ class DataCoordinator(Closeable):
                  # Predictions will not be collected unless at least the following proportion of the prediction buffer is full
                  prediction_load: float = 0.005,
                  # A directory to save positively-predicted spectrograms to. The spectrograms are not saved if this is not specified.
-                 spectrogram_capture_dir: Optional[str] = None):
+                 spectrogram_capture_dir: Optional[str] = None,
+                 # prediction outputs for each time step are between 0 and 1. If any are greater than or equal to
+                 # this threshold, those will be classified as positive.
+                 prediction_threshold: float = PREDICTION_THRESHOLD):
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
         self.prediction_transition_state = non_detected_transition_state()
+        self.prediction_threshold = prediction_threshold
 
         self.blackout_interval_recorder = IntervalRecorder(blackout_interval_output_path)
 
@@ -329,7 +336,7 @@ class DataCoordinator(Closeable):
 
             # handle next time increment of prediction
             if self.prediction_transition_state.is_detected():
-                if finalized_predictions[i] >= PREDICTION_THRESHOLD:
+                if finalized_predictions[i] >= self.prediction_threshold:
                     # expand the detected event by one time step
                     self.prediction_transition_state.num_consecutive_ones += 1
                 else:
@@ -342,7 +349,7 @@ class DataCoordinator(Closeable):
                                               extending_current_capture=extending_current_capture)
                     self.prediction_transition_state = non_detected_transition_state()
                     extending_current_capture = False
-            elif finalized_predictions[i] >= PREDICTION_THRESHOLD:
+            elif finalized_predictions[i] >= self.prediction_threshold:
                 # begin a new detection event
                 start_time = cur_timestamp[1] + (i - cur_timestamp[0])*TIME_DELTA_PER_TIME_STEP
                 detect_start_idx = i
@@ -426,10 +433,10 @@ class DataCoordinator(Closeable):
     def update_collection_lock(self):
         with self.collection_sync_lock:
             metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
-            prediction_threshold = self.spectrogram_buffer.buffer.shape[0] * self.prediction_load
+            num_predictions_threshold = self.spectrogram_buffer.buffer.shape[0] * self.prediction_load
             pending_predictions = metadata_snapshot.rows_allocated - metadata_snapshot.rows_unprocessed
             # 1. If there's some configurably large amount of pending predictions, unlock it
-            if pending_predictions >= prediction_threshold and pending_predictions > 0:
+            if pending_predictions >= num_predictions_threshold and pending_predictions > 0:
                 # unlock it if possible
                 if self._holding_collection_lock:
                     self._holding_collection_lock = False
