@@ -80,7 +80,6 @@ class SpectrogramBuffer:
             metadata_snapshot = SpectrogramBufferMetadata(self)
         return metadata_snapshot
 
-    # TODO: an approach where the STFT writes directly into this buffer?
     def append_data(self, new_data: np.ndarray, time: Optional[datetime] = None):
         """Append new unprocessed data to the buffer."""
         with self.metadata_mutex:
@@ -89,7 +88,6 @@ class SpectrogramBuffer:
         available_time_distance_in_buf = self.buffer.shape[0] - metadata_snapshot.rows_allocated
 
         if available_time_distance_in_buf < new_data_time_len:
-            # TODO: handle this more gracefully?
             raise ValueError("Not enough space in the buffer for new data!")
         self._assert_sufficient_time_steps(new_data, time)
 

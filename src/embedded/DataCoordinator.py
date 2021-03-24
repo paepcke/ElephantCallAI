@@ -2,7 +2,7 @@ from typing import Optional, Deque, Tuple, List
 import numpy as np
 from datetime import datetime
 from collections import deque
-import sys
+import sys, os
 from threading import Lock
 
 from embedded.Closeable import Closeable
@@ -28,6 +28,12 @@ class DataCoordinator(Closeable):
     overlap_allowance: int
     prediction_load: float  # If predictions take up at least this proportion of the buffer, allow them to be collected
     min_free_space_for_input: int
+
+    # A directory to save positively-predicted spectrograms to
+    spectrogram_capture_dir: Optional[str]
+
+    # A piece of state that corresponds to a potentially unfinished positively-detected interval.
+    current_spectrogram_capture: Optional[np.ndarray]
 
 
     # Thread synchronization states
@@ -73,7 +79,9 @@ class DataCoordinator(Closeable):
                  # Do not accept input if fewer than this number of rows are unallocated
                  min_free_space_for_input: Optional[int] = None,
                  # Predictions will not be collected unless at least the following proportion of the prediction buffer is full
-                 prediction_load: float = 0.005):
+                 prediction_load: float = 0.005,
+                 # A directory to save positively-predicted spectrograms to. The spectrograms are not saved if this is not specified.
+                 spectrogram_capture_dir: Optional[str] = None):
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
@@ -82,6 +90,10 @@ class DataCoordinator(Closeable):
         self.prediction_transition_state = non_detected_transition_state()
 
         self.blackout_interval_recorder = IntervalRecorder(blackout_interval_output_path)
+
+        self.spectrogram_capture_dir = spectrogram_capture_dir
+        self.current_spectrogram_capture = None
+        self._assert_spectrogram_capture_dir()
 
         self.min_free_space_for_input = min_free_space_for_input
         if min_free_space_for_input is None or self.min_free_space_for_input < self.spectrogram_buffer.min_appendable_time_steps:
@@ -259,6 +271,14 @@ class DataCoordinator(Closeable):
                     buf_timestamp = buffer_timestamps[buf_idx]
                     buf_timestamp_dist = self.spectrogram_buffer.circular_distance(end_idx, buf_timestamp[0])
 
+        spect_data = None
+        if self.spectrogram_capture_dir is not None:
+            # spectrogram data for use in capturing
+            spect_data, _ = self.spectrogram_buffer.consume_data(len(final_predictions), True)
+
+        # create time intervals for detection events, save them to a file
+        intervals = self.get_detection_intervals(final_predictions, timestamps, spect_data)
+
         # free the underlying memory in the spectrogrambuffer
         self.spectrogram_buffer.mark_post_processing_complete(time_window)
 
@@ -266,22 +286,30 @@ class DataCoordinator(Closeable):
         self.update_input_lock()
         self.update_collection_lock()
 
-        # create time intervals for detection events, save them to a file
-        intervals = self.get_detection_intervals(final_predictions, timestamps)
+        # save detection intervals to interval file
         self.save_detection_intervals(intervals)
 
         return time_window, final_predictions
 
     # Start with the left-over transition state and a deque of timestamps, return a list of event intervals
-    def get_detection_intervals(self, finalized_predictions: np.ndarray, timestamps: Deque[Tuple[int, datetime]]) -> List[Tuple[datetime, datetime]]:
+    # If a spectrogram_capture_dir is defined, this method will also save positively-classified spectrograms to a file.
+    def get_detection_intervals(self, finalized_predictions: np.ndarray, timestamps: Deque[Tuple[int, datetime]],
+                                spect_data: Optional[np.ndarray]) -> List[Tuple[datetime, datetime]]:
         intervals = list()
         cur_timestamp = timestamps.popleft()
+        extending_current_capture = False
+        detect_start_idx = 0
 
         if self.prediction_transition_state.is_detected():
             tentative_interval_end = self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP
             if tentative_interval_end != cur_timestamp[1]:
-                intervals.append((self.prediction_transition_state.start_time, tentative_interval_end))
+                interval = (self.prediction_transition_state.start_time, tentative_interval_end)
+                intervals.append(interval)
+                if self.spectrogram_capture_dir is not None:
+                    self._capture_spectrogram(interval, ignore_spectrogram=True)
                 self.prediction_transition_state = non_detected_transition_state()
+            elif self.spectrogram_capture_dir is not None:
+                extending_current_capture = True
 
         for i in range(0, finalized_predictions.shape[0]):
             if len(timestamps) > 0 and timestamps[0][0] <= i:
@@ -290,9 +318,14 @@ class DataCoordinator(Closeable):
                 if cur_timestamp[1] != ((cur_timestamp[0] - prev_timestamp[0])*TIME_DELTA_PER_TIME_STEP + prev_timestamp[1]):
                     # This is a time discontinuity. We can only detect call events that cross this boundary as two separate events; one on each side of the discontinuity.
                     if self.prediction_transition_state.is_detected():
-                        intervals.append((self.prediction_transition_state.start_time,
-                                          self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
+                        interval = (self.prediction_transition_state.start_time,
+                                          self.prediction_transition_state.start_time +
+                                    self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
+                        intervals.append(interval)
+                        self._capture_spectrogram(interval, begin_idx=detect_start_idx, end_idx=i, spectrogram=spect_data,
+                                                  extending_current_capture=extending_current_capture)
                         self.prediction_transition_state = non_detected_transition_state()
+                        extending_current_capture = False
 
             # handle next time increment of prediction
             if self.prediction_transition_state.is_detected():
@@ -301,15 +334,56 @@ class DataCoordinator(Closeable):
                     self.prediction_transition_state.num_consecutive_ones += 1
                 else:
                     # finalize the detected event
-                    intervals.append((self.prediction_transition_state.start_time,
-                                      self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP))
+                    interval = (self.prediction_transition_state.start_time,
+                                      self.prediction_transition_state.start_time +
+                                self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
+                    intervals.append(interval)
+                    self._capture_spectrogram(interval, begin_idx=detect_start_idx, end_idx=i, spectrogram=spect_data,
+                                              extending_current_capture=extending_current_capture)
                     self.prediction_transition_state = non_detected_transition_state()
+                    extending_current_capture = False
             elif finalized_predictions[i] >= PREDICTION_THRESHOLD:
                 # begin a new detection event
                 start_time = cur_timestamp[1] + (i - cur_timestamp[0])*TIME_DELTA_PER_TIME_STEP
+                detect_start_idx = i
                 self.prediction_transition_state = TransitionState(start_time, 1)
 
+        if self.spectrogram_capture_dir is not None:
+            if extending_current_capture:
+                self._combine_captured_spectrogram(spect_data)
+            elif self.prediction_transition_state.is_detected():
+                self.current_spectrogram_capture = np.copy(spect_data[detect_start_idx:, :])
+
         return intervals
+
+    def _capture_spectrogram(self, time_bounds: Tuple[datetime, datetime], begin_idx: int = -1, end_idx: int = -1,
+                             spectrogram: Optional[np.ndarray] = None, ignore_spectrogram: bool = False,
+                             extending_current_capture: bool = False):
+        if self.spectrogram_capture_dir is None:
+            return
+
+        if ignore_spectrogram and self.current_spectrogram_capture is not None:
+            spect_to_save = self.current_spectrogram_capture
+        elif extending_current_capture and self.current_spectrogram_capture is not None:
+            spect_to_save = np.concatenate([self.current_spectrogram_capture, spectrogram[:end_idx, :]])
+        else:
+            spect_to_save = spectrogram[begin_idx:end_idx, :]
+
+        filename = "{}_to_{}.npy".format(time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f"),
+                                         time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f"))
+        np.save(self.spectrogram_capture_dir + "/" + filename, spect_to_save)
+        self.current_spectrogram_capture = None
+
+    def _combine_captured_spectrogram(self, new_spectrogram: np.ndarray):
+        self.current_spectrogram_capture = np.concatenate([self.current_spectrogram_capture, new_spectrogram])
+
+    def _assert_spectrogram_capture_dir(self):
+        if self.spectrogram_capture_dir is None:
+            return
+        if os.path.isdir(self.spectrogram_capture_dir):
+            return
+        raise ValueError("The spectrogram capture directory specified, '{}', does not exist!"
+                         .format(self.spectrogram_capture_dir))
 
     def update_input_lock(self):
         with self.input_sync_lock:

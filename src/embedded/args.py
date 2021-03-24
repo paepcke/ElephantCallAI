@@ -11,9 +11,7 @@ def get_embedded_listening_args():
                     help="the location of the file that blackout intervals will be recorded to")
     parser.add_argument('--model-path', type=str, required=True,
                         help="a path to a PyTorch model for audio classification")
-
-    # TODO: implement this
-    parser.add_argument('--spectrogram-directory', type=str, default=None,
+    parser.add_argument('--spectrogram-capture-dir', type=str, default=None,
                         help="A directory to save positively-labeled spectrograms to." +
                              " Spectrograms will not be saved if this argument is not specified.")
 

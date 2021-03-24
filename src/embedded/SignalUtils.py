@@ -13,7 +13,7 @@ def set_signal_handler(closeables: List[Closeable], start_time: datetime, timeou
             closeable.close()
 
         finish = datetime.now(timezone.utc)
-        print("Listening process finished: Total duration was {} to {}".format(start_time, finish))
+        print("Listening process finished: Time interval was {} to {}".format(start_time, finish))
         if not timeout:
             # We don't want to wait for our threads to acquire and release any locks, this should be snappy
             sys.exit(0)

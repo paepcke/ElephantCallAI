@@ -257,7 +257,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.prediction_transition_state = TransitionState(now, 2)
 
-        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
+        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps, None)
         coordinator.close()
 
         self.assertEqual(4, len(intervals))
@@ -279,7 +279,7 @@ class DataCoordinatorTest(unittest.TestCase):
         finalized_predictions = np.ones((10,))
         finalized_predictions[9] = 0
 
-        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps)
+        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps, None)
         coordinator.close()
 
         self.assertEqual(1, len(intervals))
