@@ -36,9 +36,19 @@ NVIDIA has a forum page detailing how to get some necessary PyTorch dependencies
 
 ## Model Constraints
 
+The following details constrain models to the existing codebase, but modification of the codebase
+to accommodate slight differences should not be difficult.
+
 Audio is sampled at 8000 Hz and quantized to 16-bit integer samples. Your model input must be a spectrogram,
-the default shape is 256 time steps by 77 frequency components. Your model output must be a 1D vector of predictions for
+the required shape is 256 time steps by 77 frequency components. There will also be a batch dimension;
+your model must accept inputs of shape (num_batches, 256, 77). Your model output must be a 1D vector of predictions for
 each time step in the input. These things can be customized, but you may have to edit the code.
+
+Currently, after taking the STFT of audio data, a transform is applied to each element x: 10*log10(x). The model should
+be trained for this. We also normalize each prediction frame (256x77 input tensor) at prediction time so that
+the arithmetic mean of all elements in the frame is 0 and the variance of all elements in the frame is 1. These methods
+can be edited fairly easily in `FileSpectrogramStream.py`, `AudioSpectrogramStream.py`, and `PredictionUtils.py` if
+necessary to accommodate models trained with different configurations.
 
 Based on the configurable `jump` parameter, a number of 256x77 spectrogram frames containing a particular timestep will be used
 to make predictions for that timestep. The arithmetic mean of each prediction for a particular timestep is passed into
