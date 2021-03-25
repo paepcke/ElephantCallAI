@@ -38,11 +38,18 @@ def get_embedded_listening_args():
                         "debugging and testing.")
 
     # STFT configuration (this is model-specific): see SpectrogramExtractor.py for explanations
-    parser.add_argument('--nfft', type=int, default=4096)
-    parser.add_argument('--hop', type=int, default=800)
-    parser.add_argument('--window', type=int, default=256)
-    parser.add_argument('--sampling-freq', type=int, default=8000)
-    parser.add_argument('--max-freq', type=int, default=150)
+    parser.add_argument('--nfft', type=int, default=4096,
+                        help="Window size used for creating spectrograms. " +
+                             "This should match the setting used to train the model.")
+    parser.add_argument('--hop', type=int, default=800,
+                        help="Hop size used for creating spectrograms (hop = nfft - n_overlap). " +
+                             "This should match the setting used to train the model.")
+    parser.add_argument('--sampling-freq', type=int, default=8000,
+                        help="The frequency at which the data is sampled. " +
+                        "This should match the setting used to train the model.")
+    parser.add_argument('--max-freq', type=int, default=150,
+                        help="Frequencies above this are omitted from generated spectrograms. " +
+                        "This should match the setting used to train the model.")
 
     # TODO: add arguments that allow variation in model input shape?
 

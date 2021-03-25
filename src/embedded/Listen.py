@@ -45,7 +45,7 @@ def main():
                                min_consumable_rows=args.nfft + (MODEL_INPUT_TIMESTEPS - 1) * args.hop,
                                override_buffer_size=convert_mb_to_num_elements(args.audio_buffer_size_mb,
                                                                                AudioBuffer.BYTES_PER_ELEMENT))
-    spec_extractor = SpectrogramExtractor(nfft=args.nfft, pad_to=args.nfft, hop=args.hop, window=args.window,
+    spec_extractor = SpectrogramExtractor(nfft=args.nfft, pad_to=args.nfft, hop=args.hop,
                                           max_freq=args.max_freq, sampling_freq=args.sampling_freq)
 
     audio_capturer = AudioCapturer(audio_buffer, frames_per_buffer=args.nfft, sampling_freq=args.sampling_freq)
