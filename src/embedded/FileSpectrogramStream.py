@@ -19,9 +19,11 @@ class FileSpectrogramStream(Closeable):
     stream_thread: Thread
     # If there isn't room in the buffer and 'drop_data' is true, we don't re-attempt to buffer this data, instead moving on to the next batch
     drop_data: bool
+    closed: bool
 
     def __init__(self, path_to_spectrogram_file: str, max_time_steps: Optional[int] = None, drop_data: bool = True):
         super().__init__()
+        self.closed = False
         self.spectrogram_data = np.load(path_to_spectrogram_file)
         if self.spectrogram_data.shape[0] < MIN_EXPECTED_SHAPE:
             self.spectrogram_data = self.spectrogram_data.T
@@ -44,7 +46,7 @@ class FileSpectrogramStream(Closeable):
         need_new_timestamp = True
         i = 0
 
-        while i < max_chunks:
+        while not self.closed and i < max_chunks:
             if not data_coordinator.space_available_for_input_lock.acquire(timeout=INPUT_LOCK_TIMEOUT_IN_SECONDS):
                 if self.drop_data:
                     i += 1
@@ -71,6 +73,9 @@ class FileSpectrogramStream(Closeable):
 
     def transform(self, spectrogram_data: np.ndarray):
         return 10*np.log10(spectrogram_data)
+
+    def close(self):
+        self.closed = True
 
     def join(self):
         self.stream_thread.join()
