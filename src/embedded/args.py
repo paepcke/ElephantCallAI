@@ -2,6 +2,7 @@ import argparse
 
 
 def get_embedded_listening_args():
+    """Command-line arguments for Listen.py are configured here"""
     parser = argparse.ArgumentParser()
 
     # I/O arguments

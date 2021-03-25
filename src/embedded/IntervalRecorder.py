@@ -8,6 +8,7 @@ FLUSH_COOLDOWN = timedelta(minutes=5)
 
 
 class IntervalRecorder(Closeable):
+    """An object which exposes a simple interface to insert interval data into a file."""
     interval_file_path: str
     file_writer: IO
     most_recent_write: datetime

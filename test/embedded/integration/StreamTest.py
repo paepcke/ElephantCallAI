@@ -15,6 +15,8 @@ LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy
 
 
 def integration_test_with_model(small_buffer: bool = False):
+    """This test will bypass the audio portion of the pipeline, streaming spectrogram data
+    from a file into the DataCoordinator. Useful for testing this part in isolation."""
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))

@@ -17,6 +17,8 @@ DEFAULT_N_OVERLAPS_PER_CHUNK = 256
 
 
 class AudioSpectrogramStream(Closeable):
+    """An object that takes audio data from an AudioBuffer, performs an STFT conversion on it,
+    and appends it to a DataCoordinator."""
     audio_buf: AudioBuffer
     spectrogram_extractor: SpectrogramExtractor
     stream_thread: Thread
@@ -87,6 +89,8 @@ class AudioSpectrogramStream(Closeable):
             print(error_msg, file=sys.stderr)
 
     def transform(self, spectrogram_data: np.ndarray):
+        """A transformation applied to spectrogram data specific to the model with which
+        this code was developed. It may be changed for other models."""
         return 10*np.log10(spectrogram_data)
 
     def close(self):

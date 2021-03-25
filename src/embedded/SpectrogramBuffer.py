@@ -22,8 +22,11 @@ MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 # This represents the length of the non-overlapping segments of each time window.
 TIME_DELTA_PER_TIME_STEP = timedelta(seconds=0.1)
 
-"""A thread-safe spectrogram buffer."""
+
 class SpectrogramBuffer:
+    """A thread-safe spectrogram buffer. No more than one thread should concurrently append data.
+    No more than one thread should concurrently make predictions or consume unprocessed data.
+    No more than one thread should concurrently consume data for post-processing or free space."""
     buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
 
     # an index into the first dimension of the buffer indicating the data between 'processed' and this has not been evaluated by the model
@@ -76,6 +79,7 @@ class SpectrogramBuffer:
         self.timestamp_mutex = Lock()
 
     def get_metadata_snapshot(self):
+        """Returns a consistent snapshot of this object's metadata"""
         with self.metadata_mutex:
             metadata_snapshot = SpectrogramBufferMetadata(self)
         return metadata_snapshot

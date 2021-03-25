@@ -12,7 +12,8 @@ DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 class ModelPredictor(Predictor):
-    """A predictor that uses a pre-trained PyTorch model. A specific input and output shape is required here!"""
+    """A predictor that uses a pre-trained PyTorch model. A specific input and output shape is required here,
+    (num_batches, 256, 77) and (num_batches, 256) respectively."""
     model: nn.Module
     batch_size: int
     jump: int

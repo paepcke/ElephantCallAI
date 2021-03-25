@@ -13,6 +13,8 @@ TIME_KEY = "input_buffer_adc_time"
 
 
 class AudioCapturer(Closeable):
+    """An object that listens to a USB microphone and asynchronously appends gathered data
+    to an AudioBuffer."""
     audio_buf: AudioBuffer
     sampling_freq: int
     stream: pyaudio.Stream
@@ -37,6 +39,8 @@ class AudioCapturer(Closeable):
         self.dropped_prev_segment = True
 
     def _stream_callback(self, in_data, frame_count, time_info, status_flags):
+        """This is invoked by PyAudio every time a configurable amount of audio data
+        is collected by the microphone"""
         if frame_count != self.frames_per_buffer:
             raise ValueError("Frame_count and frames_per_buffer not equal")
 

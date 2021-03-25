@@ -6,6 +6,8 @@ from embedded.Closeable import Closeable
 
 
 def set_signal_handler(closeables: List[Closeable], start_time: datetime, timeout: bool = False):
+    """Configures behavior on SIGTERM or SIGINT (generally a user killing the process with 'kill' or Ctrl+C)."""
+
     def handler(signum, frame):
         print("Received SIGTERM or SIGINT, closing interval files and terminating prediction...", file=sys.stderr)
 

@@ -11,6 +11,8 @@ LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
 class PredictionCollector(Closeable):
+    """An object which governs a thread that gathers predictions made by a model and converts them
+    into useful output."""
     collector_thread: Thread
     timeout: bool
     verbose: bool
@@ -65,6 +67,6 @@ class PredictionCollector(Closeable):
     def close(self):
         self.closed = True
 
-    def join(self) -> List[np.ndarray]:
+    def join(self) -> Optional[List[np.ndarray]]:
         self.collector_thread.join()
         return self.predictions_list

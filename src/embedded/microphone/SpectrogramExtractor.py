@@ -3,6 +3,8 @@ from matplotlib import mlab as ml
 
 
 class SpectrogramExtractor:
+    """An object that encapsulates STFT settings to provide a simple interface for
+    performing a frequency transform."""
     nfft: int  # Window size used for creating spectrograms
     hop: int  # Hop size used for creating spectrograms
     max_freq: int  # Determines the maximum frequency band we keep

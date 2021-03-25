@@ -14,6 +14,8 @@ MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
 
 class FileSpectrogramStream(Closeable):
+    """An object which governs a thread that inserts spectrogram data from a file into a
+    DataCoordinator object in chunks. Used for testing."""
     max_time_steps: Optional[int]
     spectrogram_data: np.ndarray
     stream_thread: Thread
@@ -72,6 +74,8 @@ class FileSpectrogramStream(Closeable):
         print("Done streaming spectrogram data, inserted {} rows".format(i*CHUNK_SIZE))
 
     def transform(self, spectrogram_data: np.ndarray):
+        """A transformation applied to spectrogram data specific to the model with which
+        this code was developed. It may be changed for other models."""
         return 10*np.log10(spectrogram_data)
 
     def close(self):

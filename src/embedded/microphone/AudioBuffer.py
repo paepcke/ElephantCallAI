@@ -20,7 +20,9 @@ MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 
 
 class AudioBuffer:
-    """A thread-safe audio buffer."""
+    """A thread-safe audio buffer. For concurrency control,
+    no more than one thread should be appending data to the buffer and no more than one thread should be consuming
+    it. These do not have to be the same thread."""
 
     buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
 
@@ -81,6 +83,7 @@ class AudioBuffer:
         self._holding_output_lock = True
 
     def get_metadata_snapshot(self):
+        """Returns a consistent snapshot of this object's metadata"""
         with self.metadata_mutex:
             metadata_snapshot = AudioBufferMetadata(self)
         return metadata_snapshot

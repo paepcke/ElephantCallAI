@@ -3,7 +3,7 @@ import numpy as np
 
 
 class PredictionBuffer:
-    """A 1-D numpy array that's also a ring buffer"""
+    """A 1-D numpy array that's also a ring buffer. Used for storing predictions."""
     predictions: np.ndarray
     overlap_counts: np.ndarray
 

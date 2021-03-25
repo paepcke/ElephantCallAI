@@ -17,7 +17,11 @@ PREDICTION_THRESHOLD = 0.5
 
 class DataCoordinator(Closeable):
     """An object that abstracts out the unsightly ring-buffer indexing used when storing spectrograms and predictions.
-    Extracts intervals of continuously-detected positive predictions and saves these intervals to a file."""
+    Extracts intervals of continuously-detected positive predictions and saves these intervals to a file.
+
+    This is thread-safe, with some conditions: No more than one thread should concurrently append data.
+    No more than one thread should concurrently make predictions or consume unprocessed data.
+    No more than one thread should concurrently consume data for post-processing or free space."""
     spectrogram_buffer: SpectrogramBuffer
     prediction_buffer: PredictionBuffer
     prediction_transition_state: TransitionState
