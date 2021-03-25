@@ -11,12 +11,10 @@ from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 from embedded.predictors import ModelPredictor
 
 # these hard-coded resource paths can be swapped out with environment variables later
-SPECTROGRAM_NPY_FILE = "../../../elephant_dataset/Test_Spectrograms/nn10b_20180604_spec.npy"
-MODEL_PATH = "../../../models/remote_model.pt"
+MODEL_PATH = "../../../../models/remote_model.pt"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
-LABELS_PATH = "../../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy"
 
 
 def integration_test_with_model_and_audio(small_buffer: bool = False):

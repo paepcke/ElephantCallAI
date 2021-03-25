@@ -106,14 +106,12 @@ class DataCoordinator(Closeable):
         if min_free_space_for_input is None or self.min_free_space_for_input < self.spectrogram_buffer.min_appendable_time_steps:
             self.min_free_space_for_input = self.spectrogram_buffer.min_appendable_time_steps
 
-        if jump is None:
+        if jump is None or jump == 0:
             print("WARNING: DataCoordinator overlap_allowance parameter is 0. There will not be any overlap between "
                   "evaluated spectrogram frames. Please make sure this is intentional.", file=sys.stderr)
             self.overlap_allowance = 0
         else:
-            if jump == 0:
-                raise ValueError("jump must be greater than 0")
-            elif jump > self.spectrogram_buffer.min_appendable_time_steps:
+            if jump > self.spectrogram_buffer.min_appendable_time_steps:
                 raise ValueError("jump must be less than or equal to min appendable time steps")
             elif self.spectrogram_buffer.min_appendable_time_steps % jump != 0:
                 raise ValueError("jump must evenly divide min appendable time steps")
