@@ -15,6 +15,9 @@ def get_embedded_listening_args():
     parser.add_argument('--spectrogram-capture-dir', type=str, default=None,
                         help="A directory to save positively-labeled spectrograms to." +
                              " Spectrograms will not be saved if this argument is not specified.")
+    parser.add_argument('--captured-disk-usage-limit', type=float, default=1.,
+                        help="A floating-point number of gigabytes. Once this much spectrogram data has been saved to " +
+                             "disk, no more spectrograms will be captured (prediction intervals will still be recorded).")
 
     # Prediction configuration arguments
     parser.add_argument('--batch-size', type=int, default=4,

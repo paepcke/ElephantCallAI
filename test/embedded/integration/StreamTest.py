@@ -27,11 +27,13 @@ def integration_test_with_model(small_buffer: bool = False):
 
     if small_buffer:
         data_coordinator = DataCoordinator.DataCoordinator(
-            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=2048 * 8, jump=jump)
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=2048 * 8, jump=jump,
+            min_collectable_predictions=1)
         drop_data = False
     else:
         data_coordinator = DataCoordinator.DataCoordinator(
-            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump)
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump,
+            min_collectable_predictions=1)
         drop_data = True
 
     spec_stream = FileSpectrogramStream.FileSpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)

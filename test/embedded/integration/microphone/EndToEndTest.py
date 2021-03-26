@@ -41,9 +41,8 @@ def integration_test_with_model_and_audio(small_buffer: bool = False):
 
     audio_capturer = AudioCapturer(audio_buffer, frames_per_buffer=4096)
     spec_stream = AudioSpectrogramStream(audio_buffer, spec_extractor, timeout=True)
-    pred_mgr = PredictionManager.PredictionManager(predictor, timeout=True, verbose=True, give_up_threshold=100)
-    pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, give_up_threshold=100,
-                                                             keep_predictions=True)
+    pred_mgr = PredictionManager.PredictionManager(predictor, timeout=True, verbose=True)
+    pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, keep_predictions=True)
 
     SignalUtils.set_signal_handler([audio_capturer, spec_stream, pred_mgr, pred_collector, data_coordinator],
                                    start_time=start, timeout=True)

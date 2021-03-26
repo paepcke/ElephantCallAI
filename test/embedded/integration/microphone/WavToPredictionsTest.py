@@ -31,10 +31,11 @@ def integration_test_with_model_and_wav(small_buffer: bool = False):
 
     if small_buffer:
         data_coordinator = DataCoordinator.DataCoordinator(
-            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=2048 * 8, jump=jump)
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=2048 * 8, jump=jump,
+            min_collectable_predictions=1)
     else:
         data_coordinator = DataCoordinator.DataCoordinator(
-            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump)
+            PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, jump=jump, min_collectable_predictions=1)
 
     audio_buffer = AudioBuffer(min_appendable_time_steps=4096, min_consumable_rows=4096 + 255*800, override_buffer_size=(8000*4000 + 256))
     spec_extractor = SpectrogramExtractor()

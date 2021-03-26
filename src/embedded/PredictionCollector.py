@@ -6,8 +6,15 @@ from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 
 GIVE_UP_THRESHOLD = 250
-TIME_WINDOW = 256
 LOCK_TIMEOUT_IN_SECONDS = 0.1
+
+
+'''
+This constant determines the number of time steps in spectrograms saved for manual inspection.
+For convenience, it is set here to the number of 
+'''
+COLLECTION_WINDOW = 256
+
 
 
 class PredictionCollector(Closeable):
@@ -49,7 +56,7 @@ class PredictionCollector(Closeable):
                 continue
             else:
                 data_coordinator.predictions_available_for_collection_lock.release()
-            num_time_steps_collected, predictions = data_coordinator.finalize_predictions(TIME_WINDOW)
+            num_time_steps_collected, predictions = data_coordinator.finalize_predictions(COLLECTION_WINDOW)
             total_time_steps_collected += num_time_steps_collected
             if num_time_steps_collected != 0:
                 if self.verbose:

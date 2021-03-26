@@ -257,10 +257,11 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.prediction_transition_state = TransitionState(now, 2)
 
-        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps, None)
+        intervals, found_discontinuity = coordinator.get_detection_intervals(finalized_predictions, timestamps)
         coordinator.close()
 
         self.assertEqual(4, len(intervals))
+        self.assertTrue(found_discontinuity)
         self.assertEqual((now, now + 5*TIME_DELTA_PER_TIME_STEP), intervals[0])
         self.assertEqual((time1, time1 + 1*TIME_DELTA_PER_TIME_STEP), intervals[1])
         self.assertEqual((time2, time2 + 2 * TIME_DELTA_PER_TIME_STEP), intervals[2])
@@ -279,7 +280,7 @@ class DataCoordinatorTest(unittest.TestCase):
         finalized_predictions = np.ones((10,))
         finalized_predictions[9] = 0
 
-        intervals = coordinator.get_detection_intervals(finalized_predictions, timestamps, None)
+        intervals, found_discontinuity = coordinator.get_detection_intervals(finalized_predictions, timestamps)
         coordinator.close()
 
         self.assertEqual(1, len(intervals))
@@ -287,6 +288,8 @@ class DataCoordinatorTest(unittest.TestCase):
 
         self.assertIsNone(coordinator.prediction_transition_state.start_time)
         self.assertIsNone(coordinator.prediction_transition_state.num_consecutive_ones)
+
+        self.assertFalse(found_discontinuity)
 
     def test_write_intervals_to_file(self):
         clear_interval_files()

@@ -77,12 +77,24 @@ through the `--blackout-intervals-output-path` argument of `Listen.py`. It conta
 in UTC time, intervals for which the model did not make a prediction. This may happen because new data is collected
 faster than it can be processed. It should be unlikely unless your model is extremely slow for some reason.
 
+### Spectrogram Capturing
+
 If you want to save spectrogram fragments that are labeled as positive by your model, you can specify a directory to
 save these fragments to. By default, fragments are not saved because this is somewhat resource-intensive. Specify
-the desired directory with the `--spectrogram-capture-dir` argument to `Listen.py`. `*.npy` files will be saved there
+the desired directory with the `--spectrogram-capture-dir` argument to `Listen.py`. `*.pkl` files will be saved there
 with the detection intervals in UTC being used for the file names 
-(e.g., `2021-03-25-21-57-28.671189_to_2021-03-25-21-57-30.771189.npy`). As of now, these files only contain spectrogram
-data for time steps that are classified as positive.
+(e.g., `2021-03-25-21-57-28.671189_to_2021-03-25-21-57-30.771189.pkl`). As of now, each of these spectrograms contains
+256 time steps (about 27 seconds) of data and *every* time interval containing any predictions above the threshold
+will be represented in one of these saved spectrograms.
+
+When unpickled, these files yield Dictionary objects with two numpy arrays: one for the spectrogram and another for the
+model's predictions. To find out which time steps were predicted positive, compare a time step's prediction value to the
+threshold used for the invocation of `Listen.py` that generated the .pkl file. See 
+`src/embedded/analysis/CapturedSpectrogramLoader.py` for an example of unpickling a file like this.
+
+If you plan to leave `Listen.py` running for a long time, you may want to set a cap on the disk space taken up by all of
+these .pkl files. Use `--captured-disk-usage-limit <NUMBER OF GIGABYTES>` to accomplish this (runs will only track 
+their own disk usage, even if adding files to a directory that already has .pkl files in it, so be mindful).
 
 ## Contributing
 

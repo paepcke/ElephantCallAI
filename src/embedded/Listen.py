@@ -38,6 +38,7 @@ def main():
         args.predicted_intervals_output_path, args.blackout_intervals_output_path, jump=jump,
         prediction_threshold=args.prediction_threshold,
         spectrogram_capture_dir=args.spectrogram_capture_dir,
+        max_captured_disk_usage=args.captured_disk_usage_limit,
         override_buffer_size=convert_mb_to_num_elements(args.spectrogram_buffer_size_mb,
                                                         MODEL_INPUT_FREQUENCY_BINS * SpectrogramBuffer.BYTES_PER_ELEMENT))
 

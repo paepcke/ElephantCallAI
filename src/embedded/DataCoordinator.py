@@ -2,17 +2,18 @@ from typing import Optional, Deque, Tuple, List
 import numpy as np
 from datetime import datetime
 from collections import deque
-import sys, os
+import sys, os, pickle
 from threading import Lock
 
 from embedded.Closeable import Closeable
 from embedded.IntervalRecorder import IntervalRecorder
-from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP
+from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP, NUM_SAMPLES_IN_TIME_WINDOW
 from embedded.PredictionBuffer import PredictionBuffer
 from embedded.TransitionState import TransitionState, non_detected_transition_state
 from embedded.predictors import Predictor
 
 PREDICTION_THRESHOLD = 0.5
+BYTES_PER_GIGABYTE = 1024*1024*1024
 
 
 class DataCoordinator(Closeable):
@@ -36,11 +37,18 @@ class DataCoordinator(Closeable):
     # A directory to save positively-predicted spectrograms to
     spectrogram_capture_dir: Optional[str]
 
-    # A piece of state that corresponds to a potentially unfinished positively-detected interval.
-    current_spectrogram_capture: Optional[np.ndarray]
+    # The total number of gigabytes of disk space occupied by captured spectrograms saved by this process at some point.
+    captured_disk_usage: float
+
+    # A configurable number of gigabytes. If `captured_disk_usage` exceeds this, no more spectrograms will be captured.
+    max_captured_disk_usage: float
 
     # If a prediction is greater than or equal to this value, it is classified as positive.
     prediction_threshold: float
+
+    # Forbid the collection of fewer than this number of predictions. Useful for spectrogram capturing.
+    # A value of '1' does not impose any restrictions.
+    min_collectable_predictions: int
 
 
     # Thread synchronization states
@@ -91,7 +99,11 @@ class DataCoordinator(Closeable):
                  spectrogram_capture_dir: Optional[str] = None,
                  # prediction outputs for each time step are between 0 and 1. If any are greater than or equal to
                  # this threshold, those will be classified as positive.
-                 prediction_threshold: float = PREDICTION_THRESHOLD):
+                 prediction_threshold: float = PREDICTION_THRESHOLD,
+                 # Forbid the collection of fewer than this number of predictions. Useful for spectrogram capturing.
+                 min_collectable_predictions: int = NUM_SAMPLES_IN_TIME_WINDOW,
+                 # A configurable number of gigabytes. If `captured_disk_usage` exceeds this, no more spectrograms will be captured.
+                 max_captured_disk_usage: float = 1):
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
@@ -99,12 +111,14 @@ class DataCoordinator(Closeable):
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
         self.prediction_transition_state = non_detected_transition_state()
         self.prediction_threshold = prediction_threshold
+        self.min_collectable_predictions = max(1, min_collectable_predictions)
 
         self.blackout_interval_recorder = IntervalRecorder(blackout_interval_output_path)
 
         self.spectrogram_capture_dir = spectrogram_capture_dir
-        self.current_spectrogram_capture = None
         self._assert_spectrogram_capture_dir()
+        self.captured_disk_usage = 0.
+        self.max_captured_disk_usage = max_captured_disk_usage
 
         self.min_free_space_for_input = min_free_space_for_input
         if min_free_space_for_input is None or self.min_free_space_for_input < self.spectrogram_buffer.min_appendable_time_steps:
@@ -269,6 +283,7 @@ class DataCoordinator(Closeable):
         with self.spectrogram_buffer.timestamp_mutex:
             buffer_timestamps = self.spectrogram_buffer.post_processing_timestamp_deque
             buf_timestamp = buffer_timestamps[0]
+            start_timestamp = buffer_timestamps[0][1]
             buf_idx = 0
             buf_timestamp_dist = 0
             while buf_timestamp is not None and buf_timestamp_dist < time_window:
@@ -280,13 +295,32 @@ class DataCoordinator(Closeable):
                     buf_timestamp = buffer_timestamps[buf_idx]
                     buf_timestamp_dist = self.spectrogram_buffer.circular_distance(end_idx, buf_timestamp[0])
 
-        spect_data = None
-        if self.spectrogram_capture_dir is not None:
-            # spectrogram data for use in capturing
-            spect_data, _ = self.spectrogram_buffer.consume_data(len(final_predictions), True)
-
         # create time intervals for detection events, save them to a file
-        intervals = self.get_detection_intervals(final_predictions, timestamps, spect_data)
+        intervals, found_discontinuity = self.get_detection_intervals(final_predictions, timestamps)
+
+        # Capture spectrogram only if capture_dir is configured and there is a prediction event in `final_predictions`
+        if self.spectrogram_capture_dir is not None \
+                and (len(intervals) > 0 or self.prediction_transition_state.is_detected())\
+                and self.captured_disk_usage < self.max_captured_disk_usage:
+
+            '''
+            In the case of a time discontinuity, do not capture a spectrogram.
+            The expectation is that time discontinuities will be rare and additional logic to
+            handle this is probably not worth the complexity it adds to the capture process.
+            '''
+            if not found_discontinuity:
+                # spectrogram data for use in capturing
+                spectrogram, _ = self.spectrogram_buffer.consume_data(len(final_predictions), True)
+                end_timestamp = start_timestamp + len(final_predictions)*TIME_DELTA_PER_TIME_STEP
+                file_size_gb = self._capture_spectrogram((start_timestamp, end_timestamp), spectrogram=spectrogram,
+                                          predictions=final_predictions)
+                self.captured_disk_usage += file_size_gb
+                if self.captured_disk_usage >= self.max_captured_disk_usage:
+                    print("Disk usage limit for spectrogram capture reached, no more spectrograms will be captured.",
+                          file=sys.stderr)
+            else:
+                print("Omitting spectrogram capture because of time discontinuity in data - check blackout intervals " +
+                      "file to see if your device is struggling to process data quickly enough", file=sys.stderr)
 
         # free the underlying memory in the spectrogrambuffer
         self.spectrogram_buffer.mark_post_processing_complete(time_window)
@@ -300,25 +334,23 @@ class DataCoordinator(Closeable):
 
         return time_window, final_predictions
 
-    # Start with the left-over transition state and a deque of timestamps, return a list of event intervals
+    # Start with the left-over transition state and a deque of timestamps, return a list of event intervals and a boolean
+    # specifying whether there was a time discontinuity in this interval of predictions.
     # If a spectrogram_capture_dir is defined, this method will also save positively-classified spectrograms to a file.
-    def get_detection_intervals(self, finalized_predictions: np.ndarray, timestamps: Deque[Tuple[int, datetime]],
-                                spect_data: Optional[np.ndarray]) -> List[Tuple[datetime, datetime]]:
+    def get_detection_intervals(self, finalized_predictions: np.ndarray, timestamps: Deque[Tuple[int, datetime]]) ->\
+            Tuple[List[Tuple[datetime, datetime]], bool]:
         intervals = list()
+        found_discontinuity = False
         cur_timestamp = timestamps.popleft()
-        extending_current_capture = False
-        detect_start_idx = 0
 
         if self.prediction_transition_state.is_detected():
             tentative_interval_end = self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP
             if tentative_interval_end != cur_timestamp[1]:
+                # This is a time discontinuity
+                found_discontinuity = True
                 interval = (self.prediction_transition_state.start_time, tentative_interval_end)
                 intervals.append(interval)
-                if self.spectrogram_capture_dir is not None:
-                    self._capture_spectrogram(interval, ignore_spectrogram=True)
                 self.prediction_transition_state = non_detected_transition_state()
-            elif self.spectrogram_capture_dir is not None:
-                extending_current_capture = True
 
         for i in range(0, finalized_predictions.shape[0]):
             if len(timestamps) > 0 and timestamps[0][0] <= i:
@@ -326,15 +358,13 @@ class DataCoordinator(Closeable):
                 cur_timestamp = timestamps.popleft()
                 if cur_timestamp[1] != ((cur_timestamp[0] - prev_timestamp[0])*TIME_DELTA_PER_TIME_STEP + prev_timestamp[1]):
                     # This is a time discontinuity. We can only detect call events that cross this boundary as two separate events; one on each side of the discontinuity.
+                    found_discontinuity = True
                     if self.prediction_transition_state.is_detected():
                         interval = (self.prediction_transition_state.start_time,
                                           self.prediction_transition_state.start_time +
                                     self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
                         intervals.append(interval)
-                        self._capture_spectrogram(interval, begin_idx=detect_start_idx, end_idx=i, spectrogram=spect_data,
-                                                  extending_current_capture=extending_current_capture)
                         self.prediction_transition_state = non_detected_transition_state()
-                        extending_current_capture = False
 
             # handle next time increment of prediction
             if self.prediction_transition_state.is_detected():
@@ -347,44 +377,25 @@ class DataCoordinator(Closeable):
                                       self.prediction_transition_state.start_time +
                                 self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
                     intervals.append(interval)
-                    self._capture_spectrogram(interval, begin_idx=detect_start_idx, end_idx=i, spectrogram=spect_data,
-                                              extending_current_capture=extending_current_capture)
                     self.prediction_transition_state = non_detected_transition_state()
-                    extending_current_capture = False
             elif finalized_predictions[i] >= self.prediction_threshold:
                 # begin a new detection event
                 start_time = cur_timestamp[1] + (i - cur_timestamp[0])*TIME_DELTA_PER_TIME_STEP
-                detect_start_idx = i
                 self.prediction_transition_state = TransitionState(start_time, 1)
 
-        if self.spectrogram_capture_dir is not None:
-            if extending_current_capture:
-                self._combine_captured_spectrogram(spect_data)
-            elif self.prediction_transition_state.is_detected():
-                self.current_spectrogram_capture = np.copy(spect_data[detect_start_idx:, :])
+        return intervals, found_discontinuity
 
-        return intervals
-
-    def _capture_spectrogram(self, time_bounds: Tuple[datetime, datetime], begin_idx: int = -1, end_idx: int = -1,
-                             spectrogram: Optional[np.ndarray] = None, ignore_spectrogram: bool = False,
-                             extending_current_capture: bool = False):
-        if self.spectrogram_capture_dir is None:
-            return
-
-        if ignore_spectrogram and self.current_spectrogram_capture is not None:
-            spect_to_save = self.current_spectrogram_capture
-        elif extending_current_capture and self.current_spectrogram_capture is not None:
-            spect_to_save = np.concatenate([self.current_spectrogram_capture, spectrogram[:end_idx, :]])
-        else:
-            spect_to_save = spectrogram[begin_idx:end_idx, :]
-
-        filename = "{}_to_{}.npy".format(time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f"),
+    # Returns size of created file in GB.
+    def _capture_spectrogram(self, time_bounds: Tuple[datetime, datetime],
+                             spectrogram: np.ndarray, predictions: np.ndarray) -> float:
+        filename = "{}_to_{}.pkl".format(time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f"),
                                          time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f"))
-        np.save(self.spectrogram_capture_dir + "/" + filename, spect_to_save)
-        self.current_spectrogram_capture = None
+        filepath = self.spectrogram_capture_dir + "/" + filename
+        arrays_of_interest = {"spectrogram": spectrogram, "predictions": predictions}
+        with open(filepath, 'wb') as file:
+            pickle.dump(arrays_of_interest, file)
 
-    def _combine_captured_spectrogram(self, new_spectrogram: np.ndarray):
-        self.current_spectrogram_capture = np.concatenate([self.current_spectrogram_capture, new_spectrogram])
+        return os.stat(filepath).st_size/BYTES_PER_GIGABYTE
 
     def _assert_spectrogram_capture_dir(self):
         if self.spectrogram_capture_dir is None:
@@ -445,7 +456,8 @@ class DataCoordinator(Closeable):
                     self.predictions_available_for_collection_lock.release()
                 return
             # 2. If there is very little unprocessed data in the buffer, we're probably just finishing off the data we have, so unlock it
-            if metadata_snapshot.rows_unprocessed <= 2*self.spectrogram_buffer.min_appendable_time_steps and pending_predictions > 0:
+            if metadata_snapshot.rows_unprocessed <= 2*self.spectrogram_buffer.min_appendable_time_steps \
+                    and pending_predictions >= self.min_collectable_predictions:
                 if self._holding_collection_lock:
                     self._holding_collection_lock = False
                     self.predictions_available_for_collection_lock.release()
