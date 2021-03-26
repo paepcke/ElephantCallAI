@@ -7,7 +7,7 @@ from typing import List
 
 from embedded.DataCoordinator import DataCoordinator
 from embedded.TransitionState import TransitionState
-from embedded.SpectrogramBuffer import TIME_DELTA_PER_TIME_STEP, FREQ_BINS
+from embedded.SpectrogramBuffer import DEFAULT_TIME_DELTA_PER_TIME_STEP, FREQ_BINS
 from embedded.predictors.ConstPredictor import ConstPredictor
 
 
@@ -54,9 +54,9 @@ class DataCoordinatorTest(unittest.TestCase):
         self.assertEqual(2, len(lines))
 
         begin_interval_0 = now
-        end_interval_0 = now + 4*TIME_DELTA_PER_TIME_STEP
-        begin_interval_1 = now + 8*TIME_DELTA_PER_TIME_STEP
-        end_interval_1 = now + 11*TIME_DELTA_PER_TIME_STEP
+        end_interval_0 = now + 4 * DEFAULT_TIME_DELTA_PER_TIME_STEP
+        begin_interval_1 = now + 8 * DEFAULT_TIME_DELTA_PER_TIME_STEP
+        end_interval_1 = now + 11 * DEFAULT_TIME_DELTA_PER_TIME_STEP
         self.assertEqual("{},{}\n".format(begin_interval_0.isoformat(), end_interval_0.isoformat()), lines[0])
         self.assertEqual("{},{}\n".format(begin_interval_1.isoformat(), end_interval_1.isoformat()), lines[1])
 
@@ -135,7 +135,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.write(data)
 
-        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
+        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40 * DEFAULT_TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 4)
         coordinator.close()
@@ -150,7 +150,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.write(data)
 
-        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40*TIME_DELTA_PER_TIME_STEP))
+        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((5, now + 40 * DEFAULT_TIME_DELTA_PER_TIME_STEP))
 
         processed = coordinator.make_predictions(predictor, 2)
         coordinator.close()
@@ -209,7 +209,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator.write(data)
 
-        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((4, now + 40 * TIME_DELTA_PER_TIME_STEP))
+        coordinator.spectrogram_buffer.unprocessed_timestamp_deque.append((4, now + 40 * DEFAULT_TIME_DELTA_PER_TIME_STEP))
 
         got_lock = coordinator.data_available_for_prediction_lock.acquire(timeout=TEST_LOCK_TIMEOUT_SECONDS)
         coordinator.close()
@@ -243,11 +243,11 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_get_detection_intervals(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
-        time1 = now + 40*TIME_DELTA_PER_TIME_STEP
-        time2 = time1 + 40*TIME_DELTA_PER_TIME_STEP
+        time1 = now + 40 * DEFAULT_TIME_DELTA_PER_TIME_STEP
+        time2 = time1 + 40 * DEFAULT_TIME_DELTA_PER_TIME_STEP
 
         timestamps = deque()
-        timestamps.append((0, now + 2*TIME_DELTA_PER_TIME_STEP))
+        timestamps.append((0, now + 2 * DEFAULT_TIME_DELTA_PER_TIME_STEP))
         timestamps.append((3, time1))
         timestamps.append((4, time2))
 
@@ -262,12 +262,12 @@ class DataCoordinatorTest(unittest.TestCase):
 
         self.assertEqual(4, len(intervals))
         self.assertTrue(found_discontinuity)
-        self.assertEqual((now, now + 5*TIME_DELTA_PER_TIME_STEP), intervals[0])
-        self.assertEqual((time1, time1 + 1*TIME_DELTA_PER_TIME_STEP), intervals[1])
-        self.assertEqual((time2, time2 + 2 * TIME_DELTA_PER_TIME_STEP), intervals[2])
-        self.assertEqual((time2 + 3*TIME_DELTA_PER_TIME_STEP, time2 + 4*TIME_DELTA_PER_TIME_STEP), intervals[3])
+        self.assertEqual((now, now + 5 * DEFAULT_TIME_DELTA_PER_TIME_STEP), intervals[0])
+        self.assertEqual((time1, time1 + 1 * DEFAULT_TIME_DELTA_PER_TIME_STEP), intervals[1])
+        self.assertEqual((time2, time2 + 2 * DEFAULT_TIME_DELTA_PER_TIME_STEP), intervals[2])
+        self.assertEqual((time2 + 3 * DEFAULT_TIME_DELTA_PER_TIME_STEP, time2 + 4 * DEFAULT_TIME_DELTA_PER_TIME_STEP), intervals[3])
 
-        self.assertEqual(time2 + 5 * TIME_DELTA_PER_TIME_STEP, coordinator.prediction_transition_state.start_time)
+        self.assertEqual(time2 + 5 * DEFAULT_TIME_DELTA_PER_TIME_STEP, coordinator.prediction_transition_state.start_time)
         self.assertEqual(1, coordinator.prediction_transition_state.num_consecutive_ones)
 
     def test_get_detection_interval_without_initial_state_or_leftover_state(self):
@@ -284,7 +284,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator.close()
 
         self.assertEqual(1, len(intervals))
-        self.assertEqual((now, now + 9*TIME_DELTA_PER_TIME_STEP), intervals[0])
+        self.assertEqual((now, now + 9 * DEFAULT_TIME_DELTA_PER_TIME_STEP), intervals[0])
 
         self.assertIsNone(coordinator.prediction_transition_state.start_time)
         self.assertIsNone(coordinator.prediction_transition_state.num_consecutive_ones)
@@ -297,7 +297,7 @@ class DataCoordinatorTest(unittest.TestCase):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16)
         now = datetime.now(timezone.utc)
         start = now
-        end = now + 2*TIME_DELTA_PER_TIME_STEP
+        end = now + 2 * DEFAULT_TIME_DELTA_PER_TIME_STEP
         intervals = [(start, end)]
         coordinator.save_detection_intervals(intervals)
         coordinator.close()
@@ -315,8 +315,8 @@ class DataCoordinatorTest(unittest.TestCase):
         data = np.zeros((3, FREQ_BINS))
 
         now = datetime.now(timezone.utc)
-        time1 = now + 46 * TIME_DELTA_PER_TIME_STEP
-        time2 = time1 + 53 * TIME_DELTA_PER_TIME_STEP
+        time1 = now + 46 * DEFAULT_TIME_DELTA_PER_TIME_STEP
+        time2 = time1 + 53 * DEFAULT_TIME_DELTA_PER_TIME_STEP
 
         coordinator.write(data, now)
         coordinator.write(data, time1)
@@ -326,9 +326,9 @@ class DataCoordinatorTest(unittest.TestCase):
 
         lines = get_lines_of_blackout_file()
 
-        blk1_start = now + 3*TIME_DELTA_PER_TIME_STEP
+        blk1_start = now + 3 * DEFAULT_TIME_DELTA_PER_TIME_STEP
         blk1_end = time1
-        blk2_start = time1 + 3*TIME_DELTA_PER_TIME_STEP
+        blk2_start = time1 + 3 * DEFAULT_TIME_DELTA_PER_TIME_STEP
         blk2_end = time2
         self.assertEqual(2, len(lines))
         self.assertEqual("{},{}\n".format(blk1_start.isoformat(), blk1_end.isoformat()), lines[0])

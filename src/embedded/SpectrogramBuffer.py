@@ -19,8 +19,8 @@ BUFFER_SIZE_IN_TIME_STEPS = BUFFER_SIZE_MB * 1024 * 1024 // (FREQ_BINS * BYTES_P
 # This constant is the default value, but other values can be configured in the constructor.
 MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 
-# This represents the length of the non-overlapping segments of each time window.
-TIME_DELTA_PER_TIME_STEP = timedelta(seconds=0.1)
+# This represents the length of the non-overlapping segments of each time window with the default STFT parameters
+DEFAULT_TIME_DELTA_PER_TIME_STEP = timedelta(seconds=0.1)
 
 
 class SpectrogramBuffer:
@@ -47,6 +47,12 @@ class SpectrogramBuffer:
     # The number of rows currently allocated to storing data
     rows_allocated: int
 
+    '''
+    The number of seconds a single time step of a spectrogram frame represents 
+    (the length of the non-overlapping segments of each time window used in the STFT)
+    '''
+    time_delta_per_time_step: timedelta
+
     # A queue of tuples that allow us to keep track of the timestamps corresponding to unprocessed examples in the queue.
     unprocessed_timestamp_deque: Deque[Tuple[int, datetime]]
 
@@ -61,7 +67,8 @@ class SpectrogramBuffer:
     # A synchronization object that synchronizes changes to the timestamp deques
     timestamp_mutex: Lock
 
-    def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None):
+    def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None,
+                 time_delta_per_time_step: Optional[float] = None):
         buf_size = BUFFER_SIZE_IN_TIME_STEPS if override_buffer_size is None else override_buffer_size
         self.buffer = np.zeros((buf_size, FREQ_BINS))
         self.unprocessed_end = 0
@@ -69,6 +76,12 @@ class SpectrogramBuffer:
         self.allocated_begin = 0
         self.rows_allocated = 0
         self.rows_unprocessed = 0
+
+        if time_delta_per_time_step is None:
+            self.time_delta_per_time_step = DEFAULT_TIME_DELTA_PER_TIME_STEP
+        else:
+            self.time_delta_per_time_step = timedelta(seconds=time_delta_per_time_step)
+
         self.unprocessed_timestamp_deque = deque()
         self.post_processing_timestamp_deque = deque()
         if min_appendable_time_steps is None:
@@ -207,7 +220,7 @@ class SpectrogramBuffer:
 
             new_timestamp = (new_allocated_begin,
                              cur_timestamp_entry[1]
-                             + TIME_DELTA_PER_TIME_STEP * (self.circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
+                             + self.time_delta_per_time_step * (self.circular_distance(new_allocated_begin, cur_timestamp_entry[0])))
             self.post_processing_timestamp_deque.appendleft(new_timestamp)
 
     # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method.
@@ -232,7 +245,7 @@ class SpectrogramBuffer:
                 circular_distance = self.circular_distance(new_post_proc_end, cur_timestamp_entry[0])
                 new_earliest_unprocessed_timestamp = (new_post_proc_end,
                                                       cur_timestamp_entry[1]
-                                                      + TIME_DELTA_PER_TIME_STEP * circular_distance)
+                                                      + self.time_delta_per_time_step * circular_distance)
                 if len(self.unprocessed_timestamp_deque) != 0:
                     first_index = self.unprocessed_timestamp_deque[0][0]
                     if cur_timestamp_entry[0] + circular_distance != first_index:
@@ -245,7 +258,7 @@ class SpectrogramBuffer:
         """A helper method that ensures timestamps only exist in the case of discontinuities or manual labels via 'append_data()'"""
         if len(self.post_processing_timestamp_deque) != 0:
             prev_time_idx, prev_timestamp = self.post_processing_timestamp_deque[-1]
-            if cur_timestamp_entry[1] != (prev_timestamp + self.circular_distance(cur_timestamp_entry[0], prev_time_idx) * TIME_DELTA_PER_TIME_STEP):
+            if cur_timestamp_entry[1] != (prev_timestamp + self.circular_distance(cur_timestamp_entry[0], prev_time_idx) * self.time_delta_per_time_step):
                 self.post_processing_timestamp_deque.append(cur_timestamp_entry)
         else:
             self.post_processing_timestamp_deque.append(cur_timestamp_entry)

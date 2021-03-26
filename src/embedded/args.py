@@ -18,6 +18,9 @@ def get_embedded_listening_args():
     parser.add_argument('--captured-disk-usage-limit', type=float, default=1.,
                         help="A floating-point number of gigabytes. Once this much spectrogram data has been saved to " +
                              "disk, no more spectrograms will be captured (prediction intervals will still be recorded).")
+    parser.add_argument('--echo-args', action='store_true',
+                        help="Causes all arguments to be printed at the very start of the process. Can be very useful " +
+                             "if you're comparing different combinations of arguments.")
 
     # Prediction configuration arguments
     parser.add_argument('--batch-size', type=int, default=4,
@@ -49,7 +52,7 @@ def get_embedded_listening_args():
                         help="Hop size used for creating spectrograms (hop = nfft - n_overlap). " +
                              "This should match the setting used to train the model.")
     parser.add_argument('--sampling-freq', type=int, default=8000,
-                        help="The frequency at which the data is sampled. " +
+                        help="The frequency at which the data is sampled, in Hz. " +
                         "This should match the setting used to train the model.")
     parser.add_argument('--max-freq', type=int, default=150,
                         help="Frequencies above this are omitted from generated spectrograms. " +

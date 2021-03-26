@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timezone
 from time import sleep
+import pprint
 
 from embedded.args import get_embedded_listening_args
 from embedded import DataCoordinator, PredictionManager, PredictionCollector, SignalUtils
@@ -22,6 +23,11 @@ def main():
             run it through the provided model, and it will do so indefinitely."""
     args = get_embedded_listening_args()
 
+    # Pretty print all of the args used for help debugging
+    if args.echo_args:
+        print("Arguments to 'Listen.py':")
+        pprint.pprint(vars(args))
+
     start = datetime.now(timezone.utc)
 
     # This deletes files at these locations, be careful!
@@ -39,6 +45,7 @@ def main():
         prediction_threshold=args.prediction_threshold,
         spectrogram_capture_dir=args.spectrogram_capture_dir,
         max_captured_disk_usage=args.captured_disk_usage_limit,
+        time_delta_per_time_step=args.hop/args.sampling_freq,
         override_buffer_size=convert_mb_to_num_elements(args.spectrogram_buffer_size_mb,
                                                         MODEL_INPUT_FREQUENCY_BINS * SpectrogramBuffer.BYTES_PER_ELEMENT))
 

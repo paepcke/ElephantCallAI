@@ -7,7 +7,7 @@ from threading import Lock
 
 from embedded.Closeable import Closeable
 from embedded.IntervalRecorder import IntervalRecorder
-from embedded.SpectrogramBuffer import SpectrogramBuffer, TIME_DELTA_PER_TIME_STEP, NUM_SAMPLES_IN_TIME_WINDOW
+from embedded.SpectrogramBuffer import SpectrogramBuffer, NUM_SAMPLES_IN_TIME_WINDOW
 from embedded.PredictionBuffer import PredictionBuffer
 from embedded.TransitionState import TransitionState, non_detected_transition_state
 from embedded.predictors import Predictor
@@ -88,6 +88,9 @@ class DataCoordinator(Closeable):
                  # some incoming data. This creates a time discontinuity for which we cannot make predictions.
                  # This parameter specifies a path to a txt file where those intervals of 'blackout' are recorded.
                  blackout_interval_output_path: str,
+                 # The number of seconds a single time step of a spectrogram frame represents
+                 # (the length of the non-overlapping segments of each time window used in the STFT)
+                 time_delta_per_time_step: Optional[float] = None,
                  jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
                  # We assume that 'min_appendable_time_steps' is sufficient to make a prediction.
                  min_appendable_time_steps: Optional[int] = None,
@@ -107,7 +110,8 @@ class DataCoordinator(Closeable):
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
-                                                    min_appendable_time_steps=min_appendable_time_steps)
+                                                    min_appendable_time_steps=min_appendable_time_steps,
+                                                    time_delta_per_time_step=time_delta_per_time_step)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
         self.prediction_transition_state = non_detected_transition_state()
         self.prediction_threshold = prediction_threshold
@@ -175,7 +179,7 @@ class DataCoordinator(Closeable):
         if most_recent_timestamp_entry is not None:
             prev_continuity_len =\
                 self.spectrogram_buffer.circular_distance(prev_unprocessed_end, most_recent_timestamp_entry[0])
-            blackout_start = most_recent_timestamp_entry[1] + TIME_DELTA_PER_TIME_STEP*prev_continuity_len
+            blackout_start = most_recent_timestamp_entry[1] + self.spectrogram_buffer.time_delta_per_time_step * prev_continuity_len
             blackout_end = timestamp
             self.blackout_interval_recorder.write_interval((blackout_start, blackout_end))
 
@@ -311,7 +315,7 @@ class DataCoordinator(Closeable):
             if not found_discontinuity:
                 # spectrogram data for use in capturing
                 spectrogram, _ = self.spectrogram_buffer.consume_data(len(final_predictions), True)
-                end_timestamp = start_timestamp + len(final_predictions)*TIME_DELTA_PER_TIME_STEP
+                end_timestamp = start_timestamp + len(final_predictions) * self.spectrogram_buffer.time_delta_per_time_step
                 file_size_gb = self._capture_spectrogram((start_timestamp, end_timestamp), spectrogram=spectrogram,
                                           predictions=final_predictions)
                 self.captured_disk_usage += file_size_gb
@@ -344,7 +348,8 @@ class DataCoordinator(Closeable):
         cur_timestamp = timestamps.popleft()
 
         if self.prediction_transition_state.is_detected():
-            tentative_interval_end = self.prediction_transition_state.start_time + self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP
+            tentative_interval_end = self.prediction_transition_state.start_time +\
+                                     self.prediction_transition_state.num_consecutive_ones * self.spectrogram_buffer.time_delta_per_time_step
             if tentative_interval_end != cur_timestamp[1]:
                 # This is a time discontinuity
                 found_discontinuity = True
@@ -356,13 +361,13 @@ class DataCoordinator(Closeable):
             if len(timestamps) > 0 and timestamps[0][0] <= i:
                 prev_timestamp = cur_timestamp
                 cur_timestamp = timestamps.popleft()
-                if cur_timestamp[1] != ((cur_timestamp[0] - prev_timestamp[0])*TIME_DELTA_PER_TIME_STEP + prev_timestamp[1]):
+                if cur_timestamp[1] != ((cur_timestamp[0] - prev_timestamp[0]) * self.spectrogram_buffer.time_delta_per_time_step + prev_timestamp[1]):
                     # This is a time discontinuity. We can only detect call events that cross this boundary as two separate events; one on each side of the discontinuity.
                     found_discontinuity = True
                     if self.prediction_transition_state.is_detected():
                         interval = (self.prediction_transition_state.start_time,
-                                          self.prediction_transition_state.start_time +
-                                    self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
+                                    self.prediction_transition_state.start_time +
+                                    self.prediction_transition_state.num_consecutive_ones * self.spectrogram_buffer.time_delta_per_time_step)
                         intervals.append(interval)
                         self.prediction_transition_state = non_detected_transition_state()
 
@@ -374,13 +379,13 @@ class DataCoordinator(Closeable):
                 else:
                     # finalize the detected event
                     interval = (self.prediction_transition_state.start_time,
-                                      self.prediction_transition_state.start_time +
-                                self.prediction_transition_state.num_consecutive_ones * TIME_DELTA_PER_TIME_STEP)
+                                self.prediction_transition_state.start_time +
+                                self.prediction_transition_state.num_consecutive_ones * self.spectrogram_buffer.time_delta_per_time_step)
                     intervals.append(interval)
                     self.prediction_transition_state = non_detected_transition_state()
             elif finalized_predictions[i] >= self.prediction_threshold:
                 # begin a new detection event
-                start_time = cur_timestamp[1] + (i - cur_timestamp[0])*TIME_DELTA_PER_TIME_STEP
+                start_time = cur_timestamp[1] + (i - cur_timestamp[0]) * self.spectrogram_buffer.time_delta_per_time_step
                 self.prediction_transition_state = TransitionState(start_time, 1)
 
         return intervals, found_discontinuity
