@@ -200,11 +200,11 @@ class DataCoordinator(Closeable):
                 raise ValueError("Time window must be evenly divisible by jump")
         else:
             if time_window % self.spectrogram_buffer.min_appendable_time_steps:
-                raise ValueError("With no overlap, time window must be an integer multiple of {}".format(self.spectrogram_buffer.min_appendable_time_steps))
+                raise ValueError(f"With no overlap, time window must be an integer multiple of {self.spectrogram_buffer.min_appendable_time_steps}")
 
         if time_window < self.spectrogram_buffer.min_appendable_time_steps:
-            raise ValueError("Predictions must be made on at least {} rows of contiguous spectrogram data"
-                             .format(self.spectrogram_buffer.min_appendable_time_steps))
+            raise ValueError(f"Predictions must be made on at least {self.spectrogram_buffer.min_appendable_time_steps}"
+                             + " rows of contiguous spectrogram data")
 
         if time_window > metadata_snapshot.rows_unprocessed:
             time_window = metadata_snapshot.rows_unprocessed - metadata_snapshot.rows_unprocessed % jump
@@ -393,8 +393,9 @@ class DataCoordinator(Closeable):
     # Returns size of created file in GB.
     def _capture_spectrogram(self, time_bounds: Tuple[datetime, datetime],
                              spectrogram: np.ndarray, predictions: np.ndarray) -> float:
-        filename = "{}_to_{}.pkl".format(time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f"),
-                                         time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f"))
+        interval_begin_time_formatted = time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f")
+        interval_end_time_formatted = time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f")
+        filename = f"{interval_begin_time_formatted}_to_{interval_end_time_formatted}.pkl"
         filepath = self.spectrogram_capture_dir + "/" + filename
         arrays_of_interest = {"spectrogram": spectrogram, "predictions": predictions}
         with open(filepath, 'wb') as file:
@@ -407,8 +408,7 @@ class DataCoordinator(Closeable):
             return
         if os.path.isdir(self.spectrogram_capture_dir):
             return
-        raise ValueError("The spectrogram capture directory specified, '{}', does not exist!"
-                         .format(self.spectrogram_capture_dir))
+        raise ValueError(f"The spectrogram capture directory specified, '{self.spectrogram_capture_dir}', does not exist!")
 
     def update_input_lock(self):
         with self.input_sync_lock:

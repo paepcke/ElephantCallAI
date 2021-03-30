@@ -34,7 +34,7 @@ class PredictionBuffer:
         if out is None:
             out = np.zeros((pred_size,))
         elif out.shape[0] != pred_size:
-            raise ValueError("Output array provided is the wrong size; must be size {}".format(pred_size))
+            raise ValueError(f"Output array provided is the wrong size; must be size {pred_size}")
         if end_idx < begin_idx:
             first_len = self.predictions.shape[0] - begin_idx
             out[0:first_len] = self.predictions[begin_idx:] / self.overlap_counts[begin_idx:]

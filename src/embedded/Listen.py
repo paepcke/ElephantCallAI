@@ -31,12 +31,12 @@ def main():
     start = datetime.now(timezone.utc)
 
     # This deletes files at these locations, be careful!
-    os.system("rm {}".format(args.predicted_intervals_output_path))
-    os.system("rm {}".format(args.blackout_intervals_output_path))
+    os.system(f"rm {args.predicted_intervals_output_path}")
+    os.system(f"rm {args.blackout_intervals_output_path}")
 
     jump = args.jump
     if jump != 0 and MODEL_INPUT_TIMESTEPS % jump != 0:
-        raise ValueError("'jump' must be an even divisor of {}".format(MODEL_INPUT_TIMESTEPS))
+        raise ValueError(f"'jump' must be an even divisor of {MODEL_INPUT_TIMESTEPS}")
 
     predictor = ModelPredictor.ModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
 

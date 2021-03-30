@@ -20,7 +20,7 @@ class IntervalRecorder(Closeable):
         self.most_recent_flush = datetime.now(timezone.utc)
 
     def write_interval(self, interval: Tuple[datetime, datetime]):
-        self.file_writer.write("{},{}\n".format(interval[0].isoformat(), interval[1].isoformat()))
+        self.file_writer.write(f"{interval[0].isoformat()},{interval[1].isoformat()}\n")
         now = datetime.now(timezone.utc)
         if now - self.most_recent_flush > FLUSH_COOLDOWN:
             self.file_writer.flush()

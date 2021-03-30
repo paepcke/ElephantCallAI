@@ -43,7 +43,7 @@ class FileSpectrogramStream(Closeable):
             max_chunks = min(max_chunks, self.max_time_steps//CHUNK_SIZE)
 
         if self.max_time_steps is None or max_chunks != self.max_time_steps//CHUNK_SIZE:
-            print("WARNING: processing all {} time steps of data".format(self.spectrogram_data.shape[0]))
+            print(f"WARNING: processing all {self.spectrogram_data.shape[0]} time steps of data")
 
         need_new_timestamp = True
         i = 0
@@ -71,7 +71,7 @@ class FileSpectrogramStream(Closeable):
                     need_new_timestamp = True
                     print("Dropped a chunk", file=sys.stderr)
 
-        print("Done streaming spectrogram data, inserted {} rows".format(i*CHUNK_SIZE))
+        print(f"Done streaming spectrogram data, inserted {i*CHUNK_SIZE} rows")
 
     def transform(self, spectrogram_data: np.ndarray):
         """A transformation applied to spectrogram data specific to the model with which

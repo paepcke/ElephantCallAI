@@ -138,8 +138,8 @@ class SpectrogramBuffer:
 
     def _assert_sufficient_time_steps(self, new_data: np.ndarray, time: Optional[datetime]):
         if new_data.shape[0] < self.min_appendable_time_steps:
-            raise ValueError(("Cannot put less than {} contiguous time steps of data " +
-                             "into the buffer in a single append operation.").format(self.min_appendable_time_steps))
+            raise ValueError(f"Cannot put less than {self.min_appendable_time_steps} contiguous time steps of data " +
+                             "into the buffer in a single append operation.")
 
     # data should always be accessed from the *return value* of this method
     def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None,
