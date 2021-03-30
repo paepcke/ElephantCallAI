@@ -16,10 +16,12 @@ For convenience, it is set here to the number of
 COLLECTION_WINDOW = 256
 
 
-
 class PredictionCollector(Closeable):
-    """An object which governs a thread that gathers predictions made by a model and converts them
-    into useful output."""
+    """
+    An object which governs a thread that gathers predictions made by a model and converts them
+    into useful output.
+    """
+
     collector_thread: Thread
     timeout: bool
     verbose: bool

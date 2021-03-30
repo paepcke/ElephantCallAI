@@ -19,8 +19,11 @@ BYTES_PER_MB = 1024*1024
 
 
 def main():
-    """This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
-            run it through the provided model, and it will do so indefinitely."""
+    """
+    This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
+    run it through the provided model, and it will do so indefinitely.
+    """
+
     args = get_embedded_listening_args()
 
     # Pretty print all of the args used for help debugging

@@ -18,8 +18,15 @@ PREDS_SAVE_PATH = "/tmp/preds.npy"
 
 
 def integration_test_with_model_and_audio(small_buffer: bool = False):
-    """This test requires a microphone to be connected to your computer. It will collect audio, transform it, and
-    run it through the model, and it will do so indefinitely."""
+    """
+    This test requires a microphone to be connected to your computer. It will collect audio, transform it, and
+    run it through the model, and it will do so indefinitely.
+
+    :param small_buffer: set this to 'True' if you want the test to run with a very small buffer size to test the system
+    under memory pressure
+    :return:
+    """
+
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))

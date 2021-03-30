@@ -10,8 +10,11 @@ LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
 class PredictionManager(Closeable):
-    """An object which governs a thread that makes model predictions on spectrogram data and stores those
-    predictions for later collection."""
+    """
+    An object which governs a thread that makes model predictions on spectrogram data and stores those
+    predictions for later collection.
+    """
+
     predictor: Predictor
     predictor_thread: Thread
     timeout: bool

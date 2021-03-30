@@ -20,9 +20,11 @@ MIN_APPENDABLE_TIME_STEPS = NUM_SAMPLES_IN_TIME_WINDOW
 
 
 class AudioBuffer:
-    """A thread-safe audio buffer. For concurrency control,
+    """
+    A thread-safe audio buffer. For concurrency control,
     no more than one thread should be appending data to the buffer and no more than one thread should be consuming
-    it. These do not have to be the same thread."""
+    it. These do not have to be the same thread.
+    """
 
     buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
 

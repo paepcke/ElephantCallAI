@@ -107,6 +107,30 @@ class DataCoordinator(Closeable):
                  min_collectable_predictions: int = NUM_SAMPLES_IN_TIME_WINDOW,
                  # A configurable number of gigabytes. If `captured_disk_usage` exceeds this, no more spectrograms will be captured.
                  max_captured_disk_usage: float = 1):
+        """
+        DataCoordinator constructor
+
+        :param prediction_interval_output_path: path to the file where prediction intervals are saved
+        :param blackout_interval_output_path: If the data is being inserted faster than it can be processed, we may be
+            forced to drop some incoming data. This creates a time discontinuity for which we cannot make predictions.
+            This parameter specifies a path to a txt file where those intervals of 'blackout' are recorded.
+        :param time_delta_per_time_step: The number of seconds a single time step of a spectrogram frame represents
+            (the length of the non-overlapping segments of each time window used in the STFT)
+        :param jump:
+        :param override_buffer_size:
+        :param min_appendable_time_steps: We assume that 'min_appendable_time_steps' is sufficient to make a prediction
+        :param min_free_space_for_input: Do not accept input if fewer than this number of rows are unallocated
+        :param prediction_load: Predictions will not be collected unless at least the following proportion of the
+            prediction buffer is full
+        :param spectrogram_capture_dir: A directory to save positively-predicted spectrograms to. The spectrograms are
+            not saved if this is not specified.
+        :param prediction_threshold: prediction outputs for each time step are between 0 and 1. If any are greater than
+            or equal to this threshold, those will be classified as positive.
+        :param min_collectable_predictions: Forbid the collection of fewer than this number of predictions.
+            Useful for spectrogram capturing.
+        :param max_captured_disk_usage: A configurable number of gigabytes. If `captured_disk_usage` exceeds this,
+            no more spectrograms will be captured.
+        """
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,

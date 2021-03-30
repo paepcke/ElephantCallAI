@@ -17,10 +17,16 @@ BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 
 
-
 def integration_test_with_model_and_wav(small_buffer: bool = False):
-    """This test does not require a microphone to be connected to your computer. It will instead use audio from a WAV file
-    and insert it into the processing pipeline where mic-captured audio would normally be found."""
+    """
+    This test does not require a microphone to be connected to your computer. It will instead use audio from a WAV file
+    and insert it into the processing pipeline where mic-captured audio would normally be found.
+
+    :param small_buffer: set this to 'True' if you want the test to run with a very small buffer size to test the system
+    under memory pressure
+    :return:
+    """
+
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))

@@ -158,7 +158,13 @@ class SpectrogramBuffer:
         return data, data_start_idx
 
     def mark_for_post_processing(self, time_steps: int):
-        """Can be used to manually reclassify a region of the buffer without reading it"""
+        """
+        Can be used to manually reclassify a region of the buffer without reading it
+
+        :param time_steps: number of time steps to mark for post-processing
+        :return:
+        """
+
         with self.metadata_mutex:
             available_time_steps = self.rows_unprocessed
             if time_steps > available_time_steps:
@@ -169,8 +175,16 @@ class SpectrogramBuffer:
             self._transfer_timestamp_data(old_post_proc_end)
 
     def get_processed_data(self, time_steps: int, target: Optional[np.ndarray] = None, free_buffer_region: bool = True) -> np.ndarray:
-        """Read data from the buffer for post-processing. This copies the data into a separate location
-        and, by default, frees the region of the buffer for other use."""
+        """
+        Read data from the buffer for post-processing. This copies the data into a separate location
+        and, by default, frees the region of the buffer for other use.
+
+        :param time_steps: the number of time steps of data to read
+        :param target: a numpy array to copy the data into (may be None).
+        :param free_buffer_region: if true, free the region of the buffer where this data was obtained
+        :return:
+        """
+
         data, new_begin_idx = self.consume_data(time_steps, True, target=target, force_copy=True)
         if free_buffer_region:
             with self.metadata_mutex:
@@ -181,8 +195,14 @@ class SpectrogramBuffer:
         return data
 
     def mark_post_processing_complete(self, time_steps: int) -> int:
-        """Manually free the oldest *time_steps* time steps of the buffer for reuse. Allows data here to be overwritten.
-        Returns an integer corresponding to the number of rows actually freed for reuse."""
+        """
+        Manually free the oldest *time_steps* time steps of the buffer for reuse. Allows data here to be overwritten.
+        Returns an integer corresponding to the number of rows actually freed for reuse.
+
+        :param time_steps: the requested number of time steps to free
+        :return: the number of time steps that were freed
+        """
+
         with self.metadata_mutex:
             available_time_steps = self.rows_allocated - self.rows_unprocessed
             if time_steps > available_time_steps:
@@ -196,7 +216,13 @@ class SpectrogramBuffer:
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
     # Call this method while holding the metadata_mutex
     def _free_rows_update_timestamp(self, old_allocated_begin: int):
-        """Updates the timestamp deques after a region of the buffer is deallocated"""
+        """
+        Updates the timestamp deques after a region of the buffer is deallocated"
+
+        :param old_allocated_begin: the value 'allocated_begin' held at the start of the free operation this is part of
+        :return:
+        """
+
         if (self.rows_allocated - self.rows_unprocessed) == 0:
             with self.timestamp_mutex:
                 self.post_processing_timestamp_deque.clear()
@@ -226,7 +252,13 @@ class SpectrogramBuffer:
     # update 'rows_unprocessed' and 'pending_post_processing_end' BEFORE calling this method.
     # Call this method while holding the metadata mutex.
     def _transfer_timestamp_data(self, old_post_proc_end: int):
-        """Moves timestamps from the unprocessed deque to the pending_post_processing deque as data in the buffer is reclassified"""
+        """
+        Moves timestamps from the unprocessed deque to the pending_post_processing deque as data in the buffer is reclassified
+
+        :param old_post_proc_end: the value 'post_processing_end' held at the start of the free operation this is part of
+        :return:
+        """
+
         with self.timestamp_mutex:
             new_post_proc_end = self.pending_post_processing_end
             max_distance = (new_post_proc_end - old_post_proc_end) % self.buffer.shape[0]
@@ -271,8 +303,17 @@ class SpectrogramBuffer:
 
     def consume_data(self, time_steps: int, processed: bool, target: Optional[np.ndarray] = None,
                      force_copy: Optional[bool] = False) -> Tuple[np.ndarray, int]:
-        """copy data from the buffer into the target if necessary, otherwise, return a view.
-        returns (read data, new value for starting index of read-from chunk)"""
+        """
+        copy data from the buffer into the target if necessary, otherwise, return a view.
+        returns (read data, new value for starting index of read-from chunk)
+
+        :param time_steps: requested number of time steps of data to read
+        :param processed: whether to read from the post-processing region of the buffer
+        :param target: a numpy array to copy read data into (may be None)
+        :param force_copy: if true, do NOT return a view of the underlying buffer
+        :return: a numpy array containing the read data
+        """
+
         with self.metadata_mutex:
             metadata_snapshot = SpectrogramBufferMetadata(self)
         begin_idx: int
