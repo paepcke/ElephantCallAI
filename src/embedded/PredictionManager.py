@@ -10,8 +10,11 @@ LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
 class PredictionManager(Closeable):
-    """An object which governs a thread that makes model predictions on spectrogram data and stores those
-    predictions for later collection."""
+    """
+    An object which governs a thread that makes model predictions on spectrogram data and stores those
+    predictions for later collection.
+    """
+
     predictor: Predictor
     predictor_thread: Thread
     timeout: bool
@@ -48,13 +51,13 @@ class PredictionManager(Closeable):
             total_time_steps_predicted += num_time_steps_predicted
             if num_time_steps_predicted != 0:
                 if self.verbose:
-                    print("PredictionManager.py: {} total time steps predicted so far".format(total_time_steps_predicted))
+                    print(f"PredictionManager.py: {total_time_steps_predicted} total time steps predicted so far")
                 num_consecutive_times_buffer_empty = 0
             else:
                 num_consecutive_times_buffer_empty += 1
 
         if self.verbose:
-            print("Total time steps predicted by prediction thread: {}".format(total_time_steps_predicted))
+            print(f"Total time steps predicted by prediction thread: {total_time_steps_predicted}")
 
     def close(self):
         self.closed = True

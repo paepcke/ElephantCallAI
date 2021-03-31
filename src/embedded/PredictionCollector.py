@@ -16,10 +16,12 @@ For convenience, it is set here to the number of
 COLLECTION_WINDOW = 256
 
 
-
 class PredictionCollector(Closeable):
-    """An object which governs a thread that gathers predictions made by a model and converts them
-    into useful output."""
+    """
+    An object which governs a thread that gathers predictions made by a model and converts them
+    into useful output.
+    """
+
     collector_thread: Thread
     timeout: bool
     verbose: bool
@@ -60,8 +62,7 @@ class PredictionCollector(Closeable):
             total_time_steps_collected += num_time_steps_collected
             if num_time_steps_collected != 0:
                 if self.verbose:
-                    print("PredictionCollector.py: {} time steps worth of predictions collected so far"
-                          .format(total_time_steps_collected))
+                    print(f"PredictionCollector.py: {total_time_steps_collected} time steps worth of predictions collected so far")
                 num_consecutive_times_buffer_empty = 0
             else:
                 num_consecutive_times_buffer_empty += 1
@@ -69,7 +70,7 @@ class PredictionCollector(Closeable):
                 self.predictions_list.append(predictions)
 
         if self.verbose:
-            print("Total time steps collected by collector thread: {}".format(total_time_steps_collected))
+            print(f"Total time steps collected by collector thread: {total_time_steps_collected}")
 
     def close(self):
         self.closed = True

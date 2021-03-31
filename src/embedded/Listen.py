@@ -19,8 +19,11 @@ BYTES_PER_MB = 1024*1024
 
 
 def main():
-    """This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
-            run it through the provided model, and it will do so indefinitely."""
+    """
+    This program requires a microphone to be connected to your computer. It will collect audio, transform it, and
+    run it through the provided model, and it will do so indefinitely.
+    """
+
     args = get_embedded_listening_args()
 
     # Pretty print all of the args used for help debugging
@@ -31,12 +34,12 @@ def main():
     start = datetime.now(timezone.utc)
 
     # This deletes files at these locations, be careful!
-    os.system("rm {}".format(args.predicted_intervals_output_path))
-    os.system("rm {}".format(args.blackout_intervals_output_path))
+    os.system(f"rm {args.predicted_intervals_output_path}")
+    os.system(f"rm {args.blackout_intervals_output_path}")
 
     jump = args.jump
     if jump != 0 and MODEL_INPUT_TIMESTEPS % jump != 0:
-        raise ValueError("'jump' must be an even divisor of {}".format(MODEL_INPUT_TIMESTEPS))
+        raise ValueError(f"'jump' must be an even divisor of {MODEL_INPUT_TIMESTEPS}")
 
     predictor = ModelPredictor.ModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
 

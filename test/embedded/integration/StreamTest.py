@@ -3,26 +3,34 @@ import numpy as np
 from datetime import datetime, timezone
 
 from embedded import DataCoordinator, FileSpectrogramStream, PredictionManager, PredictionCollector, SignalUtils
+from embedded.FileUtils import assert_path_exists
 from embedded.predictors import ModelPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
-SPECTROGRAM_NPY_FILE = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_spec.npy"
-MODEL_PATH = "../../models/remote_model.pt"
+SPECTROGRAM_NPY_FILE = "../../../Integration_Test_Data/spectrograms/nn10b_20180604_spec.npy"
+MODEL_PATH = "../../../Integration_Test_Data/models/remote_model.pt"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
-LABELS_PATH = "../../elephant_dataset/Test_Spectrograms/nn10b_20180604_label.npy"
+LABELS_PATH = "../../../Integration_Test_Data/spectrograms/nn10b_20180604_label.npy"
 
 
 def integration_test_with_model(small_buffer: bool = False):
-    """This test will bypass the audio portion of the pipeline, streaming spectrogram data
-    from a file into the DataCoordinator. Useful for testing this part in isolation."""
+    """
+    This test will bypass the audio portion of the pipeline, streaming spectrogram data
+    from a file into the DataCoordinator. Useful for testing this part in isolation.
+
+    :param small_buffer:
+    :return:
+    """
+
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
+    assert_path_exists(MODEL_PATH, "You must provide a PyTorch model.")
     predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
 
     if small_buffer:
@@ -36,6 +44,7 @@ def integration_test_with_model(small_buffer: bool = False):
             min_collectable_predictions=1)
         drop_data = True
 
+    assert_path_exists(SPECTROGRAM_NPY_FILE, "You must provide a .npy file containing spectrogram data.")
     spec_stream = FileSpectrogramStream.FileSpectrogramStream(SPECTROGRAM_NPY_FILE, drop_data=drop_data)
     pred_mgr = PredictionManager.PredictionManager(predictor, timeout=True, verbose=True, give_up_threshold=100)
     pred_collector = PredictionCollector.PredictionCollector(timeout=True, verbose=True, give_up_threshold=100,
@@ -57,7 +66,10 @@ def integration_test_with_model(small_buffer: bool = False):
 
 
 def compare_preds():
+    assert_path_exists(LABELS_PATH, "You must provide a .npy file containing labels for the spectrogram data.")
     labels = np.load(LABELS_PATH)
+
+    assert_path_exists(PREDS_SAVE_PATH, "Predictions file not found.")
     preds = np.load(PREDS_SAVE_PATH)
 
     labels_clipped = labels[:preds.shape[0]]

@@ -3,20 +3,24 @@
 This directory contains code to be used in deploying an elephant listening model (or some other kind of audio 
 classification model) onto a lightweight edge computing device such as a Raspberry Pi or an NVIDIA Jetson Nano.
 
+Sounds from a microphone are processed on the device. Spectrograms are generated from these sounds and fed as input to
+a trained ML model. Time intervals of positively-classified events are logged to a file. Optionally,
+spectrograms and raw predictions for time intervals containing positively-classified events can be saved to disk.
+
 ## Requirements
 
-Normally, you'd just run `pip install -r requirements.txt` to download dependencies, but since you likely want to
+Normally, you'd just use `pip` to download all of your dependencies, but since you likely want to
 run this on a lightweight device, binaries appropriate to your device may not be available from `pip`.
 
 Dependencies include:
 
-`pytorch`
+`pytorch` (methods of installing this vary based on your chosen hardware)
 
-`pyaudio` (install this with `$ sudo apt-get install python3-pyaudio`)
+`pyaudio` (install this with `$ sudo apt-get install python3-pyaudio` if you're using a Linux system)
 
-`matplotlib`
+`matplotlib` (install this with `$ pip install matplotlib`)
 
-`numpy`
+`numpy` (install this with `$ pip install numpy`)
 
 Your Pytorch model may have additional dependencies not specified here (such as `torchvision` or `tensorboardx`).
 
@@ -41,8 +45,9 @@ to accommodate slight differences should not be difficult.
 
 Audio is sampled at 8000 Hz and quantized to 16-bit integer samples. Your model input must be a spectrogram,
 the required shape is 256 time steps by 77 frequency components. There will also be a batch dimension;
-your model must accept inputs of shape (num_batches, 256, 77). Your model output must be a 1D vector of predictions for
-each time step in the input. These things can be customized, but you may have to edit the code.
+your model must accept inputs of shape (batch_size, 256, 77). Your model output must be a 1D vector of logits for
+each time step in the input. A sigmoid function will be applied to the logits and a decision function
+(based on the threshold) will be applied after that. These things can be customized, but you may have to edit the code.
 
 Currently, after taking the STFT of audio data, a transform is applied to each element x: 10*log10(x). The model should
 be trained for this. We also normalize each prediction frame (256x77 input tensor) at prediction time so that
@@ -98,8 +103,9 @@ their own disk usage, even if adding files to a directory that already has .pkl 
 
 ## Contributing
 
-Unit tests are available in `test/embedded/unit`. Integration tests (requiring a model and data of various forms) are
-available in `test/embedded/integration`, but for these, outputs should be manually inspected.
+Unit tests are available in `test/embedded/unit`. Integration tests (requiring a model and data of various forms,
+not provided in this repo) are available in `test/embedded/integration`, but for these,
+outputs should be manually inspected.
 
 ## Feedback
 

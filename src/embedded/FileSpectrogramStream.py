@@ -14,8 +14,11 @@ MIN_EXPECTED_SHAPE = 100  # We know there are more time steps than this...
 
 
 class FileSpectrogramStream(Closeable):
-    """An object which governs a thread that inserts spectrogram data from a file into a
-    DataCoordinator object in chunks. Used for testing."""
+    """
+    An object which governs a thread that inserts spectrogram data from a file into a
+    DataCoordinator object in chunks. Used for testing.
+    """
+
     max_time_steps: Optional[int]
     spectrogram_data: np.ndarray
     stream_thread: Thread
@@ -43,7 +46,7 @@ class FileSpectrogramStream(Closeable):
             max_chunks = min(max_chunks, self.max_time_steps//CHUNK_SIZE)
 
         if self.max_time_steps is None or max_chunks != self.max_time_steps//CHUNK_SIZE:
-            print("WARNING: processing all {} time steps of data".format(self.spectrogram_data.shape[0]))
+            print(f"WARNING: processing all {self.spectrogram_data.shape[0]} time steps of data")
 
         need_new_timestamp = True
         i = 0
@@ -71,11 +74,16 @@ class FileSpectrogramStream(Closeable):
                     need_new_timestamp = True
                     print("Dropped a chunk", file=sys.stderr)
 
-        print("Done streaming spectrogram data, inserted {} rows".format(i*CHUNK_SIZE))
+        print(f"Done streaming spectrogram data, inserted {i*CHUNK_SIZE} rows")
 
     def transform(self, spectrogram_data: np.ndarray):
-        """A transformation applied to spectrogram data specific to the model with which
-        this code was developed. It may be changed for other models."""
+        """
+        A transformation applied to spectrogram data specific to the model with which
+        this code was developed. It may be changed for other models.
+
+        :param spectrogram_data: the spectrogram data to be transformed
+        :return: transformed spectrogram data
+        """
         return 10*np.log10(spectrogram_data)
 
     def close(self):

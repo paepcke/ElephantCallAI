@@ -5,8 +5,11 @@ from embedded.predictors.Predictor import Predictor
 
 
 class ConstPredictor(Predictor):
-    """This implementation is a 'dummy' implementation meant to be replaced or overridden later. Its purpose
-        is to test the harness code rather than be an accurate model."""
+    """
+    This implementation is a 'dummy' implementation meant to be replaced or overridden later. Its purpose
+        is to test the harness code rather than be an accurate model.
+    """
+
     const_prediction: int
 
     def __init__(self, const_prediction: int = 1):

@@ -142,3 +142,6 @@ venv.bak/
 
 # IDE settings
 .idea/**
+
+# Embedded Integration Test Resources
+Integration_Test_Data/**

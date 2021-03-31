@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from time import sleep
 
 from embedded import DataCoordinator, PredictionManager, PredictionCollector, SignalUtils
+from embedded.FileUtils import assert_path_exists
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.AudioCapturer import AudioCapturer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
@@ -11,21 +12,29 @@ from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 from embedded.predictors import ModelPredictor
 
 # these hard-coded resource paths can be swapped out with environment variables later
-MODEL_PATH = "../../../../models/remote_model.pt"
+MODEL_PATH = "../../../../Integration_Test_Data/models/remote_model.pt"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 
 
 def integration_test_with_model_and_audio(small_buffer: bool = False):
-    """This test requires a microphone to be connected to your computer. It will collect audio, transform it, and
-    run it through the model, and it will do so indefinitely."""
+    """
+    This test requires a microphone to be connected to your computer. It will collect audio, transform it, and
+    run it through the model, and it will do so indefinitely.
+
+    :param small_buffer: set this to 'True' if you want the test to run with a very small buffer size to test the system
+    under memory pressure
+    :return:
+    """
+
     start = datetime.now(timezone.utc)
 
     os.system("rm {}".format(PREDICTION_INTERVALS_OUTPUT_PATH))
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
+    assert_path_exists(MODEL_PATH, "You must provide a PyTorch model.")
     predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
 
     if small_buffer:

@@ -13,8 +13,11 @@ TIME_KEY = "input_buffer_adc_time"
 
 
 class AudioCapturer(Closeable):
-    """An object that listens to a USB microphone and asynchronously appends gathered data
-    to an AudioBuffer."""
+    """
+    An object that listens to a USB microphone and asynchronously appends gathered data
+    to an AudioBuffer.
+    """
+
     audio_buf: AudioBuffer
     sampling_freq: int
     stream: pyaudio.Stream

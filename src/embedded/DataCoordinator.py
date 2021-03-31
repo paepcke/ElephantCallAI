@@ -5,6 +5,7 @@ from collections import deque
 import sys, os, pickle
 from threading import Lock
 
+from embedded import FileUtils
 from embedded.Closeable import Closeable
 from embedded.IntervalRecorder import IntervalRecorder
 from embedded.SpectrogramBuffer import SpectrogramBuffer, NUM_SAMPLES_IN_TIME_WINDOW
@@ -107,6 +108,30 @@ class DataCoordinator(Closeable):
                  min_collectable_predictions: int = NUM_SAMPLES_IN_TIME_WINDOW,
                  # A configurable number of gigabytes. If `captured_disk_usage` exceeds this, no more spectrograms will be captured.
                  max_captured_disk_usage: float = 1):
+        """
+        DataCoordinator constructor
+
+        :param prediction_interval_output_path: path to the file where prediction intervals are saved
+        :param blackout_interval_output_path: If the data is being inserted faster than it can be processed, we may be
+            forced to drop some incoming data. This creates a time discontinuity for which we cannot make predictions.
+            This parameter specifies a path to a txt file where those intervals of 'blackout' are recorded.
+        :param time_delta_per_time_step: The number of seconds a single time step of a spectrogram frame represents
+            (the length of the non-overlapping segments of each time window used in the STFT)
+        :param jump:
+        :param override_buffer_size:
+        :param min_appendable_time_steps: We assume that 'min_appendable_time_steps' is sufficient to make a prediction
+        :param min_free_space_for_input: Do not accept input if fewer than this number of rows are unallocated
+        :param prediction_load: Predictions will not be collected unless at least the following proportion of the
+            prediction buffer is full
+        :param spectrogram_capture_dir: A directory to save positively-predicted spectrograms to. The spectrograms are
+            not saved if this is not specified.
+        :param prediction_threshold: prediction outputs for each time step are between 0 and 1. If any are greater than
+            or equal to this threshold, those will be classified as positive.
+        :param min_collectable_predictions: Forbid the collection of fewer than this number of predictions.
+            Useful for spectrogram capturing.
+        :param max_captured_disk_usage: A configurable number of gigabytes. If `captured_disk_usage` exceeds this,
+            no more spectrograms will be captured.
+        """
         super().__init__()
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
@@ -200,11 +225,11 @@ class DataCoordinator(Closeable):
                 raise ValueError("Time window must be evenly divisible by jump")
         else:
             if time_window % self.spectrogram_buffer.min_appendable_time_steps:
-                raise ValueError("With no overlap, time window must be an integer multiple of {}".format(self.spectrogram_buffer.min_appendable_time_steps))
+                raise ValueError(f"With no overlap, time window must be an integer multiple of {self.spectrogram_buffer.min_appendable_time_steps}")
 
         if time_window < self.spectrogram_buffer.min_appendable_time_steps:
-            raise ValueError("Predictions must be made on at least {} rows of contiguous spectrogram data"
-                             .format(self.spectrogram_buffer.min_appendable_time_steps))
+            raise ValueError(f"Predictions must be made on at least {self.spectrogram_buffer.min_appendable_time_steps}"
+                             + " rows of contiguous spectrogram data")
 
         if time_window > metadata_snapshot.rows_unprocessed:
             time_window = metadata_snapshot.rows_unprocessed - metadata_snapshot.rows_unprocessed % jump
@@ -393,8 +418,9 @@ class DataCoordinator(Closeable):
     # Returns size of created file in GB.
     def _capture_spectrogram(self, time_bounds: Tuple[datetime, datetime],
                              spectrogram: np.ndarray, predictions: np.ndarray) -> float:
-        filename = "{}_to_{}.pkl".format(time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f"),
-                                         time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f"))
+        interval_begin_time_formatted = time_bounds[0].strftime("%Y-%m-%d-%H-%M-%S.%f")
+        interval_end_time_formatted = time_bounds[1].strftime("%Y-%m-%d-%H-%M-%S.%f")
+        filename = f"{interval_begin_time_formatted}_to_{interval_end_time_formatted}.pkl"
         filepath = self.spectrogram_capture_dir + "/" + filename
         arrays_of_interest = {"spectrogram": spectrogram, "predictions": predictions}
         with open(filepath, 'wb') as file:
@@ -405,10 +431,8 @@ class DataCoordinator(Closeable):
     def _assert_spectrogram_capture_dir(self):
         if self.spectrogram_capture_dir is None:
             return
-        if os.path.isdir(self.spectrogram_capture_dir):
-            return
-        raise ValueError("The spectrogram capture directory specified, '{}', does not exist!"
-                         .format(self.spectrogram_capture_dir))
+        FileUtils.assert_is_directory(self.spectrogram_capture_dir,
+                                      "The spectrogram capture directory specified does not exist!")
 
     def update_input_lock(self):
         with self.input_sync_lock:
