@@ -5,6 +5,7 @@ from collections import deque
 import sys, os, pickle
 from threading import Lock
 
+from embedded import FileUtils
 from embedded.Closeable import Closeable
 from embedded.IntervalRecorder import IntervalRecorder
 from embedded.SpectrogramBuffer import SpectrogramBuffer, NUM_SAMPLES_IN_TIME_WINDOW
@@ -430,9 +431,8 @@ class DataCoordinator(Closeable):
     def _assert_spectrogram_capture_dir(self):
         if self.spectrogram_capture_dir is None:
             return
-        if os.path.isdir(self.spectrogram_capture_dir):
-            return
-        raise ValueError(f"The spectrogram capture directory specified, '{self.spectrogram_capture_dir}', does not exist!")
+        FileUtils.assert_is_directory(self.spectrogram_capture_dir,
+                                      "The spectrogram capture directory specified does not exist!")
 
     def update_input_lock(self):
         with self.input_sync_lock:

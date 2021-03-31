@@ -4,26 +4,29 @@ from datetime import datetime, timezone, date
 from scipy.io import wavfile
 
 from embedded import DataCoordinator, PredictionManager, PredictionCollector, SignalUtils
+from embedded.FileUtils import assert_path_exists
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 from embedded.predictors import ModelPredictor
 
 # these hard-coded resource paths can be swapped out with environment variables later
-WAV_PATH = "../../../../elephant_dataset/Test/rawaudio/nn04c_20180308_000000.wav"
-MODEL_PATH = "../../../../models/remote_model.pt"
+WAV_PATH = "../../../../Integration_Test_Data/audio/nn04c_20180308_000000.wav"
+AUDIO_NPY_PATH = "../../../../Integration_Test_Data/audio/small_audio.npy"
+MODEL_PATH = "../../../../Integration_Test_Data/models/remote_model.pt"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 
 
-def integration_test_with_model_and_wav(small_buffer: bool = False):
+def integration_test_with_model_and_wav(small_buffer: bool = False, skip_wav: bool = True):
     """
     This test does not require a microphone to be connected to your computer. It will instead use audio from a WAV file
     and insert it into the processing pipeline where mic-captured audio would normally be found.
 
     :param small_buffer: set this to 'True' if you want the test to run with a very small buffer size to test the system
     under memory pressure
+    :param skip_wav: set this to 'True' if you want to use a .npy file as the audio data source rather than a WAV file
     :return:
     """
 
@@ -33,6 +36,7 @@ def integration_test_with_model_and_wav(small_buffer: bool = False):
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
+    assert_path_exists(MODEL_PATH, "You must provide a PyTorch model.")
     predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
 
     if small_buffer:
@@ -47,7 +51,12 @@ def integration_test_with_model_and_wav(small_buffer: bool = False):
     spec_extractor = SpectrogramExtractor()
 
     # Pre-load the audio buffer with data instead of streaming it from a microphone
-    wav_data = read_wav(WAV_PATH)[:(8000*4000)]  # Samples we're interested in occur before t = 4000 seconds for this file
+    if not skip_wav:
+        assert_path_exists(WAV_PATH, "You must provide a WAV file.")
+        wav_data = read_wav(WAV_PATH)[:(8000*4000)]  # Samples we're interested in occur before t = 4000 seconds for this file
+    else:
+        assert_path_exists(AUDIO_NPY_PATH, "You must provide a .npy file with audio data.")
+        wav_data = np.load(AUDIO_NPY_PATH)[:(8000*4000)]
 
     time = datetime.combine(date.today(), datetime.min.time())  # Sets the time to midnight, which makes reading the intervals conveniently easy
 
