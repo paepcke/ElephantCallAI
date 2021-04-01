@@ -1,3 +1,4 @@
+from typing import Optional
 import pyaudio
 from datetime import datetime, timezone, timedelta
 import numpy as np
@@ -22,7 +23,7 @@ class AudioCapturer(Closeable):
     sampling_freq: int
     stream: pyaudio.Stream
     frames_per_buffer: int
-    start_time_seconds: float
+    start_time_seconds: Optional[float]
     start_timestamp: datetime
     dropped_prev_segment: bool
 
@@ -36,10 +37,12 @@ class AudioCapturer(Closeable):
         pyaudio_obj = pyaudio.PyAudio()
         # Careful! The following line assumes you have exactly 1 USB mic plugged in (with a working driver!)
         self.stream = pyaudio_obj.open(rate=self.sampling_freq, channels=1, format=pyaudio.paInt16, input=True,
-                                       frames_per_buffer=self.frames_per_buffer, stream_callback=self._stream_callback)
+                                       frames_per_buffer=self.frames_per_buffer, stream_callback=self._stream_callback,
+                                       start=False)
         self.start_timestamp = datetime.now(timezone.utc)
-        self.start_time_seconds = self.stream.get_time()
+        self.start_time_seconds = None
         self.dropped_prev_segment = True
+        self.stream.start_stream()
 
     def _stream_callback(self, in_data, frame_count, time_info, status_flags):
         """This is invoked by PyAudio every time a configurable amount of audio data
@@ -54,6 +57,9 @@ class AudioCapturer(Closeable):
             timestamp = None
             if self.dropped_prev_segment:
                 absolute_time_seconds = time_info[TIME_KEY]
+                if self.start_time_seconds is None:
+                    # read initial time offset here, 'stream.get_time()' wasn't working on the Jetson
+                    self.start_time_seconds = absolute_time_seconds
                 timestamp = self._compute_timestamp(absolute_time_seconds)
             self.audio_buf.append_data(new_data, timestamp)
             self.dropped_prev_segment = False
