@@ -1,16 +1,16 @@
 from typing import Optional
-import pyaudio
-from datetime import datetime, timezone, timedelta
+import sounddevice
+from datetime import datetime, timezone
 import numpy as np
+import sys
 
 from embedded.Closeable import Closeable
 from embedded.microphone.AudioBuffer import AudioBuffer
 
 
+TARGET_DEVICE_NAME = "pulse"
 DEFAULT_SAMPLE_FREQ = 8000
 DEFAULT_FRAMES_PER_BUFFER = 4096  # about half a second of audio
-
-TIME_KEY = "input_buffer_adc_time"
 
 
 class AudioCapturer(Closeable):
@@ -21,9 +21,8 @@ class AudioCapturer(Closeable):
 
     audio_buf: AudioBuffer
     sampling_freq: int
-    stream: pyaudio.Stream
+    stream: sounddevice.InputStream
     frames_per_buffer: int
-    start_time_seconds: Optional[float]
     start_timestamp: datetime
     dropped_prev_segment: bool
 
@@ -34,19 +33,24 @@ class AudioCapturer(Closeable):
         self.frames_per_buffer = frames_per_buffer
 
     def start(self):
-        pyaudio_obj = pyaudio.PyAudio()
+        audio_device_idx = self._identify_pulse_device_id()
+        if audio_device_idx is None:
+            print(f"WARNING: '{TARGET_DEVICE_NAME}' audio device not found. Audio capture may not work as expected.",
+                  file=sys.stderr)
         # Careful! The following line assumes you have exactly 1 USB mic plugged in (with a working driver!)
-        self.stream = pyaudio_obj.open(rate=self.sampling_freq, channels=1, format=pyaudio.paInt16, input=True,
-                                       frames_per_buffer=self.frames_per_buffer, stream_callback=self._stream_callback,
-                                       start=False)
+        self.stream = sounddevice.InputStream(samplerate=self.sampling_freq, channels=1, dtype=np.int16,
+                                              blocksize=self.frames_per_buffer, callback=self._stream_callback,
+                                              device=audio_device_idx)
         self.start_timestamp = datetime.now(timezone.utc)
-        self.start_time_seconds = None
         self.dropped_prev_segment = True
-        self.stream.start_stream()
+        self.stream.start()
 
     def _stream_callback(self, in_data, frame_count, time_info, status_flags):
-        """This is invoked by PyAudio every time a configurable amount of audio data
-        is collected by the microphone"""
+        """
+        This is invoked by sounddevice every time a configurable amount of audio data
+        is collected by the microphone.
+        """
+
         if frame_count != self.frames_per_buffer:
             raise ValueError("Frame_count and frames_per_buffer not equal")
 
@@ -56,21 +60,29 @@ class AudioCapturer(Closeable):
             new_data = np.fromstring(in_data, dtype=np.int16)
             timestamp = None
             if self.dropped_prev_segment:
-                absolute_time_seconds = time_info[TIME_KEY]
-                if self.start_time_seconds is None:
-                    # read initial time offset here, 'stream.get_time()' wasn't working on the Jetson
-                    self.start_time_seconds = absolute_time_seconds
-                timestamp = self._compute_timestamp(absolute_time_seconds)
+                '''
+                there may be a delay between the actual time of recording and this call,
+                but it should be about 1 second or less, probably not enough to make a practical difference
+                for the intended use case of this module.
+                '''
+                timestamp = datetime.now(timezone.utc)
             self.audio_buf.append_data(new_data, timestamp)
             self.dropped_prev_segment = False
         else:
             self.dropped_prev_segment = True
 
-        return in_data, pyaudio.paContinue
+    def _identify_pulse_device_id(self) -> Optional[int]:
+        """
+        Due to some audio quirks on Linux devices, we want a device called 'pulse' to be used as audio input.
+        If pulseaudio is installed, it should appear in the list of sound devices.
 
-    def _compute_timestamp(self, absolute_time: float):
-        relative_time = absolute_time - self.start_time_seconds
-        return self.start_timestamp + timedelta(seconds=relative_time)
+        :return: a device ID for the pulse device or 'None' if the pulse device cannot be found
+        """
+        for device_id, device_info in enumerate(sounddevice.query_devices()):
+            if device_info['name'] == TARGET_DEVICE_NAME:
+                return device_id
+
+        return None
 
     def close(self):
         self.stream.close()
