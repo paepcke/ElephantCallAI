@@ -38,6 +38,10 @@ but it's a more involved process.
 NVIDIA has a forum page detailing how to get some necessary PyTorch dependencies. See 
 `https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-8-0-now-available/72048`.
 
+Note: When running the Jetson, you can use the command `$ sudo nvpmodel -m 1` to turn off two of its 4 CPU cores to save
+power. This is not recommended for development with USB peripherals and monitors connected, though. Use
+`$sudo nvpmodel -m 0` to restore the Jetson to full-power mode. These changes persist across reboots.
+
 ## Model Constraints
 
 The following details constrain models to the existing codebase, but modification of the codebase
