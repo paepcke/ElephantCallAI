@@ -9,18 +9,18 @@ spectrograms and raw predictions for time intervals containing positively-classi
 
 ## Requirements
 
-Normally, you'd just use `pip` to download all of your dependencies, but since you likely want to
-run this on a lightweight device, binaries appropriate to your device may not be available from `pip`.
+Normally, you'd just use `pip3` to download all of your dependencies, but since you likely want to
+run this on a lightweight device, binaries appropriate to your device may not be available from `pip3`.
 
 Dependencies include:
 
+`sounddevice` (install this with `$ sudo apt-get install libffi-dev; pip3 install sounddevice`)
+
 `pytorch` (methods of installing this vary based on your chosen hardware)
 
-`pyaudio` (install this with `$ sudo apt-get install python3-pyaudio` if you're using a Linux system)
+`matplotlib` (install this with `$ pip3 install matplotlib`)
 
-`matplotlib` (install this with `$ pip install matplotlib`)
-
-`numpy` (install this with `$ pip install numpy`)
+`numpy` (install this with `$ pip3 install numpy`)
 
 Your Pytorch model may have additional dependencies not specified here (such as `torchvision` or `tensorboardx`).
 
