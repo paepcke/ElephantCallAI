@@ -118,7 +118,8 @@ def forward_inference_on_batch(
     :param overlap_counts: full ndarray of the number of predictions applied to each invididual time step
     :param max_jumps: the number of different offsets that should be used. This method will process this many batches of input.
         If this number is 1, no 'jumps' will actually be evaluated, just the standard start of the array (the offset of 0).
-    :param first_stage: if 'True', run special processing for 2-stage model
+    :param first_stage: if not None, run special processing for 2-stage model. 'True' indicates this invocation is for
+        the first of the two model stages.
     :param second_stage_interest_queue: if not None, use this to filter things after running through second stage model
     :return: Nothing, output is written to the 2 param arrays 'predictions' and 'overlap_counts'
     """
@@ -129,6 +130,10 @@ def forward_inference_on_batch(
     # each iteration of this loop performs this approach with a different offset into the first frame, allowing the evaluation
     # of overlapping frames. Overlapping frames are NOT evaluated in parallel, but non-overlapping consecutive frames can be.
     for num_jumps_to_offset in range(0, max_jumps):
+        # Will always return 'False' for a single-stage model
+        if should_skip_batch(first_stage, second_stage_interest_queue):
+            continue
+
         # Used for indexing into the input batch
         local_begin_idx = num_jumps_to_offset * jump
         local_end_idx = local_begin_idx + batchsize * TIME_STEPS_IN_WINDOW
@@ -151,7 +156,7 @@ def forward_inference_on_batch(
 
         reshaped_input_batch_var = Variable(torch.from_numpy(reshaped_input_batch).float().to(parameters.device))
 
-        raw_outputs = model(reshaped_input_batch_var)  # TODO: take subset of batches and re-expand? Avoid running for all uninteresting stuff? etc
+        raw_outputs = model(reshaped_input_batch_var)  # TODO: take subset of batches and re-expand?
         outputs = raw_outputs.view(batchsize, TIME_STEPS_IN_WINDOW)
 
         relevant_predictions = predictions[global_begin_idx:global_end_idx].reshape((batchsize, TIME_STEPS_IN_WINDOW))
@@ -169,6 +174,7 @@ def forward_inference_on_batch(
         # now we restore the segment of the input data
         reshaped_input_batch *= stds
         reshaped_input_batch += means
+
 
 def consolidate_inference_output(
         prediction_outputs: np.ndarray,
@@ -208,6 +214,27 @@ def consolidate_inference_output(
         relevant_overlap_counts += 1
 
     relevant_predictions += prediction_outputs
+
+
+def should_skip_batch(first_stage: Optional[bool], second_stage_interest_queue: Deque[np.ndarray]) -> bool:
+    """
+    Used to encapsulate logic for skipping unnecessary invocations of a second-stage model to save on compute
+
+    :param first_stage: None if using a single-stage model, otherwise, True if processing the first stage, else False
+    :param second_stage_interest_queue: A queue of np arrays indicating whether the second model should be invoked for
+        the corresponding examples in the batch
+    :return: a bool indicating whether the invocation of the model should be skipped for this batch of examples
+    """
+    if first_stage is not None and not first_stage:
+        batch_interest = second_stage_interest_queue[0]
+        if np.sum(batch_interest) == 0:
+            """
+            If none of the examples are 'interesting', remove the indicator from the queue and return 'True'
+            so that the invocation of the second stage model is skipped for this batch
+            """
+            second_stage_interest_queue.popleft()
+            return True
+    return False
 
 
 def sigmoid(arg: np.ndarray):
