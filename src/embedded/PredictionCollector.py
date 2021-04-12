@@ -4,6 +4,7 @@ import numpy as np
 
 from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
+from embedded.SynchronizationUtils import yield_to_thread_scheduler
 
 GIVE_UP_THRESHOLD = 250
 LOCK_TIMEOUT_IN_SECONDS = 0.1
@@ -68,6 +69,7 @@ class PredictionCollector(Closeable):
                 num_consecutive_times_buffer_empty += 1
             if predictions is not None and self.predictions_list is not None:
                 self.predictions_list.append(predictions)
+            yield_to_thread_scheduler()
 
         if self.verbose:
             print(f"Total time steps collected by collector thread: {total_time_steps_collected}")

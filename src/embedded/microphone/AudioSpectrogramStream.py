@@ -8,6 +8,7 @@ from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
+from embedded.SynchronizationUtils import yield_to_thread_scheduler
 
 GIVE_UP_THRESHOLD_FOR_AUDIO_BUF = 100
 GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR = 200
@@ -90,6 +91,7 @@ class AudioSpectrogramStream(Closeable):
                             " Spectrogram stream giving up at {}.".format(
                     num_consecutive_times_audio_buf_empty * AUDIO_OUTPUT_LOCK_TIMEOUT_IN_SECONDS, now)
             print(error_msg, file=sys.stderr)
+        yield_to_thread_scheduler()
 
     def transform(self, spectrogram_data: np.ndarray):
         """
