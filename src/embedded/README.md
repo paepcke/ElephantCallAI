@@ -24,15 +24,6 @@ Dependencies include:
 
 Your Pytorch model may have additional dependencies not specified here (such as `torchvision` or `tensorboardx`).
 
-### Raspberry Pi 4
-
-The Raspberry Pi 4 does not have a GPU, and it ran very slowly during testing with a 43MB ResNet model. Make sure
-you are aware of performance limitations before deploying `Listen.py` on a Raspberry Pi 4.
-
-To install PyTorch dependencies, I used `https://github.com/sungjuGit/PyTorch-and-Vision-for-Raspberry-Pi-4B`.
-This may not be secure, so be mindful of your exposure. You can compile these yourself,
-but it's a more involved process.
-
 ### NVIDIA Jetson Nano
 
 NVIDIA has a forum page detailing how to get some necessary PyTorch dependencies. See 
@@ -41,6 +32,17 @@ NVIDIA has a forum page detailing how to get some necessary PyTorch dependencies
 Note: When running the Jetson, you can use the command `$ sudo nvpmodel -m 1` to turn off two of its 4 CPU cores to save
 power. This is not recommended for development with USB peripherals and monitors connected, though. Use
 `$sudo nvpmodel -m 0` to restore the Jetson to full-power mode. These changes persist across reboots.
+
+A detailed setup and installation guide for the Jetson can be found in `src/embedded/JetsonSetup.md`.
+
+### Raspberry Pi 4
+
+The Raspberry Pi 4 does not have a GPU, and it ran very slowly during testing with a 43MB ResNet model. Make sure
+you are aware of performance limitations before deploying `Listen.py` on a Raspberry Pi 4.
+
+To install PyTorch dependencies, I used `https://github.com/sungjuGit/PyTorch-and-Vision-for-Raspberry-Pi-4B`.
+This may not be secure, so be mindful of your exposure. You can compile these yourself,
+but it's a more involved process.
 
 ## Model Constraints
 
