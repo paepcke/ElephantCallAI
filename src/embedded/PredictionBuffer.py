@@ -1,6 +1,8 @@
 from typing import Optional
 import numpy as np
 
+from PredictionUtils import sigmoid
+
 
 class PredictionBuffer:
     """A 1-D numpy array that's also a ring buffer. Used for storing predictions."""
@@ -47,9 +49,5 @@ class PredictionBuffer:
             out[:] = self.predictions[begin_idx:end_idx] / self.overlap_counts[begin_idx:end_idx]
             self.predictions[begin_idx:end_idx] = 0
             self.overlap_counts[begin_idx:end_idx] = 0
-        out[:] = self.sigmoid(out)
+        out[:] = sigmoid(out)
         return out
-
-    def sigmoid(self, arg: np.ndarray):
-        exp_arg = np.exp(arg)
-        return exp_arg/(exp_arg + 1)
