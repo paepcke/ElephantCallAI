@@ -13,12 +13,16 @@ DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # middle threshold is always 0.5
 class TwoStageModelPredictor:
+    """
+    A model consisting of two PyTorch models applied in sequence. The second model's output is used depending on the
+    first model's output for the same data.
+    """
+
     first_stage_model: nn.Module
     second_stage_model: nn.Module
     batch_size: int
     jump: int
 
-    """An abstract base class for making predictions based on spectrograms"""
     def __init__(self, path_to_2stage_dir: str, batch_size: int = 4, jump: int = NUM_SAMPLES_IN_TIME_WINDOW // 4):
         assert_is_directory(path_to_2stage_dir,
                             "A two-stage model must be specified with a directory containing each stage's model")

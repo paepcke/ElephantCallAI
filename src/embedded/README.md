@@ -64,6 +64,14 @@ to make predictions for that timestep. The arithmetic mean of each prediction fo
 a sigmoid function and its output is used as the model's prediction for that timestep. If this overlapping behavior is
 not desired, you may pass `--jump 0` to `Listen.py`.
 
+By default, two such models are used in sequence. The directory containing them is specified with the `--model-path` argument
+to `Listen.py` and they must be named `first_stage.pt` and `second_stage.pt` respectively. If at least 15 elements of
+a 256-step output of `first_stage.pt` are greater than a threshold of 0.5, the `second_stage.pt` model is run on the same
+input data and its output is used instead. These values cannot yet be configured through the command-line interface.
+
+If you want to use a single model instead, specify the `--single-stage-model` argument to `Listen.py` and instead of a directory,
+provide a path to a `*.pt` file using the `--model-path` argument.
+
 ## Usage
 
 To see the various command-line arguments, look at `src/embedded/args.py` or run `python3 Listen.py -h`.

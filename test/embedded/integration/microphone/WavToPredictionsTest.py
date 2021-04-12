@@ -8,18 +8,19 @@ from embedded.FileUtils import assert_path_exists
 from embedded.microphone.AudioBuffer import AudioBuffer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
-from embedded.predictors import ModelPredictor
+from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredictor
 
 # these hard-coded resource paths can be swapped out with environment variables later
 WAV_PATH = "../../../../Integration_Test_Data/audio/nn04c_20180308_000000.wav"
 AUDIO_NPY_PATH = "../../../../Integration_Test_Data/audio/small_audio.npy"
-MODEL_PATH = "../../../../Integration_Test_Data/models/remote_model.pt"
+SINGLE_STAGE_MODEL_PATH = "../../../../Integration_Test_Data/models/remote_model.pt"
+TWO_STAGE_MODEL_PATH = "../../../../Integration_Test_Data/models/2stage"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 
 
-def integration_test_with_model_and_wav(small_buffer: bool = False, skip_wav: bool = True):
+def integration_test_with_model_and_wav(small_buffer: bool = False, skip_wav: bool = True, two_stage_model: bool = False):
     """
     This test does not require a microphone to be connected to your computer. It will instead use audio from a WAV file
     and insert it into the processing pipeline where mic-captured audio would normally be found.
@@ -36,8 +37,12 @@ def integration_test_with_model_and_wav(small_buffer: bool = False, skip_wav: bo
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
-    assert_path_exists(MODEL_PATH, "You must provide a PyTorch model.")
-    predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
+    if two_stage_model:
+        assert_path_exists(TWO_STAGE_MODEL_PATH, "You must provide a directory containing two PyTorch models.")
+        predictor = TwoStageModelPredictor.TwoStageModelPredictor(SINGLE_STAGE_MODEL_PATH, jump=jump)
+    else:
+        assert_path_exists(SINGLE_STAGE_MODEL_PATH, "You must provide a PyTorch model.")
+        predictor = SingleStageModelPredictor.SingleStageModelPredictor(SINGLE_STAGE_MODEL_PATH, jump=jump)
 
     if small_buffer:
         data_coordinator = DataCoordinator.DataCoordinator(

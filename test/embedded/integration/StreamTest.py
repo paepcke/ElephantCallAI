@@ -4,18 +4,19 @@ from datetime import datetime, timezone
 
 from embedded import DataCoordinator, FileSpectrogramStream, PredictionManager, PredictionCollector, SignalUtils
 from embedded.FileUtils import assert_path_exists
-from embedded.predictors import ModelPredictor
+from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
 SPECTROGRAM_NPY_FILE = "../../../Integration_Test_Data/spectrograms/nn10b_20180604_spec.npy"
-MODEL_PATH = "../../../Integration_Test_Data/models/remote_model.pt"
+SINGLE_STAGE_MODEL_PATH = "../../../Integration_Test_Data/models/remote_model.pt"
+TWO_STAGE_MODEL_PATH = "../../../Integration_Test_Data/models/2stage"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
 LABELS_PATH = "../../../Integration_Test_Data/spectrograms/nn10b_20180604_label.npy"
 
 
-def integration_test_with_model(small_buffer: bool = False):
+def integration_test_with_model(small_buffer: bool = False, two_stage_model: bool = False):
     """
     This test will bypass the audio portion of the pipeline, streaming spectrogram data
     from a file into the DataCoordinator. Useful for testing this part in isolation.
@@ -30,8 +31,12 @@ def integration_test_with_model(small_buffer: bool = False):
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
-    assert_path_exists(MODEL_PATH, "You must provide a PyTorch model.")
-    predictor = ModelPredictor.ModelPredictor(MODEL_PATH, jump=jump)
+    if two_stage_model:
+        assert_path_exists(TWO_STAGE_MODEL_PATH, "You must provide a directory containing two PyTorch models.")
+        predictor = TwoStageModelPredictor.TwoStageModelPredictor(SINGLE_STAGE_MODEL_PATH, jump=jump)
+    else:
+        assert_path_exists(SINGLE_STAGE_MODEL_PATH, "You must provide a PyTorch model.")
+        predictor = SingleStageModelPredictor.SingleStageModelPredictor(SINGLE_STAGE_MODEL_PATH, jump=jump)
 
     if small_buffer:
         data_coordinator = DataCoordinator.DataCoordinator(
