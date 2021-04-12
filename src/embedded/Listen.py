@@ -9,7 +9,7 @@ from embedded.microphone import AudioBuffer
 from embedded.microphone.AudioCapturer import AudioCapturer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
-from embedded.predictors import ModelPredictor
+from embedded.predictors import Predictor, SingleStageModelPredictor, TwoStageModelPredictor
 from embedded import SpectrogramBuffer
 
 
@@ -41,7 +41,11 @@ def main():
     if jump != 0 and MODEL_INPUT_TIMESTEPS % jump != 0:
         raise ValueError(f"'jump' must be an even divisor of {MODEL_INPUT_TIMESTEPS}")
 
-    predictor = ModelPredictor.ModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
+    predictor: Predictor
+    if args.single_stage_model:
+        predictor = SingleStageModelPredictor.SingleStageModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
+    else:
+        predictor = TwoStageModelPredictor.TwoStageModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
 
     data_coordinator = DataCoordinator.DataCoordinator(
         args.predicted_intervals_output_path, args.blackout_intervals_output_path, jump=jump,

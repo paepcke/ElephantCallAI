@@ -3,6 +3,7 @@ from threading import Thread
 from embedded.Closeable import Closeable
 from embedded.predictors.Predictor import Predictor
 from embedded.DataCoordinator import DataCoordinator
+from embedded.SynchronizationUtils import yield_to_thread_scheduler
 
 GIVE_UP_THRESHOLD = 250
 TIME_WINDOW = 256*4 + 3*64
@@ -55,6 +56,7 @@ class PredictionManager(Closeable):
                 num_consecutive_times_buffer_empty = 0
             else:
                 num_consecutive_times_buffer_empty += 1
+            yield_to_thread_scheduler()
 
         if self.verbose:
             print(f"Total time steps predicted by prediction thread: {total_time_steps_predicted}")
