@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 """
-Script used for running the inferance prediction pipeline.
+Script used for running the inference prediction pipeline.
 The prediction pipeline consists of three main components:
     1) Data processing. Given a directory with .wav files,
     generate the corresponding spectrogram representations
     2) 2-stage model prediction. Predict the 0/1 segmentation
     given the 2-stage model.
-    3) Elephant call prediction. Output in csv format the models
+    3) Elephant call prediction. Output in csv format the model's
     predictions for start / end times of calls.
 
 This script allows for complete and partial runs of the 3 steps above.
@@ -15,6 +15,27 @@ Namely, the flag '--process_data' indicates that we want to process
 the '.wav' files (step 1), and the flag '--make_predictions' means we want
 to generate elephant call predictions (step 2 + 3). Other arguments 
 are then provided to properly run the auxilliary scripts.
+
+Example run:
+
+Help:
+python Inference_pipeline.py --help
+
+------------------------------------
+
+Full Pipeline:
+python Inference_pipeline.py --process_data --data_dir <data directory> --spect_out <output directory> --make_predictions --model_0 2_Stage_Model/first_stage.pt --model_1 2_Stage_Model/second_stage.pt
+
+------------------------------------
+
+Data Generation:
+python Inference_pipeline.py --process_data --data_dir <data directory> --spect_out <output directory> 
+
+------------------------------------
+
+Model Predictions:
+python Inference_pipeline.py --make_predictions --model_0 2_Stage_Model/first_stage.pt --model_1 2_Stage_Model/second_stage.pt --spect_path <directory with processed spectrograms>
+
 """
 
 import temp_spectrogramer

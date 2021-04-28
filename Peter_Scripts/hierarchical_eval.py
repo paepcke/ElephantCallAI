@@ -1,3 +1,10 @@
+'''
+While this module is designed for start by end users from the command
+line, it is also run by Inference_pipeline.py.  For a higher level
+experience, take a look at that module.
+'''
+
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -163,7 +170,7 @@ def multi_class_predict_spec_sliding_window(spectrogram, model, chunk_size=256, 
     # frame, determined by the hop size.
     spect_idx = 0 # The frame idx of the beginning of the current window
     i = 0
-    # How can I parralelize this shit??????
+    # How can I parallelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
         # Transform the slice - this is definitely sketchy!!!! 
@@ -279,7 +286,7 @@ def predict_spec_sliding_window(spectrogram, model, chunk_size=256, jump=128, hi
     # frame, determined by the hop size.
     spect_idx = 0 # The frame idx of the beginning of the current window
     i = 0
-    # How can I parralelize this shit??????
+    # How can I parallelize this shit??????
     while  spect_idx + chunk_size <= spectrogram.shape[1]:
         spect_slice = spectrogram[:, spect_idx: spect_idx + chunk_size, :]
         # Transform the slice - this is definitely sketchy!!!! 
