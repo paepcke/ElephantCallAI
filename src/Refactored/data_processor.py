@@ -114,8 +114,8 @@ class Spectrogram_Generator(object):
         for(dirpath, dirnames, filenames) in os.walk(data_dir):
             for file in filenames:
                 # Make sure that we don't get garbage files
-                file_type = file.split('.')[1]
-                if (file_type not in ['wav', 'txt']):
+                file_type = file.split('.')
+                if len(file_type) == 1 or (file_type[1] not in ['wav', 'txt']):
                     continue
 
                 data_paths.append(os.path.join(dirpath, file))
@@ -137,7 +137,8 @@ class LaunchChopper(object):
 
         The output file is to be likely a Train or Test dir!
     """
-    def __init__(self, data, output_dir, window_size=256, data_path=None):
+    def __init__(self, data, output_dir, window_size=256, 
+                data_path=None, exclude_marginal=False):
         '''
         @param data: Either a data directory with the processed spectrogram files and
             corresponding mask files or a file with the '_spectro.npy' files that we 
@@ -162,7 +163,7 @@ class LaunchChopper(object):
 
             spect_file_pairs = self.extract_from_file(data, data_path)
         else:
-            spect_file_pairs = self.extract_from_dir(data)
+            spect_file_pairs = self.extract_from_dir(data, exclude_marginal=exclude_marginal)
 
         for spect_file, mask_file in spect_file_pairs:
             SpectrogramChopper(spect_file,
@@ -183,6 +184,8 @@ class LaunchChopper(object):
             so that they can be read!
 
             @return list of ('_spectro.npy', '_label_mask.npy') tuples
+
+            MAY NEED TO ADD EXCLUDE MARGINALS FLAG!
         """
         with open(data_file, "r") as f:
             lines = f.readlines()
@@ -202,7 +205,7 @@ class LaunchChopper(object):
 
         return spect_file_pairs
 
-    def extract_from_dir(self, data_dir):
+    def extract_from_dir(self, data_dir, exclude_marginal=False):
         """
             Given a data directory, extract a list of (spect, mask) file
             tuples that are to be chopped.
@@ -221,7 +224,10 @@ class LaunchChopper(object):
                     file_family = FileFamily(full_file)
 
                     # Append tuple with (spect_file, label_mask_file)
-                    spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MASK)))
+                    if exclude_marginal:
+                        spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MARGINAL_MASK)))
+                    else:
+                        spect_file_pairs.append((full_file, file_family.fullpath(AudioType.MASK)))
 
         return spect_file_pairs
 
@@ -243,7 +249,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--actions',
                         nargs='+',
-                        choices=['spectro', 'melspectro','labelmask', 'copyraven'],
+                        choices=['spectro', 'melspectro','labelmask', 'copyraven', 'marginal_labelmask'],
                         help="Which tasks to accomplish (repeatable)"
                         )
 
@@ -331,6 +337,12 @@ if __name__ == '__main__':
                         help='If "spect_data" is a file, then we need this to specify the data path to append to these files'
                         )
 
+    parser.add_argument('--exclude_marginal',
+                        action='store_true',
+                        default=False,
+                        help='Flag indicating to exclude elephant calls marked as marginal (i.e. use the MARGINAL_MASK for chopping)'
+                        )
+
 
     args = parser.parse_args();
 
@@ -354,9 +366,11 @@ if __name__ == '__main__':
         # If we have just processed the data then just use spect_outdir as input!
         # Remember we need to add in the subdirectory created!??
         if args.process_spects:
-            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=args.window, data_path=args.spect_data_path)
+            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=args.window, 
+                                data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         else:
-            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=args.window, data_path=args.spect_data_path)
+            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=args.window, 
+                            data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         
 
         

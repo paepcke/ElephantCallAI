@@ -73,6 +73,7 @@ def get_loader_fuzzy(data_dir,
                batch_size,
                random_seed=8,
                norm="norm",
+               gaussian_smooth=0,
                scale=False,
                include_boundaries=False,
                shift_windows=False,
@@ -120,7 +121,8 @@ def get_loader_fuzzy(data_dir,
     print ("DataLoader Seed:", parameters.DATA_LOADER_SEED)
     set_seed(parameters.DATA_LOADER_SEED)
 
-    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, include_boundaries=include_boundaries, 
+    dataset = ElephantDatasetFuzzy(data_dir, preprocess=norm, scale=scale, gaussian_smooth=gaussian_smooth,
+                        include_boundaries=include_boundaries, 
                         shift_windows=shift_windows, is_full_dataset=is_full_dataset, 
                         full_window_predict=full_window_predict)
     
@@ -142,7 +144,8 @@ def get_loader_fuzzy(data_dir,
 
 
 class ElephantDatasetFuzzy(data.Dataset):
-    def __init__(self, data_path, preprocess="norm", scale=False, transform=None, include_boundaries=False, 
+    def __init__(self, data_path, preprocess="norm", gaussian_smooth=0,
+            scale=False, transform=None, include_boundaries=False, 
             shift_windows=False, is_full_dataset=False, full_window_predict=False):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
@@ -153,6 +156,8 @@ class ElephantDatasetFuzzy(data.Dataset):
         self.shift_windows = shift_windows
         self.is_full_dataset = is_full_dataset
         self.full_window_predict = full_window_predict
+        # Apply gaussian smoothing to the labels
+        self.gaussian_smooth = gaussian_smooth
         # This is only used if we want to generate fixed repeated
         # windows during hierarchical training
         self.fixed_indeces = None
@@ -374,6 +379,8 @@ class ElephantDatasetFuzzy(data.Dataset):
         else:
             feature = self.apply_transforms(feature)
 
+        label = self.apply_label_transforms(label)
+
         if self.shift_windows:
             feature, label = self.sample_chunk(feature, label)
 
@@ -429,6 +436,13 @@ class ElephantDatasetFuzzy(data.Dataset):
 
         return feature[start_slice : end_slice, :], label[start_slice : end_slice]
 
+    def apply_label_transforms(self, label):
+        # Gaussian smooth the labels!
+        if self.gaussian_smooth != 0:
+            label = gaussian_filter1d(label,sigma=self.gaussian_smooth)
+
+        return label
+
     def apply_transforms(self, data, model_0_pred=None):
         if self.scale:
             data = 10 * np.log10(data)
@@ -477,12 +491,14 @@ class ElephantDatasetFuzzy(data.Dataset):
     - Preprocess = Scale range (-1, 1), Scale = True ===> Overfit but huge variance issue
 """
 class ElephantDataset(data.Dataset):
-    def __init__(self, data_path, transform=None, preprocess="norm", scale=False):
+    def __init__(self, data_path, transform=None, preprocess="norm", scale=False, gaussian_smooth=0):
         # Plan: Load in all feature and label names to create a list
         self.data_path = data_path
         self.user_transforms = transform
         self.preprocess = preprocess
         self.scale = scale
+        # Apply gaussian smoothing to the labels
+        self.gaussian_smooth = gaussian_smooth
 
         # Probably should not have + "**/" after data_path? It seems like 
         # we are passing the exact datapths anyways! Also why recursive?
@@ -514,6 +530,7 @@ class ElephantDataset(data.Dataset):
         label = np.load(self.labels[index])
 
         feature = self.apply_transforms(feature)
+        label = self.apply_label_transforms(label)
         if self.user_transforms:
             feature = self.user_transforms(feature)
             
@@ -523,6 +540,14 @@ class ElephantDataset(data.Dataset):
 
 
         return feature, label, self.features[index] # Include the data file
+
+
+    def apply_label_transforms(self, label):
+        # Gaussian smooth the labels!
+        if self.gaussian_smooth != 0:
+            label = gaussian_filter1d(label,sigma=self.gaussian_smooth)
+
+        return label
 
     def apply_transforms(self, data):
         if self.scale:
@@ -660,11 +685,11 @@ class ElephantDatasetFull(data.Dataset):
             
         # Honestly may be worth pre-process this
         #spectrogram = torch.from_numpy(spectrogram)
-        #label = torch.from_numpy(label)
 
         if self.only_preds:
             return spectrogram, None, gt_call_path
         else:   
+            label = np.load(label_path)
             return spectrogram, label, gt_call_path
 
 

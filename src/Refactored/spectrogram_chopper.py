@@ -79,8 +79,9 @@ class SpectrogramChopper(object):
 
         try:
             spect_labels = np.load(spect_label_file)
-        except:
-            raise ValueError("Invalid spectrogram label file")
+        except: 
+            print("No label file! Using empty labels")
+            spect_labels = np.zeros(spectrogram.shape[0])
 
         # Extract the spectrogram name so that we can label the chopped spectrograms
         file_family = FileFamily(spect_file)

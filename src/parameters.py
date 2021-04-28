@@ -46,6 +46,11 @@ DATASET = 'noab'
 NEG_SAMPLES = 1
 TEST_NEG_SAMPLES = 1
 CALL_REPEATS = 1
+# New methods for smoothing labels and 
+# excluding calls that are marginal!
+LABEL_SMOOTH = 3
+EXCLUDE_MARGINALS = False
+####################################
 NORM = "norm"
 SCALE = True # Log scale the spectrograms
 SHIFT_WINDOWS = False

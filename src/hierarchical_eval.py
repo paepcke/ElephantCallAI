@@ -28,7 +28,7 @@ parser.add_argument('--call_preds_path', type=str, dest='call_predictions_path',
 
 # Defaults based on quatro
 parser.add_argument('--test_files', type=str, default='/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x1/files.txt')
-parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_general_test/", 
+parser.add_argument('--spect_path', type=str, default="/home/data/elephants/rawdata/Spectrograms/nouabale_test/", 
     help='Path to the processed spectrogram files')
 
 # Special flag to specify that we are just making predictoins and not comparing against ground truth!
@@ -987,7 +987,7 @@ def create_predictions_csv(dataset, predictions, save_path, in_seconds=False):
                 i += 1
 
 
-def get_spectrogram_paths(test_files_path, spectrogram_path):
+def get_spectrogram_paths(test_files_path, spectrogram_path, exclude_marginals=False):
     """
         In the test set folder, there is a file that includes
         all of the recording files used for the test set. Based
@@ -1011,8 +1011,15 @@ def get_spectrogram_paths(test_files_path, spectrogram_path):
         # Create the spectrogram path by concatenating
         # the test file with the path to the folder
         # containing the spectrogram files
-        paths['specs'].append(spectrogram_path + '/' + file + '_spec.npy')
-        paths['labels'].append(spectrogram_path + '/' + file + '_label.npy')
+        # For now we need to add the 000ssss
+        paths['specs'].append(spectrogram_path + '/' + file + '_000000_spectro.npy')
+        if  exclude_marginals:
+            paths['labels'].append(spectrogram_path + '/' + file + '_000000_marginal_label_mask.npy')
+        else:
+            paths['labels'].append(spectrogram_path + '/' + file + '_000000_label_mask.npy')
+
+            
+
         paths['gts'].append(spectrogram_path + '/' + file + '_gt.txt')             
 
     return paths
@@ -1042,7 +1049,7 @@ def main(args):
             os.mkdir(args.call_predictions_path)
 
     
-    full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path)
+    full_test_spect_paths = get_spectrogram_paths(args.test_files, args.spect_path, exclude_marginals=parameters.EXCLUDE_MARGINALS)
     # Include flag indicating if we are just making predictions with no labels
     full_dataset = ElephantDatasetFull(full_test_spect_paths['specs'],
                  full_test_spect_paths['labels'], full_test_spect_paths['gts'], only_preds=args.only_predictions)    

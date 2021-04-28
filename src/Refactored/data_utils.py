@@ -33,11 +33,13 @@ class PrecRecFileTypes(Enum):
     PICKLE       = '_pickle'
     
 class AudioType(Enum):
-    WAV = 0         # Audio sound wave
-    SPECTRO = 1     # 24-hr spectrogram
-    LABEL = 3       # Raven label file
-    MASK = 4        # Mask Call/No-Call from label file
-    TIME = 5       # Time series for spectrogram cols
+    WAV = 0            # Audio sound wave
+    SPECTRO = 1        # 24-hr spectrogram
+    LABEL = 3          # Raven label file
+    MASK = 4           # Mask Call/No-Call from label file
+    TIME = 5           # Time series for spectrogram cols
+    MARGINAL_LABEL = 6 # Raven label file with marginal calls labeled
+    MARGINAL_MASK = 7  # Mask Call/No-Call excluding marginal calls!!
 
 class DATAUtils(object):
     '''
@@ -549,17 +551,19 @@ class FileFamily(object):
         o inst.label
         o inst.mask
         o inst.time
+        o inst.marginal_label
     
     For full filepaths, use:
     
         inst.fullpath(<AudioType>)
         
     where AudioType is one of 
-        AudioType.WAV         # Audio sound wave
-                  SPECTRO     # 24-hr spectrogram
-                  LABEL       # Raven label file
-                  MASK        # Mask Call/No-Call from label file
-                  TIME        # Time series mask for spectrogram cols
+        AudioType.WAV            # Audio sound wave
+                  SPECTRO        # 24-hr spectrogram
+                  LABEL          # Raven label file
+                  MASK           # Mask Call/No-Call from label file
+                  TIME           # Time series mask for spectrogram cols
+                  MARGINAL_LABEL # Raven label file with marginal calls labeled
     '''
 
     #------------------------------------
@@ -584,11 +588,12 @@ class FileFamily(object):
     def fullpath(self, filetype):
         '''
         Given a filetype: 
-        AudioType.WAV         # Audio sound wave
-                  SPECTRO     # 24-hr spectrogram
-                  LABEL       # Raven label file
-                  MASK        # Mask Call/No-Call from label file
-                  TIME        # Time series mask for spectrogram cols
+        AudioType.WAV            # Audio sound wave
+                  SPECTRO        # 24-hr spectrogram
+                  LABEL          # Raven label file
+                  MASK           # Mask Call/No-Call from label file
+                  TIME           # Time series mask for spectrogram cols
+                  MARGINAL_LABEL # Raven label file with marginal calls labeled
 
         return the full path to the respective
         file family.
@@ -609,6 +614,10 @@ class FileFamily(object):
             return os.path.join(self.path, self.mask)
         elif filetype == AudioType.TIME:
             return os.path.join(self.path, self.time_labels)
+        elif filetype == AudioType.MARGINAL_LABEL:
+            return os.path.join(self.path, self.marginal_label)
+        elif filetype == AudioType.MARGINAL_MASK:
+            return os.path.join(self.path, self.marginal_mask)
 
 
     #------------------------------------
@@ -646,6 +655,12 @@ class FileFamily(object):
             self.file_root = fpath.name[:-len('_time_mask.npy')]
         elif filename.endswith('_spectro.npy'):
             self.file_root = fpath.name[:-len('_spectro.npy')]
+        # Adding in a new tag for labels based on marginal data
+        elif filename.endswith('_marginal_label_mask.npy'):
+            self.file_root = fpath.name[:-len('_marginal_label_mask.npy')]
+        elif filename.endswith('_marginal.txt'):
+            self.file_root = fpath.name[:-len('_marginal.npy')]
+
 
         # Just the path to the file without filename:
         path = str(fpath.parent)
@@ -658,9 +673,16 @@ class FileFamily(object):
         if fpath.suffix == '.wav':
             self.file_type = AudioType.WAV
         elif fpath.suffix == '.txt':
-            self.file_type = AudioType.LABEL
+            # Add a check for marginal txt labeling!
+            if filename.endswith('_marginal.txt'):
+                self.file_type = AudioType.MARGINAL_LABEL
+            else:
+                self.file_type = AudioType.LABEL
         elif str(fpath).endswith("_label_mask.npy"):
             self.file_type = AudioType.MASK
+        # Add new marginal label mask (i.e. exclude marginal calls)
+        elif str(fpath).endswith("_marginal_label_mask.npy"):
+            self.file_type = AudioType.MARGINAL_MASK
         elif str(fpath).endswith("_spectro.npy"):
             self.file_type = AudioType.SPECTRO
         elif str(fpath).endswith("_time_mask.npy"):
@@ -672,8 +694,12 @@ class FileFamily(object):
         self.wav     = self.file_root + '.wav'
         self.label   = self.file_root + '.txt'
         self.mask    = f"{self.file_root}_label_mask.npy"
+        # Add new marginal label mask (i.e. exclude marginal calls)
+        self.marginal_mask = f"{self.file_root}_marginal_label_mask.npy"
         self.time_labels = f"{self.file_root}_time_mask.npy"
         self.spectro = f"{self.file_root}_spectro.npy"
+        # Adding new marginal labeling
+        self.marginal_label = f"{self.file_root}_marginal.txt"
 
 
            
