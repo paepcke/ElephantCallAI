@@ -8,21 +8,23 @@ import random
 import argparse
 from tqdm import tqdm
 
-from gun_data.GunshotDataset import FILENAME_REGEX
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 
 ECOGUNS_REGEX = "ecoguns\.\d+\.(\d+\.\d+(?:\.\d+){0,1})\.\d+\.wav"
 PNNGUNS_REGEX = "pnnnGuns\.\d+\.\w+\.(\d+\.\d+\.\d+)\.\w+\.wav"
 BACKGROUND_FILENAME_PREFIX = "bgAudio"
+TRAIN_MEAN_FILENAME = "train_mean.npy"
+TRAIN_STD_FILENAME = "train_std.npy"
+FILENAME_REGEX = ".*_(\d+)\.npy"  # input data to the model will be of this form
 
 # These variables are for quick iteration on this script. You should override them with command-line arguments.
-REMOTE_PATH_PREFIX = "/home/deschwa2/gun_data/"
+REMOTE_PATH_PREFIX = "/home/deschwa2/gun_data"
 
-ECOGUNS_WAV_PATH = REMOTE_PATH_PREFIX + "ecoguns"
-ECOGUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "Guns_Training_ecoGuns_SST_mac.txt"
-PNNN_GUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "nn_Grid50_guns_dep1-7_train.txt"
-PNNN_GUNS_WAV_PATH = REMOTE_PATH_PREFIX + "pnnn_dep1-7"
-RAW_BG_WAV_PATH = REMOTE_PATH_PREFIX + "rawBgNoise"
+ECOGUNS_WAV_PATH = REMOTE_PATH_PREFIX + "/ecoguns"
+ECOGUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "/Guns_Training_ecoGuns_SST_mac.txt"
+PNNN_GUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "/nn_Grid50_guns_dep1-7_train.txt"
+PNNN_GUNS_WAV_PATH = REMOTE_PATH_PREFIX + "/pnnn_dep1-7"
+RAW_BG_WAV_PATH = REMOTE_PATH_PREFIX + "/rawBgNoise"
 
 """
 This is a script and a collection of related utilities that takes in a variety of weakly-labeled gunshot clips and
@@ -274,6 +276,37 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
         stft = stft.astype(np.float32)
         np.save(out_filename, stft)
 
+def prepare_freq_mean_std(args):
+    """
+    Computes training set mean and std (for each frequency band).
+    Stores these npy arrays as files in the ".../datasets" directory.
+    """
+    datasets_path = f"{args.path_prefix}/{args.output_dir}/datasets"
+    train_path = f"{datasets_path}/train"
+    train_files = os.listdir(train_path)
+    first_example = np.load(train_path + "/" + train_files[0])
+    mean = np.mean(first_example, axis=0).reshape(1, -1)
+
+    print("Computing training set mean...")
+    for filename in tqdm(train_files[1:]):
+        filepath = train_path + "/" + filename
+        example = np.load(filepath)
+        mean += np.mean(example, axis=0).reshape(1, -1)
+
+    mean /= len(train_files)
+    var = np.mean(np.power(first_example - mean, 2), axis=0).reshape(1, -1)
+
+    print("Computing training set standard deviation...")
+    for filename in tqdm(train_files[1:]):
+        filepath = train_path + "/" + filename
+        example = np.load(filepath)
+        var += np.mean(np.power(example - mean, 2), axis=0).reshape(1, -1)
+
+    var /= len(first_example)
+    std = np.sqrt(var)
+
+    np.save(f"{datasets_path}/{TRAIN_MEAN_FILENAME}", mean)
+    np.save(f"{datasets_path}/{TRAIN_STD_FILENAME}", std)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -343,6 +376,9 @@ if __name__ == "__main__":
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/datasets/test")
 
     if args.clear_dirs_first:
+        print("Clearing existing data at the target location...")
+        # TODO: suppress ugly output from these calls?
+
         # positive outputs
         os.system(f"rm {args.path_prefix}/{args.output_dir}/pos_train/*.npy")
         os.system(f"rm {args.path_prefix}/{args.output_dir}/pos_val/*.npy")
@@ -357,6 +393,7 @@ if __name__ == "__main__":
         os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/train/*.npy")
         os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/val/*.npy")
         os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/test/*.npy")
+        os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/*.npy")
 
     train_df, val_df, test_df = get_positive_clips(args)
 
@@ -400,4 +437,4 @@ if __name__ == "__main__":
                        f"{args.path_prefix}/{args.output_dir}/datasets/{setname}", n_samples,
                        args.frac_noguns, spec_ex, transform)
 
-    # TODO: globally scale by mean and std? Preprocessing for ResNet?
+    prepare_freq_mean_std(args)
