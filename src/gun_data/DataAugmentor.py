@@ -6,9 +6,10 @@ AUG_TYPES = ["freq_mask", "time_mask", "noise"]
 
 DEFAULT_STD = 0.9  # noise should have a stddev of 0.9 times the stddev across the training set (which is 1 after normalization)
 
-# TODO: augmentor object holding settings?
-
 class DataAugmentor():
+    """
+    This object holds data augmentation settings and has a simple interface for probabilistic data augmentation.
+    """
     max_freq_occlusion: int
     max_time_occlusion: int
     aug_prob: float
@@ -44,7 +45,7 @@ class DataAugmentor():
         return self.augment_with_mask(spec, self.max_freq_occlusion)
 
     def augment_with_time_mask(self, spec: np.ndarray) -> np.ndarray:
-        return self.augment_with_mask(spec.T, self.max_time_occlusion)
+        return self.augment_with_mask(spec.T, self.max_time_occlusion).T
 
     def augment_with_mask(self, spec: np.ndarray, max_height: int) -> np.ndarray:
         max_height = min(max_height, int(spec.shape[1]*MAX_REASONABLE_OCCLUSION))

@@ -13,13 +13,13 @@ class GunshotDataset(Dataset):
     # data files should have names ending in "_<class label>.npy"
     data_dir: str
     files: List[Tuple[str, int]]
-    augmentor: DataAugmentor
+    augmentor: Optional[DataAugmentor]
     mean: Optional[np.ndarray]
     std: Optional[np.ndarray]
     preprocess_normalization: bool
     # TODO: cache file contents here to avoid constantly reloading from disk? Does torch optimize this?
 
-    def __init__(self, data_dir: str, augmentor: DataAugmentor, preprocess_normalization: bool = True):
+    def __init__(self, data_dir: str, augmentor: Optional[DataAugmentor] = None, preprocess_normalization: bool = True):
         self.data_dir = data_dir
         self.augmentor = augmentor
         filename_list = os.listdir(data_dir)
@@ -41,12 +41,14 @@ class GunshotDataset(Dataset):
     def __getitem__(self, idx):
         filename, label = self.files[idx]
         data = np.load(self.data_dir + "/" + filename)
+
         if self.preprocess_normalization:
             data -= self.mean
             data /= self.std
 
         # the 'augmentor' object has a configurable aug probability. This may not change the data.
-        data = self.augmentor.augment(data)
+        if self.augmentor is not None:
+            data = self.augmentor.augment(data)
 
         # TODO: add preprocessing logic to convert to RGB and optimize for imagenet pretrained weights?
 
