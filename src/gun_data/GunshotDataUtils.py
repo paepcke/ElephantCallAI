@@ -15,11 +15,11 @@ from torch import nn
 def get_loader(data_dir,
                batch_size,
                augmentor: Optional[DataAugmentor] = None,
+               preprocess_normalization: bool = True,
                random_seed=8,
                shuffle=True,
                num_workers=16,
                pin_memory=False):
-    # TODO: add just-in-time transform/data augmentation options
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -27,7 +27,7 @@ def get_loader(data_dir,
     print("DataLoader Seed:", parameters.DATA_LOADER_SEED)
     set_seed(parameters.DATA_LOADER_SEED)
 
-    dataset = GunshotDataset(data_dir, augmentor)
+    dataset = GunshotDataset(data_dir, augmentor, preprocess_normalization)
 
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 

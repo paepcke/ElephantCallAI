@@ -22,10 +22,8 @@ class GunshotTrainer:
         self.tbx_writer = tbx_writer
         self.model = model
         self.training_settings = training_settings
-        # TODO: define a nice wrapper for the model that actually performs a softmax on the output logits for test-time usage
-        # TODO: save the mean and std as non-trainable buffers in this model and incorporate the normalization of the input into the 'forward' method
 
-    def train(self, max_epochs: int):
+    def train(self, max_epochs: int) -> nn.Module:
         self.model.to(self.training_settings.device)
 
         self.model.train()
@@ -91,7 +89,7 @@ class GunshotTrainer:
                                            total_batches_so_far)
 
             val_metrics = self.log_val_metrics(total_batches_so_far)
-            print(f"End of epoch {epoch} of {max_epochs}.   {self.val_metrics_as_string(val_metrics)}")
+            print(f"End of epoch {epoch + 1} of {max_epochs}.   {self.val_metrics_as_string(val_metrics)}")
             if val_metrics["val/loss"] < best_val_loss:
                 best_val_loss = val_metrics["val/loss"]
                 best_val_metrics = val_metrics
@@ -105,12 +103,13 @@ class GunshotTrainer:
                           f" for {epochs_since_best_val_loss} epochs," +
                           " invoking early stopping and completing training process.")
                     print(f"Best validation metrics for this training run are   {self.val_metrics_as_string(best_val_metrics)}")
-                    return
+                    return self.model
 
             # step LR scheduler
             lr_scheduler.step()
         # end of training
         print(f"Training complete! Best validation metrics are   {self.val_metrics_as_string(best_val_metrics)}")
+        return self.model
 
 
     def log_val_metrics(self, log_index: int) -> Dict[str, float]:
