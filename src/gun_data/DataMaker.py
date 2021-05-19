@@ -43,6 +43,8 @@ Label guide:
 1 is non-rapidfire shot(s)
 2 is rapidfire shots
 """
+CLASS_LABELS = {0: "no-gunshot", 1: "non-rapidfire_shot", 2: "rapidfire_shot"}
+RAPIDFIRE_SHOT_THRESHOLD = 2
 
 
 def reformat_ecoguns_df(in_df: pd.DataFrame, file_dir: str) -> pd.DataFrame:
@@ -199,7 +201,7 @@ def write_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: str, pnnng
         else:
             arr = read_wav(pnnnguns_dir + "/" + filename, force_sample_rate=8000)
         numshots = row['numshots']
-        if numshots > 2:
+        if numshots > RAPIDFIRE_SHOT_THRESHOLD:
             label = 2
         else:
             label = 1

@@ -2,9 +2,10 @@ import numpy as np
 import torch
 import argparse
 
-from gun_data.GunshotDataUtils import get_model, get_loader, compute_acc
-from gun_data.DataMaker import TRAIN_MEAN_FILENAME, TRAIN_STD_FILENAME
+from gun_data.utils.GunshotDataUtils import get_model, get_loader
+from gun_data.DataMaker import TRAIN_MEAN_FILENAME, TRAIN_STD_FILENAME, CLASS_LABELS
 from gun_data.TrainedGunshotModel import TrainedGunshotModel
+from gun_data.utils import PerformanceMetrics
 
 
 def get_args():
@@ -34,19 +35,34 @@ if __name__ == "__main__":
     test_loader = get_loader(args.data_dir, args.batch_size, preprocess_normalization=False)
     test_model.to(device)
 
-    cumu_acc = 0.
+    all_predictions = np.zeros((len(test_loader.dataset),))
+    all_labels = np.zeros_like(all_predictions)
+
     cumu_examples = 0
     for batch in test_loader:
         data, labels = batch[0], batch[1]
         data = data.to(device)
         labels = labels.to(device)
 
+        probs = test_model.forward(data)
+
+        preds = np.argmax(probs.detach().cpu().numpy(), axis=-1)
+
+        all_predictions[cumu_examples:(cumu_examples + len(labels))] = preds
+        all_labels[cumu_examples:(cumu_examples + len(labels))] = labels.detach().cpu().numpy()
+
         examples = len(labels)
         cumu_examples += examples
 
-        probs = test_model.forward(data)
-        cumu_acc += examples * compute_acc(labels.detach().cpu().numpy(), probs.detach().cpu().numpy())
-
-    test_acc = cumu_acc / cumu_examples
+    test_acc = PerformanceMetrics.all_class_accuracy(all_predictions, all_labels)
     print(f"{test_acc}% accuracy on the test set.")
-    # TODO: include other metrics, like per-class accuracies
+    total_examples = len(all_labels)
+
+    for label, classname in CLASS_LABELS:
+        class_acc = PerformanceMetrics.class_accuracy(all_predictions, all_labels, label)
+        precision = PerformanceMetrics.precision(all_predictions, all_labels, label)
+        recall = PerformanceMetrics.recall(all_predictions, all_labels, label)
+        f1 = 2*precision*recall/(precision + recall)
+        num_examples = np.sum(np.where(all_labels == label, 1, 0))
+        print(f"class stats for '{classname}' ({num_examples}/{total_examples} examples): " +
+              f"accuracy - {class_acc}, precision - {precision}, recall - {recall}, F1 - {f1}")

@@ -3,9 +3,12 @@ from torch.utils.tensorboard import SummaryWriter
 from torch import nn
 import torch
 from typing import Dict
+import numpy as np
 
-from gun_data.GunshotDataUtils import compute_acc
+from gun_data.utils.GunshotDataUtils import compute_acc
 from gun_data.training.GunshotTrainingSettings import GunshotTrainingSettings
+from gun_data.DataMaker import CLASS_LABELS
+from gun_data.utils import PerformanceMetrics
 
 
 class GunshotTrainer:
@@ -117,7 +120,11 @@ class GunshotTrainer:
         loss_func = nn.CrossEntropyLoss()
 
         cumu_loss = 0
-        cumu_acc = 0
+
+        all_labels = np.zeros((len(self.val_loader.dataset),))
+
+        all_predictions = np.zeros_like(all_labels)
+
         for batch in self.val_loader:
             with torch.no_grad():
                 data, labels = batch[0], batch[1]
@@ -129,14 +136,42 @@ class GunshotTrainer:
                 loss = loss_func(logits, labels)
 
                 cumu_loss += len(labels) * loss.item()
-                cumu_acc += len(labels) * compute_acc(labels.detach().cpu().numpy(),
-                                                               logits.detach().cpu().numpy())
+
+                all_predictions[num_examples:(num_examples + len(labels))] = np.argmax(logits.detach().cpu().numpy(),
+                                                                                       axis=-1)
+                all_labels[num_examples:(num_examples + len(labels))] = labels.detach().cpu().numpy()
+
                 num_examples += len(labels)
 
-        self.tbx_writer.add_scalar("val/loss", cumu_loss/num_examples, log_index)
-        self.tbx_writer.add_scalar("val/acc", cumu_acc/num_examples, log_index)
+        val_metrics = {}
 
-        return {"val/loss": cumu_loss/num_examples, "val/acc": cumu_acc/num_examples}
+        all_class_acc = PerformanceMetrics.all_class_accuracy(all_predictions, all_labels)
+
+        self.tbx_writer.add_scalar("val/loss", cumu_loss/num_examples, log_index)
+        val_metrics["val/loss"] = cumu_loss/num_examples
+        self.tbx_writer.add_scalar("val/all_class_acc", all_class_acc, log_index)
+        val_metrics["val/all_class_acc"] = all_class_acc
+
+        for label, classname in CLASS_LABELS.items():
+            metric_prefix = f"val/{classname}"
+
+            precision = PerformanceMetrics.precision(all_predictions, all_labels, label)
+            self.tbx_writer.add_scalar(f"{metric_prefix}/precision", precision, log_index)
+            val_metrics[f"{metric_prefix}/precision"] = precision
+
+            recall = PerformanceMetrics.recall(all_predictions, all_labels, label)
+            self.tbx_writer.add_scalar(f"{metric_prefix}/recall", recall, log_index)
+            val_metrics[f"{metric_prefix}/recall"] = recall
+
+            f1 = 2*precision*recall/(precision + recall)
+            self.tbx_writer.add_scalar(f"{metric_prefix}/f1_score", f1, log_index)
+            val_metrics[f"{metric_prefix}/f1_score"] = recall
+
+            class_acc = PerformanceMetrics.class_accuracy(all_predictions, all_labels, label)
+            self.tbx_writer.add_scalar(f"{metric_prefix}/class_accuracy", class_acc, log_index)
+            val_metrics[f"{metric_prefix}/class_acc"] = class_acc
+
+        return val_metrics
 
     def val_metrics_as_string(self, val_metrics: Dict[str, float]) -> str:
         # sort keys to enforce same order across different invocations

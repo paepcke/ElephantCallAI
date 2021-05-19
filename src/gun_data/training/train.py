@@ -4,7 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from gun_data.DataAugmentor import DataAugmentor
-from gun_data.GunshotDataUtils import get_loader, get_model
+from gun_data.utils.GunshotDataUtils import get_loader, get_model
 from gun_data.training.GunshotTrainer import GunshotTrainer
 from gun_data.training.GunshotTrainingSettings import GunshotTrainingSettings
 
