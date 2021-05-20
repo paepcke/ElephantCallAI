@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
-from typing import Optional, List, Tuple, Callable
+from typing import Optional, List, Tuple, Callable, Dict
 from scipy.io import wavfile
 import re
 import os
 import random
 import argparse
 from tqdm import tqdm
+from collections import defaultdict
 
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 
@@ -37,6 +38,18 @@ closer to the end/middle, etc).
 
 This script is suited for input data arranged in a specific file structure, but it could be adapted to fit a more
 general use case.
+
+This script has a feature called "scenarios". "scenarios" are wav files from a certain sound scene category
+(e.g., 'thunderstorm'). Snippets from scenarios can be overlaid onto generated training examples.
+
+The directory structure of 'scenarios' should look as follows with the categories 'highway' and 'thunderstorm':
+scenarios
+├── highway
+│   └── ...
+└── thunderstorm
+    ├── storm1.wav
+    └── storm2.wav
+    
 
 Label guide:
 0 is no gunshot
@@ -140,10 +153,6 @@ def train_test_split(df, frac_train, frac_val) -> Tuple[pd.DataFrame, pd.DataFra
 
 
 def split_df_for_train_val_test(combined_df, frac_train, frac_val) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    assert_fraction(frac_train)
-    assert_fraction(frac_val)
-    assert_fraction(frac_train + frac_val)
-
     # all of this specific splitting is to help maintain similar distributions between train, val, and test sets
     shots_split = simple_split_helper(combined_df, 'numshots', 2)
     df_list = []
@@ -170,10 +179,6 @@ def split_df_for_train_val_test(combined_df, frac_train, frac_val) -> Tuple[pd.D
 # returns a tuple of 3 dataframes, one for the training set, one for the validation set, and one for the test set
 # these are all un-augmented *positive* samples
 def get_positive_clips(args) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    assert_fraction(args.frac_train)
-    assert_fraction(args.frac_val)
-    assert_fraction(args.frac_train + args.frac_val)
-
     df = pd.read_csv(args.ecoguns_tsv_path, sep="\t")
     ecoguns_df = reformat_ecoguns_df(df, args.ecoguns_wav_path)
     df = pd.read_csv(args.pnnn_guns_tsv_path, sep="\t")
@@ -211,22 +216,42 @@ def write_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: str, pnnng
         example_num += 1
 
 
-def chop_background(wav_path: str, out_dir: str, interval_len_s: float):
+def chop_wav(wav_path: str, out_dir: str, created_filename_prefix: str, interval_len_s: float, overlap_fraction: float = 0.):
     arr = read_wav(wav_path, force_sample_rate=8000)
     samples_per_interval = int(interval_len_s * 8000)
-    intervals_in_arr = len(arr)//samples_per_interval
+    if len(arr) < samples_per_interval:
+        print(f"Skipping chop_wav for {wav_path}, file is too short")
+        return
+    non_overlapping_samples = int(samples_per_interval*(1 - overlap_fraction))
+    if non_overlapping_samples < 1:
+        print(f"Skipping overlap in chopping {wav_path}, it cannot be chopped as finely as requested")
+        non_overlapping_samples = samples_per_interval
+    intervals_in_arr = 1 + (len(arr) - samples_per_interval)//non_overlapping_samples
 
-    # TODO: allow configurable overlap? This can help get some more variety out of a limited amount of background noise
-    for i in tqdm(range(intervals_in_arr)):
-        left_idx = i*samples_per_interval
+    for i in tqdm(range(intervals_in_arr), delay=2.5):
+        left_idx = i*non_overlapping_samples
         right_idx = left_idx + samples_per_interval
 
         interval = arr[left_idx:right_idx]
-        np.save(out_dir + "/" + BACKGROUND_FILENAME_PREFIX + f"{i}.npy", interval)
+        np.save(out_dir + "/" + created_filename_prefix + f"{i}.npy", interval)
 
 
 def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: int, frac_nogunshot: float,
-                   spec_extractor: SpectrogramExtractor, transform: Optional[Callable[[np.ndarray], np.ndarray]]):
+                   spec_extractor: SpectrogramExtractor, transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+                   scenario_map: Optional[Dict[str, List[Tuple[str, int]]]] = None, scenario_prob: float = 0.):
+    """
+
+    :param bg_dir: path to directory storing background audio snippets
+    :param positive_dir: path to directory storing positive audio snippets
+    :param out_dir: path to target output directory
+    :param num_samples: desired number of data samples to generate
+    :param frac_nogunshot: proportion of data that should be generated with no gunshots
+    :param spec_extractor: SpectrogramExtractor object
+    :param transform: a callable to manipulate the output of the spectrogram
+    :param scenario_map: output subdictionary from split_scenarios(). See its documentation for description.
+    :param scenario_prob: probability of augmenting an example with scenario audio
+    """
+
     bg_list = os.listdir(bg_dir)
     pos_list_raw = os.listdir(positive_dir)
 
@@ -242,6 +267,14 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
     random.shuffle(bg_list)
     random.shuffle(pos_list)
 
+    if scenario_map is not None and len(scenario_map) >= 1:
+        """
+        pre-compute a probability distribution for each scenario (for use in np.random.choice) 
+        to avoid doing this multiple times during generation
+        """
+        scenarios = list(scenario_map.keys())
+        scenario_distributions = compute_scenario_distributions(scenario_map, scenarios)
+
     for i in tqdm(range(num_samples)):
         bg_idx = i % len(bg_list)
 
@@ -250,6 +283,7 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
         nogunshot_test = np.random.uniform()
         if nogunshot_test <= frac_nogunshot:
             out_filename = out_dir + f"/generatedExample{i}_0.npy"
+            example_audio = bg
         else:
             pos_idx = i % len(pos_list)
             pos = np.load(positive_dir + "/" + pos_list[pos_idx])
@@ -265,11 +299,19 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
             else:
                 pos_offset = np.random.randint(low=0, high=(bg_len - pos_len))
 
-            bg[pos_offset:(pos_offset + pos_len)] += pos  # For now, no fancy processing
+            # For now, no fancy processing to smooth these together or balance magnitudes
+            example_audio = bg
+            example_audio[pos_offset:(pos_offset + pos_len)] += pos
 
+            # TODO: construct example name so we can tell how it was assembled?
             out_filename = out_dir + f"/generatedExample{i}_" + str(pos_labels[pos_idx]) + ".npy"
 
-        stft = spec_extractor.extract_spectrogram(bg)
+        if scenario_map is not None and len(scenario_map) >= 1:
+            scenario_test = np.random.uniform()
+            if scenario_test <= scenario_prob:
+                example_audio = superimpose_scenario(example_audio, scenario_map, scenarios, scenario_distributions)
+
+        stft = spec_extractor.extract_spectrogram(example_audio)
 
         if transform is not None:
             stft = transform(stft)
@@ -277,6 +319,123 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
         # convert to float32, stft computation returns float64 by default
         stft = stft.astype(np.float32)
         np.save(out_filename, stft)
+
+
+def compute_scenario_distributions(scenario_map: Dict[str, List[Tuple[str, int]]], scenarios: List[str]) -> Dict[str, np.ndarray]:
+    """
+    Computes probability distributions for selecting snippets from individual scenario source files.
+
+    :param scenario_map: output subdictionary from split_scenarios(). See its documentation for description.
+    :param scenarios: A list of scenarios in the scenario_map
+    :return: a dictionary mapping from scenario name to a probability distribution for selecting
+        snippets from individual source scenario files
+    """
+
+    scenario_distributions = dict()
+    for scenario in scenarios:
+        scenario_distributions[scenario] = np.zeros((len(scenario_map[scenario]),))
+
+        total_snippets = 0.
+        for i, pair in enumerate(scenario_map[scenario]):
+            num_snippets = pair[1]
+            scenario_distributions[scenario][i] = num_snippets
+            total_snippets += num_snippets
+
+        scenario_distributions[scenario] /= total_snippets
+
+    return scenario_distributions
+
+
+def superimpose_scenario(example_audio: np.ndarray,
+                         scenario_map: Dict[str, List[Tuple[str, int]]],
+                         scenarios: List[str],
+                         scenario_distributions: Dict[str, np.ndarray]) -> np.ndarray:
+    """
+    Samples a scenario snippet and superimposes it onto the parameter 'example_audio'.
+
+    :param example_audio: The audio sample to superimpose a scenario audio sample onto
+    :param scenario_map: output subdictionary from split_scenarios(). See its documentation for description.
+    :param scenarios: A list of scenarios in the scenario_map
+    :param scenario_distributions: a dictionary mapping from scenario name to a probability distribution for selecting
+        snippets from individual source scenario files
+    :return: a numpy array that the scenario audio sample has been superimposed onto
+    """
+
+    # choose a scenario uniformly at random from those available
+    scenario_idx = np.random.randint(low=0, high=len(scenarios))
+    scenario = scenarios[scenario_idx]
+
+    # select a scenario source file to pick a snippet from, weighted by number of snippets
+    pairs = scenario_map[scenario]
+    pair_idx = np.random.choice(np.arange(len(pairs)), p=scenario_distributions[scenario])
+    snippet_dir, num_snippets = pairs[pair_idx]
+
+    # pick a random snippet from the selected source file
+    snippet_idx = np.random.randint(low=0, high=num_snippets)
+    snippet_filepath = f"{snippet_dir}/{scenario}_{str(snippet_idx)}.npy"
+
+    scenario_audio = np.load(snippet_filepath)
+
+    return example_audio + scenario_audio
+
+
+def chop_scenarios(args):
+    """
+    Chops scenario WAV files into snippets
+    """
+
+    scenario_types = os.listdir(f"{args.path_prefix}/scenarios")
+    if len(scenario_types) == 0:
+        return
+    make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/scenario_snips")
+    for scenario in scenario_types:
+        in_scenario_prefix = f"{args.path_prefix}/scenarios/{scenario}"
+        files = os.listdir(in_scenario_prefix)
+        if len(files) == 0:
+            break
+
+        out_scenario_prefix = f"{args.path_prefix}/{args.output_dir}/scenario_snips/{scenario}"
+        make_dir_if_not_exists(out_scenario_prefix)
+        for file in files:
+            snip_out_dir = f"{out_scenario_prefix}/{file[:-4]}"
+            make_dir_if_not_exists(snip_out_dir)  # exclude '.wav' suffix from new dir name
+            filepath = f"{in_scenario_prefix}/{file}"
+            # created files will be named like '<scenarioName>_<snippetNumber>.npy'
+            chop_wav(filepath, snip_out_dir, f"{scenario}_", args.seconds_per_example, args.scenario_overlap_frac)
+
+
+def split_scenarios(args) -> Dict[str, Optional[Dict[str, List[Tuple[str, int]]]]]:
+    """
+
+    :param args: command-line arguments for the script
+    :return: a dictionary mapping a set name ('train', 'val', 'test') to a subdictionary.
+        The subdictionary maps a scenario name (e.g., 'thunderstorm') to a list of 2-item tuples:
+        the first item is a path to a directory containing audio snippets and the second is the number of snippets
+        in that directory. This number will be used to weight the probability of selecting this directory at generation time.
+    """
+    split_map: Dict[str, Optional[Dict[str, List[Tuple[str, int]]]]] = defaultdict(lambda: None)  # do this to avoid keyerror
+
+    scenario_sets = ['train', 'val', 'test'] if args.use_scenarios_for_test_set else ['train', 'val']
+    for dataset in scenario_sets:
+        split_map[dataset] = defaultdict(lambda: [])
+
+    scenario_types = os.listdir(f"{args.path_prefix}/{args.output_dir}/scenario_snips")
+    for scenario in scenario_types:
+        file_len_pairs = []
+        files = os.listdir(f"{args.path_prefix}/{args.output_dir}/scenario_snips/{scenario}")
+        for file in files:
+            snipspath = f"{args.path_prefix}/{args.output_dir}/scenario_snips/{scenario}/{file}"
+            snips = os.listdir(snipspath)
+            file_len_pairs.append((snipspath, len(snips)))
+
+        # sort files by most to least snippets, then round-robin allocate files to train, val, and test, in that order
+        file_len_pairs = sorted(file_len_pairs, key=lambda p: p[1], reverse=True)
+        for i, pair in enumerate(file_len_pairs):
+            target_dataset = scenario_sets[i % len(scenario_sets)]
+            split_map[target_dataset][scenario].append(pair)
+
+    return split_map
+
 
 def prepare_freq_mean_std(args):
     """
@@ -310,6 +469,7 @@ def prepare_freq_mean_std(args):
     np.save(f"{datasets_path}/{TRAIN_MEAN_FILENAME}", mean)
     np.save(f"{datasets_path}/{TRAIN_STD_FILENAME}", std)
 
+
 def get_args():
     parser = argparse.ArgumentParser()
 
@@ -335,6 +495,14 @@ def get_args():
     parser.add_argument('--output-dir', type=str, default="processed",
                         help="the name of the directory that output data should be stored in. Look for the directories"
                              " 'train', 'val', and 'test'.")
+    parser.add_argument('--bg-overlap-frac', type=float, default=0.,
+                        help="fraction of sample overlap between adjacent background audio snippets. Defaults to no overlap.")
+    parser.add_argument('--scenario-overlap-frac', type=float, default=0.25,
+                        help="fraction of sample overlap between adjacent scenario audio snippets. Defaults to 0.25.")
+    parser.add_argument('--scenario-prob', type=float, default=0.15,
+                        help="Fraction of the generated examples that should have scenarios superimposed onto them")
+    parser.add_argument('--use-scenarios-for-test-set', action='store_true',
+                        help="Specify this to use scenarios to generate the test set.")
 
     # STFT configuration
     parser.add_argument('--nfft', type=int, default=4096,
@@ -361,11 +529,32 @@ def make_dir_if_not_exists(dir_path: str):
         os.mkdir(dir_path)
 
 
-if __name__ == "__main__":
-    args = get_args()
+def assert_args_valid(args):
+    """
+    Validation for command-line args. Call this at the start of the script to avoid making a user wait to find out their run has failed.
+    """
 
     if not os.path.exists(args.path_prefix):
         raise ValueError(f"{args.path_prefix} not found in filesystem. Use a different path prefix?")
+
+    if len(os.listdir(args.raw_bg_wav_path)) < 3:
+        raise ValueError("Need at least 3 separate clips of background noise.")
+
+    assert_fraction(args.frac_train)
+    assert_fraction(args.frac_val)
+    assert_fraction(args.frac_train + args.frac_val)
+
+    assert_fraction(args.bg_overlap_frac)
+
+    assert_fraction(args.scenario_overlap_frac)
+
+    assert_fraction(args.scenario_prob)
+
+
+if __name__ == "__main__":
+    args = get_args()
+
+    assert_args_valid(args)
 
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/pos_train")
@@ -391,6 +580,9 @@ if __name__ == "__main__":
         for bg_snip_dir in bg_snip_dirs:
             os.system(f"rm {args.path_prefix}/{args.output_dir}/bg_snips/{bg_snip_dir}/*.npy")
 
+        # scenarios
+        os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/scenario_snips")
+
         # datasets
         os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/train/*.npy")
         os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/val/*.npy")
@@ -407,16 +599,19 @@ if __name__ == "__main__":
     # for now, only use one background noise wav file per dataset
     bg_filenames = os.listdir(args.raw_bg_wav_path)
 
-    if len(bg_filenames) < 3:
-        raise ValueError("Need at least 3 separate clips of background noise.")
-
+    # chop background files
     for filename in bg_filenames[:3]:
         # assume all bg files end with '.wav'
         file_id = filename[:-4]
         bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{file_id}"
         make_dir_if_not_exists(bg_snip_dir)
         print(f"Chopping {filename} into {args.seconds_per_example}-second intervals...")
-        chop_background(f"{args.raw_bg_wav_path}/{filename}", bg_snip_dir, args.seconds_per_example)
+        chop_wav(f"{args.raw_bg_wav_path}/{filename}", bg_snip_dir, BACKGROUND_FILENAME_PREFIX,
+                 args.seconds_per_example, args.bg_overlap_frac)
+
+    print("Chopping scenario wav files...")
+    chop_scenarios(args)
+    scenario_split = split_scenarios(args)
 
     transform = lambda stft: 10*np.log10(stft)
     spec_ex = SpectrogramExtractor(nfft=args.nfft, hop=args.hop, max_freq=args.max_freq,
@@ -434,9 +629,9 @@ if __name__ == "__main__":
             # test set
             n_samples = args.num_test_samples
 
-        print(f"generating {setname} dataset...")
+        print(f"Generating {setname} dataset...")
         gen_mixed_data(bg_snip_dir, f"{args.path_prefix}/{args.output_dir}/pos_{setname}",
                        f"{args.path_prefix}/{args.output_dir}/datasets/{setname}", n_samples,
-                       args.frac_noguns, spec_ex, transform)
+                       args.frac_noguns, spec_ex, transform, scenario_split[setname], args.scenario_prob)
 
     prepare_freq_mean_std(args)
