@@ -27,6 +27,9 @@ PNNN_GUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "/nn_Grid50_guns_dep1-7_train.txt"
 PNNN_GUNS_WAV_PATH = REMOTE_PATH_PREFIX + "/pnnn_dep1-7"
 RAW_BG_WAV_PATH = REMOTE_PATH_PREFIX + "/rawBgNoise"
 
+# if a positive example is at least this many seconds longer than the target clip length, don't use it.
+POS_TOO_LONG_TOLERANCE = 0.5
+
 """
 This is a script and a collection of related utilities that takes in a variety of weakly-labeled gunshot clips and
 mashes them in with some long-form background noise (in multi-hour-long WAV files).
@@ -194,10 +197,12 @@ def read_wav(filepath: str, force_sample_rate: Optional[int] = None) -> np.ndarr
     if force_sample_rate is not None:
         if sample_rate != force_sample_rate:
             raise ValueError(f"{filepath} has a sample rate of {sample_rate}, but a sample rate of {force_sample_rate} was expected.")
+    if len(arr.shape) > 1 and arr.shape[1] > 1:
+        raise ValueError(f"{filepath} has more than one audio channel! Only MONO audio is supported.")
     return arr
 
 
-def write_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: str, pnnnguns_dir: str):
+def write_genuine_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: str, pnnnguns_dir: str):
     example_num = 0
     for _, row in data_df.iterrows():
         filename = row['filename']
@@ -210,7 +215,7 @@ def write_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: str, pnnng
             label = 2
         else:
             label = 1
-        out_filepath = out_dir + f"/positiveExample{example_num}_{label}.npy"
+        out_filepath = out_dir + f"/genuine_positiveExample{example_num}_{label}.npy"
         np.save(out_filepath, arr)
 
         example_num += 1
@@ -236,9 +241,27 @@ def chop_wav(wav_path: str, out_dir: str, created_filename_prefix: str, interval
         np.save(out_dir + "/" + created_filename_prefix + f"{i}.npy", interval)
 
 
+def separate_pos_list_raw(pos_list_raw: List[str], pos_labels: List[int]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]]]:
+    """
+    Separates list of positive example files into lists of genuine and synthetic example files
+
+    :param pos_list_raw: unfiltered list of positive examples
+    :return: two lists, one of genuine examples and another of synthetic examples. Each list has tuple elements (file, label).
+    """
+    genuine = []
+    synthetic = []
+    for file, label in zip(pos_list_raw, pos_labels):
+        if file.startswith("genuine_"):
+            genuine.append((file, label))
+        else:
+            synthetic.append((file, label))
+    return genuine, synthetic
+
+
 def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: int, frac_nogunshot: float,
                    spec_extractor: SpectrogramExtractor, transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-                   scenario_map: Optional[Dict[str, List[Tuple[str, int]]]] = None, scenario_prob: float = 0.):
+                   scenario_map: Optional[Dict[str, List[Tuple[str, int]]]] = None, scenario_prob: float = 0.,
+                   synthetic_positive_prob: float = 0.):
     """
 
     :param bg_dir: path to directory storing background audio snippets
@@ -267,6 +290,10 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
     random.shuffle(bg_list)
     random.shuffle(pos_list)
 
+    genuine_pos_list, synthetic_pos_list = separate_pos_list_raw(pos_list, pos_labels)
+    genuine_pos_idx = 0
+    synthetic_pos_idx = 0
+
     if scenario_map is not None and len(scenario_map) >= 1:
         """
         pre-compute a probability distribution for each scenario (for use in np.random.choice) 
@@ -285,13 +312,22 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
             out_filename = out_dir + f"/generatedExample{i}_0.npy"
             example_audio = bg
         else:
-            pos_idx = i % len(pos_list)
-            pos = np.load(positive_dir + "/" + pos_list[pos_idx])
+            # choose genuine or synthetic
+            if len(synthetic_pos_list) > 0 and np.random.rand() <= synthetic_positive_prob:
+                # Use synthetic example
+                filename, label = synthetic_pos_list[synthetic_pos_idx]
+                pos = np.load(f"{positive_dir}/{filename}")
+                synthetic_pos_idx = (1 + synthetic_pos_idx) % len(synthetic_pos_list)
+            else:
+                # use positive example
+                filename, label = genuine_pos_list[genuine_pos_idx]
+                pos = np.load(f"{positive_dir}/{filename}")
+                genuine_pos_idx = (1 + genuine_pos_idx) % len(genuine_pos_list)
 
             bg_len = len(bg)
             pos_len = len(pos)
 
-            if pos_len > bg_len:
+            if pos_len >= bg_len:
                 # for now, do not cut off any of the positive data unless pos_len > bg_len
                 pos = pos[:bg_len]
                 pos_len = pos.shape[0]
@@ -304,7 +340,7 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
             example_audio[pos_offset:(pos_offset + pos_len)] += pos
 
             # TODO: construct example name so we can tell how it was assembled?
-            out_filename = out_dir + f"/generatedExample{i}_" + str(pos_labels[pos_idx]) + ".npy"
+            out_filename = out_dir + f"/generatedExample{i}_{str(label)}.npy"
 
         if scenario_map is not None and len(scenario_map) >= 1:
             scenario_test = np.random.uniform()
@@ -470,6 +506,51 @@ def prepare_freq_mean_std(args):
     np.save(f"{datasets_path}/{TRAIN_STD_FILENAME}", std)
 
 
+def write_synthetic_pos_clips(args, train_out_dir: str, val_out_dir: str):
+    if not os.path.exists(f"{args.path_prefix}/synthetic"):
+        return
+
+    synthetic_pos_example_number = 0
+
+    # synthetic data is never included in the test set
+    synth_frac_train = args.frac_train/(args.frac_train + args.frac_val)
+
+    synthetic_dirs = os.listdir(f"{args.path_prefix}/synthetic")
+    for subdir in synthetic_dirs:
+        # synthetic dirs end with "_rapidfire" or "_nonrapid" to distinguish labels
+        if subdir.endswith("_rapidfire"):
+            label = 2
+        elif subdir.endswith("_nonrapid"):
+            label = 1
+        else:
+            print(f"Skipping synthetic-positive directory '{subdir}', its name must end with" +
+                  " '_rapidfire' or '_nonrapid' to be used.")
+            continue
+
+        subdir_path = f"{args.path_prefix}/synthetic/{subdir}"
+        files = os.listdir(subdir_path)
+        for file in files:
+            if not file.endswith(".wav"):
+                continue
+            arr = read_wav(f"{subdir_path}/{file}", force_sample_rate=8000)
+            arr_len_seconds = len(arr)/8000
+            max_seconds = args.seconds_per_example + POS_TOO_LONG_TOLERANCE
+            if arr_len_seconds > max_seconds:
+                print(f"Audio clip {subdir_path}/{file} is too long ({round(arr_len_seconds, 5)} s)," +
+                      f" max of {round(max_seconds, 5)} s expected. Excluding this file from the dataset.")
+                continue
+
+            if np.random.rand() <= synth_frac_train:
+                out_filepath = f"{train_out_dir}/synthetic_positiveExample{synthetic_pos_example_number}_{label}.npy"
+            else:
+                out_filepath = f"{val_out_dir}/synthetic_positiveExample{synthetic_pos_example_number}_{label}.npy"
+            np.save(out_filepath, arr)
+            synthetic_pos_example_number += 1
+
+    # TODO: volume augmentation (here or on-the-fly during gen_mixed_data?)
+
+
+
 def get_args():
     parser = argparse.ArgumentParser()
 
@@ -503,6 +584,8 @@ def get_args():
                         help="Fraction of the generated examples that should have scenarios superimposed onto them")
     parser.add_argument('--use-scenarios-for-test-set', action='store_true',
                         help="Specify this to use scenarios to generate the test set.")
+    parser.add_argument('--synthetic-positive-prob', type=float, default=0.,
+                        help="fraction of positive samples in train and val sets that should come from synthetic data")
 
     # STFT configuration
     parser.add_argument('--nfft', type=int, default=4096,
@@ -549,6 +632,7 @@ def assert_args_valid(args):
     assert_fraction(args.scenario_overlap_frac)
 
     assert_fraction(args.scenario_prob)
+    assert_fraction(args.synthetic_positive_prob)
 
 
 if __name__ == "__main__":
@@ -591,10 +675,13 @@ if __name__ == "__main__":
 
     train_df, val_df, test_df = get_positive_clips(args)
 
-    print("Extracting positive examples...")
-    write_pos_clips(train_df, f"{args.path_prefix}/{args.output_dir}/pos_train", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
-    write_pos_clips(val_df, f"{args.path_prefix}/{args.output_dir}/pos_val", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
-    write_pos_clips(test_df, f"{args.path_prefix}/{args.output_dir}/pos_test", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
+    print("Extracting genuine positive examples...")
+    write_genuine_pos_clips(train_df, f"{args.path_prefix}/{args.output_dir}/pos_train", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
+    write_genuine_pos_clips(val_df, f"{args.path_prefix}/{args.output_dir}/pos_val", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
+    write_genuine_pos_clips(test_df, f"{args.path_prefix}/{args.output_dir}/pos_test", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
+
+    print("Extracting synthetic positive examples...")
+    write_synthetic_pos_clips(args, f"{args.path_prefix}/{args.output_dir}/pos_train", f"{args.path_prefix}/{args.output_dir}/pos_val")
 
     # for now, only use one background noise wav file per dataset
     bg_filenames = os.listdir(args.raw_bg_wav_path)
@@ -632,6 +719,7 @@ if __name__ == "__main__":
         print(f"Generating {setname} dataset...")
         gen_mixed_data(bg_snip_dir, f"{args.path_prefix}/{args.output_dir}/pos_{setname}",
                        f"{args.path_prefix}/{args.output_dir}/datasets/{setname}", n_samples,
-                       args.frac_noguns, spec_ex, transform, scenario_split[setname], args.scenario_prob)
+                       args.frac_noguns, spec_ex, transform, scenario_split[setname], args.scenario_prob,
+                       args.synthetic_positive_prob)
 
     prepare_freq_mean_std(args)

@@ -4,16 +4,16 @@ import numpy as np
 
 def confusion_matrix(predictions: np.ndarray, labels: np.ndarray):
     """
-    the first row of the output contains all examples with the label 0
-    and the first column contains all examples predicted as 0 and so on
+    the first column of the output contains all examples with the label 0
+    and the first row contains all examples predicted as 0 and so on
     """
 
     predictions = predictions.astype(np.int16)
     labels = labels.astype(np.int16)
 
-    num_labels, _ = np.max(labels)  # labels are assumed to be the natural numbers up to 1 - the number of unique labels
+    num_labels = np.max(labels) + 1  # labels are assumed to be the natural numbers up to 1 - the number of unique labels
     confusion = np.zeros((num_labels, num_labels))
-    np.add.at(confusion, [predictions, labels], 1)
+    np.add.at(confusion, (predictions, labels), 1)
 
     return confusion
 

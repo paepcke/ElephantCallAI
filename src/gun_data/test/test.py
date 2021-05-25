@@ -58,7 +58,7 @@ if __name__ == "__main__":
     print(f"{test_acc}% accuracy on the test set.")
     total_examples = len(all_labels)
 
-    for label, classname in CLASS_LABELS:
+    for label, classname in CLASS_LABELS.items():
         class_acc = PerformanceMetrics.class_accuracy(all_predictions, all_labels, label)
         precision = PerformanceMetrics.precision(all_predictions, all_labels, label)
         recall = PerformanceMetrics.recall(all_predictions, all_labels, label)
@@ -66,3 +66,6 @@ if __name__ == "__main__":
         num_examples = np.sum(np.where(all_labels == label, 1, 0))
         print(f"class stats for '{classname}' ({num_examples}/{total_examples} examples): " +
               f"accuracy - {class_acc}, precision - {precision}, recall - {recall}, F1 - {f1}")
+
+    print("Confusion matrix [no gunshot, non-rapidfire, rapidfire]:")
+    print(PerformanceMetrics.confusion_matrix(all_predictions, all_labels))
