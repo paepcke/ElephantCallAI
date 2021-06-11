@@ -49,3 +49,10 @@ If you want to check whether your USB mic is working, use the following command 
 
 Copy `test.wav`, the newly-created file, over to a machine with a speaker and play it. If you hear your voice 
 (or whatever else you may have recorded), it's working.
+
+
+### Profiling
+
+The Jetson image should come with the `tegrastats` utility installed. You can run it, log the output to a
+file, and then pass that file as an argument to `analysis/AnalyzeTegraStats.py` to produce some summary information.
+This is not a required part of the installation.
