@@ -11,10 +11,10 @@ from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredictor
 
 # these hard-coded resource paths can be swapped out with environment variables later
-WAV_PATH = "../../../../Integration_Test_Data/audio/nn04c_20180308_000000.wav"
-AUDIO_NPY_PATH = "../../../../Integration_Test_Data/audio/small_audio.npy"
-SINGLE_STAGE_MODEL_PATH = "../../../../Integration_Test_Data/models/remote_model.pt"
-TWO_STAGE_MODEL_PATH = "../../../../Integration_Test_Data/models/2stage"
+WAV_PATH = "../../../../../Integration_Test_Data/audio/nn04c_20180308_000000.wav"
+AUDIO_NPY_PATH = "../../../../../Integration_Test_Data/audio/small_audio.npy"
+SINGLE_STAGE_MODEL_PATH = "../../../../../Integration_Test_Data/models/remote_model.pt"
+TWO_STAGE_MODEL_PATH = "../../../../../Integration_Test_Data/models/2stage"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"

@@ -6,7 +6,7 @@ from embedded.DataCoordinator import DataCoordinator
 from embedded.SynchronizationUtils import yield_to_thread_scheduler
 
 GIVE_UP_THRESHOLD = 250
-TIME_WINDOW = 256*4 + 3*64
+TIME_WINDOW = 256*4 + 3*64  # TODO: Improvement - dynamically determine this as 256*4 + (time_len - jump)?
 LOCK_TIMEOUT_IN_SECONDS = 0.1
 
 
