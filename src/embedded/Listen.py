@@ -43,9 +43,11 @@ def main():
 
     predictor: Predictor
     if args.single_stage_model:
-        predictor = SingleStageModelPredictor.SingleStageModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
+        predictor = SingleStageModelPredictor.SingleStageModelPredictor(args.model_path, batch_size=args.batch_size,
+                                                                        jump=jump, half_precision=args.half_precision)
     else:
-        predictor = TwoStageModelPredictor.TwoStageModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
+        predictor = TwoStageModelPredictor.TwoStageModelPredictor(args.model_path, batch_size=args.batch_size,
+                                                                  jump=jump, half_precision=args.half_precision)
 
     min_batch_size = 1 if args.allow_smaller_batches else args.batch_size
     data_coordinator = DataCoordinator.DataCoordinator(

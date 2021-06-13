@@ -24,7 +24,8 @@ FIRST_STAGE_NUM_INTERESTING = 15  # this is not configurable for now
 def get_batched_predictions_and_overlap_counts(data: np.ndarray, model: nn.Module, jump: int,
                                                n_samples_in_time_window: int = TIME_STEPS_IN_WINDOW,
                                                batch_size: int = BATCH_SIZE, first_stage: Optional[bool] = None,
-                                               second_stage_interest_queue: Optional[Deque[np.ndarray]] = None) -> Tuple[np.ndarray, np.ndarray]:
+                                               second_stage_interest_queue: Optional[Deque[np.ndarray]] = None,
+                                               half_precision: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Returns (prediction array, overlap count array)."""
     time_idx = 0
 
@@ -47,29 +48,29 @@ def get_batched_predictions_and_overlap_counts(data: np.ndarray, model: nn.Modul
     overlap_counts = np.zeros(clean_end_time)
 
     while time_idx + n_samples_in_time_window * batch_size + (k - 1) * jump <= clean_end_time:
-        forward_inference_on_batch(model, data, time_idx, jump, batch_size, predictions, overlap_counts, k, first_stage,
-                                   second_stage_interest_queue)
+        forward_inference_on_batch(model, data, time_idx, jump, batch_size, predictions, overlap_counts, k,
+                                   half_precision, first_stage, second_stage_interest_queue)
         time_idx += n_samples_in_time_window * batch_size
 
     # final batch (if size < BATCH_SIZE)
     final_full_batch_size = (clean_end_time - time_idx - (k - 1) * jump) // n_samples_in_time_window
     if final_full_batch_size > 0:
         forward_inference_on_batch(model, data, time_idx, jump, final_full_batch_size, predictions,
-                                   overlap_counts, k, first_stage, second_stage_interest_queue)
-        time_idx += n_samples_in_time_window* final_full_batch_size
+                                   overlap_counts, k, half_precision, first_stage, second_stage_interest_queue)
+        time_idx += n_samples_in_time_window * final_full_batch_size
 
     # remaining jumps (less than k)
     if time_idx + n_samples_in_time_window <= clean_end_time:
         remaining_jumps = (clean_end_time - time_idx - n_samples_in_time_window) // jump + 1
         forward_inference_on_batch(model, data, time_idx, jump, 1, predictions, overlap_counts,
-                                   remaining_jumps, first_stage, second_stage_interest_queue)
+                                   remaining_jumps, half_precision, first_stage, second_stage_interest_queue)
 
     return predictions, overlap_counts
 
 
 def get_batched_predictions_and_overlap_counts_for_two_stage_model(
         data: np.ndarray, first_model: nn.Module,
-        second_model: nn.Module, jump: int,
+        second_model: nn.Module, jump: int, half_precision: bool,
        n_samples_in_time_window: int = TIME_STEPS_IN_WINDOW,
        batch_size: int = BATCH_SIZE) -> Tuple[np.ndarray, np.ndarray]:
     second_stage_interest_queue = collections.deque()
@@ -82,12 +83,12 @@ def get_batched_predictions_and_overlap_counts_for_two_stage_model(
     first_stage_predictions, first_stage_overlaps = get_batched_predictions_and_overlap_counts(
         data, first_model,
         jump, n_samples_in_time_window,
-        batch_size, True, second_stage_interest_queue)
+        batch_size, True, second_stage_interest_queue, half_precision=half_precision)
 
     second_stage_predictions, second_stage_overlaps = get_batched_predictions_and_overlap_counts(
         data, second_model,
         jump, n_samples_in_time_window,
-        batch_size, False, second_stage_interest_queue)
+        batch_size, False, second_stage_interest_queue, half_precision=half_precision)
 
     predictions = first_stage_predictions + second_stage_predictions
     overlap_counts = first_stage_overlaps + second_stage_overlaps
@@ -104,6 +105,7 @@ def forward_inference_on_batch(
         predictions: np.ndarray,
         overlap_counts: np.ndarray,
         max_jumps: int,
+        half_precision: bool,
         first_stage: Optional[bool] = None,
         second_stage_interest_queue: Optional[Deque[np.ndarray]] = None):
     """
@@ -154,7 +156,10 @@ def forward_inference_on_batch(
         reshaped_input_batch -= means
         reshaped_input_batch /= stds
 
-        reshaped_input_batch_var = Variable(torch.from_numpy(reshaped_input_batch).float().to(parameters.device))
+        if half_precision:
+            reshaped_input_batch_var = Variable(torch.from_numpy(reshaped_input_batch).half().to(parameters.device))
+        else:
+            reshaped_input_batch_var = Variable(torch.from_numpy(reshaped_input_batch).float().to(parameters.device))
 
         raw_outputs = model(reshaped_input_batch_var)  # TODO: take subset of batches and re-expand?
         outputs = raw_outputs.view(batchsize, TIME_STEPS_IN_WINDOW)
@@ -163,7 +168,7 @@ def forward_inference_on_batch(
         relevant_overlap_counts = overlap_counts[global_begin_idx:global_end_idx].reshape(
             (batchsize, TIME_STEPS_IN_WINDOW))
 
-        prediction_outputs = outputs.cpu().detach().numpy()
+        prediction_outputs = outputs.cpu().detach().float().numpy()
         consolidate_inference_output(prediction_outputs, relevant_predictions,
                                      relevant_overlap_counts, first_stage,
                                      second_stage_interest_queue)
