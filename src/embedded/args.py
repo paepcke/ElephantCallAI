@@ -29,6 +29,11 @@ def get_embedded_listening_args():
     parser.add_argument('--batch-size', type=int, default=4,
                         help="How many spectrogram frames the model should be run on in parallel. More powerful " +
                              "hardware can benefit from larger values, but it may cause slowdown past a certain point.")
+    parser.add_argument('--allow-smaller-batches', action='store_true',
+                        help="Specify this to allow the predictor to process data as soon as there is enough for a model" +
+                             "prediction instead of waiting until there is a full batch ready. This may decrease power " +
+                             "efficiency but it will also decrease memory pressure on the machine. It will also allow " +
+                             "predictions to be made sooner, which could be important if some real-time response is desired.")
     parser.add_argument('--jump', type=int, default=64,
                         help="The offset in time-steps of adjacent predicted spectrogram frames. Must be an even " +
                              "divisor of the model input's time dimension.")

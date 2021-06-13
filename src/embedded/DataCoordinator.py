@@ -51,6 +51,9 @@ class DataCoordinator(Closeable):
     # A value of '1' does not impose any restrictions.
     min_collectable_predictions: int
 
+    # The minimum number of windows to process through a model simultaneously
+    min_batch_size: int
+
 
     # Thread synchronization states
 
@@ -95,6 +98,8 @@ class DataCoordinator(Closeable):
                  jump: Optional[int] = None, override_buffer_size: Optional[int] = None,
                  # We assume that 'min_appendable_time_steps' is sufficient to make a prediction.
                  min_appendable_time_steps: Optional[int] = None,
+                 # The minimum number of windows that can be processed through a model simultaneously
+                 min_batch_size: int = 1,
                  # Do not accept input if fewer than this number of rows are unallocated
                  min_free_space_for_input: Optional[int] = None,
                  # Predictions will not be collected unless at least the following proportion of the prediction buffer is full
@@ -148,6 +153,8 @@ class DataCoordinator(Closeable):
         self._assert_spectrogram_capture_dir()
         self.captured_disk_usage = 0.
         self.max_captured_disk_usage = max_captured_disk_usage
+
+        self.min_batch_size = min_batch_size
 
         self.min_free_space_for_input = min_free_space_for_input
         if min_free_space_for_input is None or self.min_free_space_for_input < self.spectrogram_buffer.min_appendable_time_steps:
@@ -461,7 +468,7 @@ class DataCoordinator(Closeable):
                     self.data_available_for_prediction_lock.release()
             else:
                 jump = self.spectrogram_buffer.min_appendable_time_steps - self.overlap_allowance
-                if metadata_snapshot.rows_unprocessed >= (self.spectrogram_buffer.min_appendable_time_steps + jump):
+                if metadata_snapshot.rows_unprocessed >= (self.min_batch_size * self.spectrogram_buffer.min_appendable_time_steps + jump):
                     # unlock it if possible
                     if self._holding_prediction_lock:
                         self._holding_prediction_lock = False
