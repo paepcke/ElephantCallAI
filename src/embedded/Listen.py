@@ -47,12 +47,14 @@ def main():
     else:
         predictor = TwoStageModelPredictor.TwoStageModelPredictor(args.model_path, batch_size=args.batch_size, jump=jump)
 
+    min_batch_size = 1 if args.allow_smaller_batches else args.batch_size
     data_coordinator = DataCoordinator.DataCoordinator(
         args.predicted_intervals_output_path, args.blackout_intervals_output_path, jump=jump,
         prediction_threshold=args.prediction_threshold,
         spectrogram_capture_dir=args.spectrogram_capture_dir,
         max_captured_disk_usage=args.captured_disk_usage_limit,
         time_delta_per_time_step=args.hop/args.sampling_freq,
+        min_batch_size=min_batch_size,
         override_buffer_size=convert_mb_to_num_elements(args.spectrogram_buffer_size_mb,
                                                         MODEL_INPUT_FREQUENCY_BINS * SpectrogramBuffer.BYTES_PER_ELEMENT))
 
