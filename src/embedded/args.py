@@ -45,6 +45,9 @@ def get_embedded_listening_args():
     parser.add_argument('--audio-buffer-size-mb', type=int, default=16,
                         help="The size of the audio buffer, in MB. This will be statically allocated. The " +
                              " optimal value will be hardware-dependent.")
+    parser.add_argument('--half-precision', action='store_true', help="Specify this to convert all model weights to " +
+                        "half-precision (16-bit floating point numbers) to reduce computation cost at the " +
+                        "expense of prediction accuracy.")
 
     # Debugging arguments
     parser.add_argument('--verbose', action='store_true', help="Prints information for debugging.")
