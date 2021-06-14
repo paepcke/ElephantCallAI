@@ -9,7 +9,7 @@ from embedded.microphone import AudioBuffer
 from embedded.microphone.AudioCapturer import AudioCapturer
 from embedded.microphone.AudioSpectrogramStream import AudioSpectrogramStream
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
-from embedded.predictors import Predictor, SingleStageModelPredictor, TwoStageModelPredictor
+from embedded.predictors import Predictor, SingleStageModelPredictor, TwoStageModelPredictor, RandomTorchvisionPredictor
 from embedded import SpectrogramBuffer
 
 
@@ -42,7 +42,10 @@ def main():
         raise ValueError(f"'jump' must be an even divisor of {MODEL_INPUT_TIMESTEPS}")
 
     predictor: Predictor
-    if args.single_stage_model:
+    if args.random_model is not None:
+        predictor = RandomTorchvisionPredictor.RandomTorchvisionPredictor(model_type=args.random_model, batch_size=args.batch_size, jump=jump,
+                                                                          half_precision=args.half_precision)
+    elif args.single_stage_model:
         predictor = SingleStageModelPredictor.SingleStageModelPredictor(args.model_path, batch_size=args.batch_size,
                                                                         jump=jump, half_precision=args.half_precision)
     else:

@@ -14,7 +14,7 @@ def get_args():
                         help="The directory containing the input *_spectro.py files", required=True)
     parser.add_argument('--prediction-output-dir', type=str,
                         help="The directory to store the prediction output files", required=True)
-    parser.add_argument('--model-path', type=str, help="path to the 2-stage-model directory with the model to run", required=True)
+    parser.add_argument('--model-path', type=str, help="path to the 2-stage-model directory with the model to run")
     parser.add_argument('--prediction-threshold', type=float, default=0.5,
                         help="Threshold for deciding a positive prediction from model outputs.")
     parser.add_argument('--overwrite-existing-predictions', action='store_true',

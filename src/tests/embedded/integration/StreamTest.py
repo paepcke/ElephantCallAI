@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from embedded import DataCoordinator, FileSpectrogramStream, PredictionManager, PredictionCollector, SignalUtils
 from embedded.FileUtils import assert_path_exists
-from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredictor
+from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredictor, RandomTorchvisionPredictor
 
 # TODO: these hard-coded resource paths can be swapped out with environment variables later
 SPECTROGRAM_NPY_FILE = "../../../../Integration_Test_Data/spectrograms/nn10b_20180604_spec.npy"
@@ -20,7 +20,8 @@ LABELS_PATH = "../../../../Integration_Test_Data/spectrograms/nn10b_20180604_lab
 
 def integration_test_with_model(small_buffer: bool = False, two_stage_model: bool = False,
                                 model_path: str = TWO_STAGE_MODEL_PATH, preds_save_path: str = PREDS_SAVE_PATH,
-                                spectrogram_file_path: str = SPECTROGRAM_NPY_FILE, verbose: bool = True):
+                                spectrogram_file_path: str = SPECTROGRAM_NPY_FILE, verbose: bool = True,
+                                random_model_type: Optional[str] = None):
     """
     This test will bypass the audio portion of the pipeline, streaming spectrogram data
     from a file into the DataCoordinator. Useful for testing this part in isolation.
@@ -35,7 +36,9 @@ def integration_test_with_model(small_buffer: bool = False, two_stage_model: boo
     os.system("rm {}".format(BLACKOUT_INTERVALS_OUTPUT_PATH))
 
     jump = 64
-    if two_stage_model:
+    if random_model_type is not None:
+        predictor = RandomTorchvisionPredictor.RandomTorchvisionPredictor(jump=jump, model_type=random_model_type)
+    elif two_stage_model:
         assert_path_exists(model_path, "You must provide a directory containing two PyTorch models.")
         predictor = TwoStageModelPredictor.TwoStageModelPredictor(model_path, jump=jump)
     else:

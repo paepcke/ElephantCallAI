@@ -10,7 +10,7 @@ def get_embedded_listening_args():
                         help="the location of the file that prediction intervals will be recorded to")
     parser.add_argument('--blackout-intervals-output-path', type=str, default="/tmp/blackout_intervals.txt",
                     help="the location of the file that blackout intervals will be recorded to")
-    parser.add_argument('--model-path', type=str, required=True,
+    parser.add_argument('--model-path', type=str,
                         help="a path to a PyTorch model OR a directory containing two correctly-named models" +
                              " for audio classification")
     parser.add_argument('--single-stage-model', action='store_true',
@@ -54,6 +54,8 @@ def get_embedded_listening_args():
     parser.add_argument('--timeout', action='store_true',
                         help="Causes the pipeline to terminate after a while if no new data is getting in. For " +
                         "debugging and testing.")
+    parser.add_argument('--random-model', type=str,
+                        help="A randomly-initialized model for use only in assessing power metrics.")
 
     # STFT configuration (this is model-specific): see SpectrogramExtractor.py for explanations
     parser.add_argument('--nfft', type=int, default=4096,
@@ -71,4 +73,12 @@ def get_embedded_listening_args():
 
     # TODO: add arguments that allow variation in model input shape?
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    assert_args(args)
+    return args
+
+
+def assert_args(args):
+    if (args.model_path is None and args.random_model is None) or\
+            (args.model_path is not None and args.random_model is not None):
+        raise ValueError("You must specify exactly one of the following arguments '--model-path', '--random-model'.")
