@@ -41,7 +41,7 @@ class RandomTorchvisionPredictor(Predictor):
         if model_type == "mobilenet":
             self.model = RandomMobileNetV2Model()
         elif model_type == "resnet":
-            self.model = RandomResNet152Model()
+            self.model = RandomResNet101Model()
         else:
             raise ValueError(f"Only 'resnet' and 'mobilenet' are supported model types. '{model_type}' is not recognized.")
         self.model.eval()
@@ -54,11 +54,11 @@ class RandomTorchvisionPredictor(Predictor):
                                                           batch_size=self.batch_size, half_precision=self.half_precision)
 
 
-class RandomResNet152Model(nn.Module):
+class RandomResNet101Model(nn.Module):
     def __init__(self):
-        super(RandomResNet152Model, self).__init__()
+        super(RandomResNet101Model, self).__init__()
 
-        self.model = models.resnet152()
+        self.model = models.resnet101()
         self.model.fc = nn.Sequential(
             nn.Linear(2048, 128),
             nn.ReLU(inplace=True),
@@ -75,6 +75,8 @@ class RandomMobileNetV2Model(nn.Module):
     def __init__(self):
         super(RandomMobileNetV2Model, self).__init__()
 
+        self.resizer = transforms.Resize((224, 224))
+
         mobilenet_model = models.mobilenet_v2()
         mobilenet_model.classifier = nn.Sequential(
             nn.Linear(1280, 128),
@@ -82,10 +84,7 @@ class RandomMobileNetV2Model(nn.Module):
             nn.Linear(128, 256)
         )
 
-        self.model = nn.Sequential(
-            transforms.Resize((224, 224)),
-            mobilenet_model
-        )
+        self.model = mobilenet_model
 
     def forward(self, inputs):
         inputs = inputs.unsqueeze(1)
