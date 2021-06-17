@@ -6,7 +6,6 @@ from os import path
 import os
 
 
-
 """
 Update this file!!
 This file is just temporary to generate spectrograms without labels for testing on 

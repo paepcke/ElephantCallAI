@@ -15,7 +15,7 @@ import time
 
 from scipy.io import wavfile
 import torch
-from torchaudio import transforms
+#from torchaudio import transforms
 
 from elephant_utils.logging_service import LoggingService
 import numpy as np
@@ -239,6 +239,7 @@ class DATAUtils(object):
         @param spect_magnitude:
         @type spect_magnitude:
         '''
+        # DEPRECATED!!
         transformer = transforms.AmplitudeToDB('power')
         spect_tensor = torch.Tensor(spect_magnitude)
         spect_dB_tensor = transformer.forward(spect_tensor)

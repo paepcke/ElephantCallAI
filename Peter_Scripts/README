@@ -50,6 +50,22 @@ KEY FILES
 
     Lastly, the data folder with the '.wav' files does not need to exist in this folder!
 
+SETUP
+    Below are a few basic instructions on how to create an anaconda environment and how 
+    to download all of the proper dependancies to run the Inference pipeline script
+
+    Setting up an anaconda environment:
+
+        > conda create -n peter python=3.7.8
+        > conda activate peter
+        > python setup.py install
+
+    Note: Do not include the '>' character when copying the command
+
+    After running these three lines you should be all good to try the example
+    runs below!
+
+
 EXAMPLE RUNS
 
 Help:

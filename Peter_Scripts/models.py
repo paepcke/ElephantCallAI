@@ -9,7 +9,7 @@ import torch.nn as nn
 from data import get_loader, get_loader_fuzzy
 from torchsummary import summary
 import time
-#from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 #import sklearn
 #import sys
 #import copy
