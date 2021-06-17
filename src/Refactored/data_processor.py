@@ -12,6 +12,14 @@ We will have two classes, one that is responsible for gathering
 the files to be passed to the spectrogrammer and the second
 class will deal with spectrogram chopping
 
+
+Example runs:
+
+Spectrogram chopping for specific spectrograms from a file
+
+    python data_processor.py --chop_spects --spect_data single_spect.txt --chopped_outdir ../../elephant_dataset/Curriculum_Tiny --spect_data_path /home/data/elephants/rawdata/Spectrograms/nouabale_test
+
+
 """
 
 import argparse
@@ -99,7 +107,7 @@ class Spectrogram_Generator(object):
         with open(data_file, "r") as f:
             lines = f.readlines()
 
-        data_paths = [os.path.join(data_path, line) for line in lines]
+        data_paths = [os.path.join(data_path, line.rstrip()) for line in lines]
         return data_paths
 
     def extract_from_dir(self, data_dir):
@@ -192,7 +200,7 @@ class LaunchChopper(object):
 
         # Add the complete path to each file name so that we can
         # properly load them into the CHOPPER
-        data_paths = [os.path.join(data_path, line) for line in lines]
+        data_paths = [os.path.join(data_path, line.rstrip()) for line in lines]
 
         spect_file_pairs = []
         for path in data_paths:

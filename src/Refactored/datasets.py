@@ -42,11 +42,18 @@ class Subsampled_ElephantDataset(data.Dataset):
         - Then that should be everything!!!!!
 
     """
-    def __init__(self, data_path, neg_ratio=1, neg_features=None, normalization="norm", 
+    def __init__(self, data_path, neg_ratio=1, neg_features=None, 
+                #seperate_hard_samples=False, 
+                normalization="norm", 
                 log_scale=True, gaussian_smooth=0, transform=None, 
                 shift_windows=False, seed=8):
         """
-            @TODO: add comments for these!!!
+            Params
+            ------
+            @param seperate_hard_samples: Flag indicating that we
+            want to have seperate arrays for hard and regular negative
+            samples.
+            @type spect_file: bool. 
         """
         # SET THE SEED???
 
@@ -74,6 +81,14 @@ class Subsampled_ElephantDataset(data.Dataset):
         # By default randomly undersample to get the negative features
         else: 
             self.undersample_negative_features(data_path)
+
+        # Step 3) Initialize empty array to seperately store the hard negative
+        # samples. NOTE: for now this is only used in curriculum training and
+        # these are empty lists otherwise!
+        #self.seperate_hard_samples = seperate_hard_samples
+        #if self.seperate_hard_samples:
+        self.hard_neg_features = []
+        self.hard_neg_labels = []
         
         # Step 3) Combine the pos and neg features to get the complete data
         self.data = None
@@ -133,7 +148,8 @@ class Subsampled_ElephantDataset(data.Dataset):
             the number of pos and neg features to be a factor 
             of 'ratio' different.
         """
-        # Step 1) Compute how many negative examples to sample to rebalance
+        # Step 1) Compute how many negative examples to sample to rebalance.
+        # Note that here we keep any neg_features that already exist.
         # as: len(pos) * neg_ratio = len(neg)
         num_neg_samples = self.neg_ratio * len(self.pos_features) - len(self.neg_features)
 
@@ -156,6 +172,34 @@ class Subsampled_ElephantDataset(data.Dataset):
         print("Undersampling more negative features to match ratio!")
         print ("New number of negative features is {}".format(len(self.neg_features)))
     
+    """
+        Things that could be done easiest to most involved:
+        - Simply have the curriculum model sample a certain ratio of hard examples
+        and new negatives.
+        - Have the curriculum model sample a set of hard examples and then use
+        the dataset to upsample negative features to balance?
+        - Would we want to keep around some data and what data would that be:
+            - There are two types of data fed to the model: hard negatives and
+            regular background. 
+            - Way to make it the mosssttt flexible
+                - Have an array for the hard examples and an array for the
+                random background examples
+                - Have a ratio for how much of each we keep and replace!
+                Naemly, we have a hard_keep ratio and a rand_keep 
+                ratio. 
+                - Then we do two things!!! 
+                    - For both we keep a random subset of 
+                    hard and random samples
+                    - Then add a new set of hard and a 
+                    new set of random!
+
+            - Things we need
+                - Method that subsamples / keeps a random portion
+                of either the hard or random samples.
+                - Method that sets the hard and random negative samples
+                (These will be fed by the curriculum model) even the
+                random sampling of the remaining data! 
+    """
 
     def combine_data(self):
         """
@@ -166,11 +210,151 @@ class Subsampled_ElephantDataset(data.Dataset):
         if self.data is not None:
             print("Total number of samples was {} and is now {}".format(len(self.data), len(self.pos_features) + len(self.neg_features)))
 
-        # Combine
-        self.data = self.pos_features + self.neg_features
-        self.labels = self.pos_labels + self.neg_labels
+        # Combine - NOTE: that if unused the hard feats/labels are empty!
+        self.data = self.pos_features + self.neg_features + self.hard_neg_features 
+        self.labels = self.pos_labels + self.neg_labels + self.hard_neg_labels
 
 
+    # Next idea!!!!! Define the method with a keep ratio!
+    # Basically, keep ratio defines how much is kept 
+    # which we randomly sample and then add too. Special
+    # cases are 0% and 100% where we empty the bish
+    # or keep all of it!
+    def update_examples(self, new_examples, features, labels, keep_ratio=0.0)#, combine_data=True):
+
+        # First we need to incorperate keep ratio
+        new_features = []
+        new_labels = []
+        if 0.0 < keep_ratio and keep_ratio < 1.0:
+            # Compute the number of examples that we want to keep
+            num_kept = int(len(features))
+            # Sample the ones we want to keep
+            kept_idxs = np.random.choice(np.arange(len(features)), num_kept, replace=False)
+
+            new_features = [features[idx] for idx in kept_idxs]
+            new_labels = [labels[idx] for idx in kept_idxs] 
+        elif keep_ratio == 1:
+            new_features = features
+            new_labels = labels
+
+        # Now we want to actually add the new examples
+        for feature, label in new_examples:
+            new_features.append(feature)
+            new_labels.append(label)
+        
+        return new_features, new_labels 
+
+
+    def update_pos_examples(self, pos_examples, keep_ratio=0.0, combine_data=True):
+        """
+            Unlike before, assume that pos_features is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+
+            @param combine_data: flag indicating whether we should in the
+            end combine the new data. Set this to false if we plan to
+            do multiple operations on the dataset and want to call
+            combine yourself! 
+        """
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_examples)))
+        print("Length of neg_features is {}".format(len(self.neg_features) + len(self.hard_neg_features)))
+        self.pos_features, self.pos_labels = self.update_examples(pos_examples, self.pos_features, \
+                                                    self.pos_labels, keep_ratio=keep_ratio)
+
+        if combine_data:
+            self.combine_data()
+
+    def update_neg_examples(self, neg_examples, keep_ratio=0.0, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        new_features_length = int(self.neg_features * keep_ratio) + len(neg_examples) + len(self.hard_neg_features)
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             new_features_length))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.neg_features, self.neg_labels = self.update_examples(neg_examples, self.neg_features, \
+                                                    self.neg_labels, keep_ratio=keep_ratio)
+
+        if combine_data:
+            self.combine_data()
+
+    def update_hard_neg_examples(self, hard_neg_examples, keep_ratio=0.0, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        new_features_length = int(self.hard_neg_features * keep_ratio) + len(neg_examples) + len(self.neg_features)
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             new_features_length))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.hard_neg_features, self.hard_neg_labels = self.update_examples(hard_neg_examples, self.hard_neg_features, \
+                                                    self.hard_neg_labels, keep_ratio=keep_ratio)
+
+        if combine_data:
+            self.combine_data()
+
+
+    """
+        This stuff below is a bit antiquated but we keep it around so that past code still works!!!!!
+    """
+    # Let us try something to unify some of the logic here!
+    def add_examples(self, new_examples, features, labels, combine_data=True):
+        """
+            Generic wrapper function for setting the examples
+            one of the instance variable arrays of the dataset class.
+
+            @param features: feature list that can be one of three option
+            (self.pos_features, self.neg_features, self.hard_neg_features)
+            @param labels: labels list that can be one of three option
+            (self.pos_labels, self.neg_labels, self.hard_neg_labels)
+            @param combine_data: flag indicating whether we should in the
+            end combine the new data. Set this to false if we plan to
+            do multiple operations on the dataset and want to call
+            combine yourself! 
+        """
+        for feature, label in new_examples:
+            features.append(feature)
+            labels.append(label)
+        
+        if combine_data:
+            self.combine_data()
+
+    
+    def set_pos_examples(self, pos_examples, combine_data=True):
+        """
+            Unlike before, assume that pos_features is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+
+            @param combine_data: flag indicating whether we should in the
+            end combine the new data. Set this to false if we plan to
+            do multiple operations on the dataset and want to call
+            combine yourself! 
+        """
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_examples)))
+        print("Length of neg_features is {}".format(len(self.neg_features) + len(self.hard_neg_features)))
+        self.pos_features = []
+        self.pos_labels = []
+        self.add_examples(pos_examples, self.pos_features, self.pos_labels, combine_data=combine_data)
+        
+    
+
+    '''
     def set_pos_examples(self, pos_examples):
         """
             Unlike before, assume that pos_features is in the following form:
@@ -189,7 +373,9 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.pos_labels.append(label)
         
         self.combine_data()
+    '''
 
+    # Need to update this!!!!!
     def add_positive_examples_from_dir(self, data_dir):
         """ 
             In certain cases we want to do the actual collection of
@@ -212,6 +398,26 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.add_pos_examples(pos_examples)
 
 
+    def add_pos_examples(self, pos_examples, combine_data=True):
+        """
+            Unlike before, assume that pos_features is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+
+            @param combine_data: flag indicating whether we should in the
+            end combine the new data. Set this to false if we plan to
+            do multiple operations on the dataset and want to call
+            combine yourself! 
+        """
+        print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(self.pos_features) + len(pos_examples)))
+        print("Length of neg_features is {}".format(len(self.neg_features) + len(self.hard_neg_features)))
+        self.add_examples(pos_examples, self.pos_features, self.pos_labels, combine_data=combine_data)
+        
+
+    '''
     def add_pos_examples(self, pos_examples):
         """
             Unlike before, assume that pos_features is in the following form:
@@ -230,7 +436,27 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.pos_labels.append(label)
         
         self.combine_data()
+    '''
 
+
+    def set_neg_examples(self, neg_examples, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             len(neg_examples) + len(self.hard_neg_features)))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.neg_features = []
+        self.neg_labels = []
+        self.add_examples(neg_examples, self.neg_features, self.neg_labels, combine_data=combine_data)
+
+
+    '''
     def set_neg_examples(self, neg_examples):
         """
             Unlike before, assume that neg_features is in the following form:
@@ -249,7 +475,23 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.neg_labels.append(label)
         
         self.combine_data() 
+    '''
 
+    def add_neg_examples(self, neg_examples, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             len(self.neg_features) + len(neg_examples) + len(self.hard_neg_features)))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.add_examples(neg_examples, self.neg_features, self.neg_labels, combine_data=combine_data)
+
+    '''
     def add_neg_examples(self, neg_examples):
         """
             Unlike before, assume that pos_features is in the following form:
@@ -268,6 +510,39 @@ class Subsampled_ElephantDataset(data.Dataset):
             self.neg_labels.append(label)
         
         self.combine_data()
+    '''
+
+    def set_hard_neg_examples(self, hard_neg_examples, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             len(hard_neg_examples) + len(self.neg_features)))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.hard_neg_features = []
+        self.hard_neg_labels = []
+        self.add_examples(hard_neg_examples, self.hard_neg_features, self.hard_neg_labels, combine_data=combine_data)
+
+    def add_hard_neg_examples(self, hard_neg_examples, combine_data=True):
+        """
+            Unlike before, assume that neg_examples is in the following form:
+
+                [(feature, label, ...), ...]
+
+            Namely, we have a list of each data example as a tuple 
+            that includes the feature, the label, and any other things we want!
+        """
+        print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
+                                                             len(self.neg_features) + len(hard_neg_examples) + len(self.hard_neg_features)))
+        print("Length of pos_features is {}".format(len(self.pos_features)))
+        self.add_examples(hard_neg_examples, self.hard_neg_features, self.hard_neg_labels, combine_data=combine_data)
+
+
 
 
     def __len__(self):
@@ -324,22 +599,14 @@ class Subsampled_ElephantDataset(data.Dataset):
 # THis class is just for the full dataset!!!!
 class Full_ElephantDataset(data.Dataset):
     """
-        Dataset used for training or testing a subsampled elephant dataset.
-        To deal with the massive imbalance present within the elephant data
-        (i.e. negative data >> positive data) we must strategically re-balance 
-        the data distribution. This dataset class allows for different means
-        of data class re-balancing. 
+        Dataset class for the full elephant dataset.
 
-        By default we use random majority class undersampling!
-
-        Also allows for manual setting of the negative or positive data!
-
-        Things that we want to do here!!
-            - This class is just for the complete elephant dataset!
-            - 
-
+        Importantly, if we set the 'only_negative' flage 
+        we only include the negative samples primarily 
+        in the case of dynamic dataset training
+        as in the 2-stage model and Curriculum setting!
     """
-    def __init__(self, data_path, normalization="norm", log_scale=True, transform=None, 
+    def __init__(self, data_path, only_negative=False, normalization="norm", log_scale=True, transform=None, 
             shift_windows=False, gaussian_smooth=0, seed=8):
 
         # Should look into this with Vrinda about how we want to deal with data augmentation transforms!
@@ -351,7 +618,7 @@ class Full_ElephantDataset(data.Dataset):
         self.gaussian_smooth = gaussian_smooth
 
         # Init positive and negative data complete data
-        self.init_data(data_path)
+        self.init_data(data_path, only_negative)
 
         assert len(self.data) == len(self.labels)
 
@@ -365,17 +632,19 @@ class Full_ElephantDataset(data.Dataset):
         print('Normalizing with {} and scaling {}'.format(normalization, log_scale))
 
 
-    def init_data(self, data_path):
+    def init_data(self, data_path, only_negative):
         """
             Intialize the positive and neg features (complete neg features)
 
             @TODO be more specificc
         """
-        self.pos_features = self.pos_features = glob.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
+        self.pos_features = []
         self.pos_labels = []
-        for feature_path in self.pos_features:
-            feature_parts = feature_path.split("pos-features")
-            self.pos_labels.append(feature_parts[0] + "pos-labels" + feature_parts[1])
+        if not only_negative:
+            self.pos_features = self.pos_features = glob.glob(os.path.join(data_path, "*_pos-features_*"), recursive=True)
+            for feature_path in self.pos_features:
+                feature_parts = feature_path.split("pos-features")
+                self.pos_labels.append(feature_parts[0] + "pos-labels" + feature_parts[1])
 
         self.neg_features = glob.glob(os.path.join(data_path, "*_neg-features_*"), recursive=True)
         self.neg_labels = []
@@ -432,3 +701,4 @@ class Full_ElephantDataset(data.Dataset):
             data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
 
         return data
+
