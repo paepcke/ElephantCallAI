@@ -240,7 +240,7 @@ class Curriculum_Strategy(object):
         # Step 2) Evaluate over every example in the full dataset
         print ("Num batches:", len(self.full_train_loader))
         for idx, batch in enumerate(self.full_train_loader):
-            if idx % 10 == 0:
+            if idx % 3000 == 0:
                 print("Full data evaluation has gotten through {} batches".format(idx))
         
             # Step 2a) Evaluate model on data
@@ -320,7 +320,6 @@ class Curriculum_Strategy(object):
             data_file_idx = sorted_weight_indeces[-idx]
             new_hard_negatives.append((self.full_train_loader.dataset.data[data_file_idx], \
                             self.full_train_loader.dataset.labels[data_file_idx]))
-            print(new_hard_negatives[-1])
 
         # Step 2a) Save the sampled hard negative indeces
         sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
@@ -356,7 +355,6 @@ class Curriculum_Strategy(object):
             # Save in reverse order to preserve the difficulty ranking
             for i in range(1, sampled_data.shape[0] + 1):
                 data_file_idx = sampled_data[-i]
-                print (f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}')
                 f.write(f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}\n')
 
 
