@@ -208,7 +208,8 @@ class Subsampled_ElephantDataset(data.Dataset):
         """
         # Logging
         if self.data is not None:
-            print("Total number of samples was {} and is now {}".format(len(self.data), len(self.pos_features) + len(self.neg_features)))
+            print("Total number of samples was {} and is now {}".format(len(self.data), len(self.pos_features) \
+                                                            + len(self.neg_features) + len(self.hard_neg_features)))
 
         # Combine - NOTE: that if unused the hard feats/labels are empty!
         self.data = self.pos_features + self.neg_features + self.hard_neg_features 
@@ -220,20 +221,18 @@ class Subsampled_ElephantDataset(data.Dataset):
     # which we randomly sample and then add too. Special
     # cases are 0% and 100% where we empty the bish
     # or keep all of it!
-    def update_examples(self, new_examples, features, labels, keep_ratio=0.0)#, combine_data=True):
+    def update_examples(self, new_examples, features, labels, num_keep):#, combine_data=True):
 
         # First we need to incorperate keep ratio
         new_features = []
         new_labels = []
-        if 0.0 < keep_ratio and keep_ratio < 1.0:
-            # Compute the number of examples that we want to keep
-            num_kept = int(len(features))
+        if len(new_examples) > 0 and num_keep > 0:
             # Sample the ones we want to keep
-            kept_idxs = np.random.choice(np.arange(len(features)), num_kept, replace=False)
+            kept_idxs = np.random.choice(np.arange(len(features)), num_keep, replace=False)
 
             new_features = [features[idx] for idx in kept_idxs]
             new_labels = [labels[idx] for idx in kept_idxs] 
-        elif keep_ratio == 1:
+        elif len(new_examples) == 0:
             new_features = features
             new_labels = labels
 
@@ -245,7 +244,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         return new_features, new_labels 
 
 
-    def update_pos_examples(self, pos_examples, keep_ratio=0.0, combine_data=True):
+    def update_pos_examples(self, pos_examples, num_keep, combine_data=True):
         """
             Unlike before, assume that pos_features is in the following form:
 
@@ -262,12 +261,12 @@ class Subsampled_ElephantDataset(data.Dataset):
         print("Length of pos_features was {} and is now {} ".format(len(self.pos_features), len(pos_examples)))
         print("Length of neg_features is {}".format(len(self.neg_features) + len(self.hard_neg_features)))
         self.pos_features, self.pos_labels = self.update_examples(pos_examples, self.pos_features, \
-                                                    self.pos_labels, keep_ratio=keep_ratio)
+                                                    self.pos_labels, num_keep)
 
         if combine_data:
             self.combine_data()
 
-    def update_neg_examples(self, neg_examples, keep_ratio=0.0, combine_data=True):
+    def update_neg_examples(self, neg_examples, num_keep, combine_data=True):
         """
             Unlike before, assume that neg_examples is in the following form:
 
@@ -276,17 +275,17 @@ class Subsampled_ElephantDataset(data.Dataset):
             Namely, we have a list of each data example as a tuple 
             that includes the feature, the label, and any other things we want!
         """
-        new_features_length = int(self.neg_features * keep_ratio) + len(neg_examples) + len(self.hard_neg_features)
+        new_features_length = num_keep + len(neg_examples) + len(self.hard_neg_features)
         print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
                                                              new_features_length))
         print("Length of pos_features is {}".format(len(self.pos_features)))
         self.neg_features, self.neg_labels = self.update_examples(neg_examples, self.neg_features, \
-                                                    self.neg_labels, keep_ratio=keep_ratio)
+                                                    self.neg_labels, num_keep)
 
         if combine_data:
             self.combine_data()
 
-    def update_hard_neg_examples(self, hard_neg_examples, keep_ratio=0.0, combine_data=True):
+    def update_hard_neg_examples(self, hard_neg_examples, num_keep, combine_data=True):
         """
             Unlike before, assume that neg_examples is in the following form:
 
@@ -295,19 +294,19 @@ class Subsampled_ElephantDataset(data.Dataset):
             Namely, we have a list of each data example as a tuple 
             that includes the feature, the label, and any other things we want!
         """
-        new_features_length = int(self.hard_neg_features * keep_ratio) + len(neg_examples) + len(self.neg_features)
+        new_features_length = num_keep + len(hard_neg_examples) + len(self.neg_features)
         print("Length of neg_features was {} and is now {} ".format(len(self.neg_features)+ len(self.hard_neg_features),\
                                                              new_features_length))
         print("Length of pos_features is {}".format(len(self.pos_features)))
         self.hard_neg_features, self.hard_neg_labels = self.update_examples(hard_neg_examples, self.hard_neg_features, \
-                                                    self.hard_neg_labels, keep_ratio=keep_ratio)
+                                                    self.hard_neg_labels, num_keep)
 
         if combine_data:
             self.combine_data()
 
 
     """
-        This stuff below is a bit antiquated but we keep it around so that past code still works!!!!!
+        This stuff below is a bit antiquated but we keep it around so that past code still works!!!!!!!!!
     """
     # Let us try something to unify some of the logic here!
     def add_examples(self, new_examples, features, labels, combine_data=True):
