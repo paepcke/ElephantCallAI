@@ -112,10 +112,10 @@ class Curriculum_Strategy(object):
 
     """
     # We should pass in a training class and just try that for now. Maybe it all doesn't make sense but fuck it
-    def __init__(self, train_model, full_loaders, save_path, 
+    def __init__(self, train_model, dataloaders, save_path, 
             num_epochs_per_era=3, eras=20, neg_ratio=1, 
-            rand_keep_ratio=0.5, hard_keep_ratio=0.0, hard_vs_rand_ratio=0.5,
-            run_type="Simple", incorrect_scoring_method="slices"):
+            rand_keep_ratio=0.5, hard_keep_ratio=0.25, hard_vs_rand_ratio=0.5,
+            run_type="Simple", difficulty_scoring_method="slices"):
     
         super(Curriculum_Strategy, self).__init__()
         
@@ -123,34 +123,40 @@ class Curriculum_Strategy(object):
         # supervises
         self.train_model = train_model
         
-        # Step 2) The full collection of negative examples
-        self.full_train_loader = full_loaders['full_train_loader']
+        # Step 2) The full collection of ONLY negative examples
+        self.full_train_loader = dataloaders['full_train_loader']
     
 
         # Step 3) Model save information
         self.save_path = save_path
         # Create Save path for the dynamically sampled examples
         self.sampled_data_path = os.path.join(self.save_path, "Sampled_Data")
+        # Create the new directory
+        os.makedirs(self.sampled_data_path)
         
 
         # Step 4) Save curriculum specific parameters
         self.eras = eras
         self.num_epochs_per_era = num_epochs_per_era
 
-        # Compute the different sampled dataset sizes based on the 
-        # different ratios
-        self.num_negatives = len(self.full_train_loader.dataset.neg_features)
-        self.num_important_negatives = int(num_negatives * hard_vs_rand_ratio)
-        self.num_rand_negatives = num_negatives - num_important_negatives
+        # Step 5) Compute the breakdown of difficult vs. random negatives 
+        #################################################################
+        # Step 5a) Number of negatives that exist in the "train dataset" for train model
+        self.num_negatives = len(self.train_model.train_dataloader.dataset.neg_features)
+        # Step 5b) Number of difficult negatives that we want will train with.
+        self.num_hard_negatives = int(self.num_negatives * hard_vs_rand_ratio)
+        # Step 5c) Number of random negatives that we include to "respect" the distribution.
+        self.num_rand_negatives = self.num_negatives - self.num_hard_negatives
 
-        self.num_new_hard = self.num_important_negatives - int(hard_keep_ratio * self.num_important_negatives) 
+        # Step 6) How many NEW difficult vs. random negatives we will include after each era
+        #self.num_keep_hard = int(hard_keep_ratio * self.num_hard_negatives)
+        self.num_new_hard = self.num_hard_negatives - int(hard_keep_ratio * self.num_hard_negatives) 
+        #self.num_keep_rand = int(rand_keep_ratio * self.num_rand_negatives)
         self.num_new_rand = self.num_rand_negatives - int(rand_keep_ratio * self.num_rand_negatives)
 
-
-        self.incorrect_scoring_method = incorrect_scoring_method
-
-        # Figure out the run type! Assume for now that we run the full pipelines
-        self.curriculum_train(run_type)
+        # Step 7) Define the curriculum strategy
+        self.difficulty_scoring_method = difficulty_scoring_method
+        self.run_type = run_type
         
    
     """
@@ -172,7 +178,7 @@ class Curriculum_Strategy(object):
 
         I may just consider writing the logic of training and eval over here? It feels very wasteful?
     """
-    def curriculum_train(run_type):
+    def curriculum_train(self):
 
         # Should we set it up 
         # For now leave out the extra class vars
@@ -180,28 +186,29 @@ class Curriculum_Strategy(object):
         # How can we start? We just need to basically:
         # 1) train for a small number of epochs
         # 2) Evaluate over the full data
-        
+        best_model_wts = None
         for era in range(self.eras):
             print(f"Curriculum Era: {era + 1}\n")
             # Step 1) Train the model on the current state of the dataset
             print ("Training Model")
-            self.train_model.train(self.num_epochs_per_era)
+            best_model_wts = self.train_model.train(self.num_epochs_per_era)
             print ("Finished Era Training")
 
             # Step 2) Run the model over the entire dataset
             # This can be made better but let us just hash her out
             print ("Evaluating Model Over Full Data")
-            window_scores = self.full_data_eval()
+            window_difficulty_scores = self.full_data_eval()
 
             # Step 3) We need to adjust the dataset!!!!!!!
             # Get the new hard and random negatives
-            new_hard_negatives, new_rand_negatives = self.re_sample_data(window_scores, era)
+            print ("Re-Sampling the data")
+            new_hard_negatives, new_rand_negatives = self.re_sample_data(window_difficulty_scores, era)
 
 
             # Step 4) Adjust the datasets baby for the next round of
             # training!
+            print ("Updated the datasets with new examples")
             self.update_dataset(new_hard_negatives, new_rand_negatives)
-
 
             # Step 5) Figure out exactly how we want to end???
             # We obviously need a way to end this? The question is how?
@@ -213,6 +220,9 @@ class Curriculum_Strategy(object):
             # metrics? Like maybe we should just after an era test over
             # the full dataset with some modified metrics??
 
+        # I think that this makes sense?
+        return best_model_wts
+
 
     def full_data_eval(self):
         """
@@ -222,15 +232,15 @@ class Curriculum_Strategy(object):
         """
 
         # Step 1) Create scoring vector for each example in the dataset
-        window_scores = np.zeros(len(self.full_train_loader.dataset))
-        
+        window_difficulty_scores = np.zeros(len(self.full_train_loader.dataset))
+
         # Put the model in eval mode!!
         self.train_model.model.eval()
 
         # Step 2) Evaluate over every example in the full dataset
         print ("Num batches:", len(self.full_train_loader))
         for idx, batch in enumerate(self.full_train_loader):
-            if idx % 1000 == 0:
+            if idx % 10 == 0:
                 print("Full data evaluation has gotten through {} batches".format(idx))
         
             # Step 2a) Evaluate model on data
@@ -244,15 +254,15 @@ class Curriculum_Strategy(object):
 
             # Step 2b) compute the difficulty score of each window
             # based on the specified scoring method
-            if self.incorrect_scoring_method == "slices":
+            if self.difficulty_scoring_method == "slices":
                 # Compute the number of incorrest slices.
                 batch_scores = self.compute_incorrect_slices(predictions)
             
             batch_size = inputs.shape[0]
             # We should set this to be a batch size for the complete loaders!!!
-            window_scores[idx * parameters.BATCH_SIZE: idx * parameters.BATCH_SIZE + curr_batch_size] = batch_scores
+            window_difficulty_scores[idx * parameters.BATCH_SIZE: idx * parameters.BATCH_SIZE + batch_size] = batch_scores
         
-        return window_scores
+        return window_difficulty_scores
 
 
 
@@ -296,21 +306,34 @@ class Curriculum_Strategy(object):
         # can take on different meaning (i.e. most on the boarder of 
         # classification)
         new_hard_negatives = []
-        for idx in range(1, self.num_new_hard + 1):
+
+        # Note that if this is the first era there are no hard negatives yet so we
+        # want to incorperate all of the hard negatives. 
+        # Basically in the first era there are just pos | start_neg
+        # want to go to pos | neg | hard_neg --> where neg + hard_neg = start_neg
+        # So initially we want the number of re-sampled hard_neg to be all 
+        num_sample_hard = self.num_new_hard
+        if era == 0:
+            num_sample_hard = self.num_hard_negatives
+
+        for idx in range(1, num_sample_hard + 1):
             data_file_idx = sorted_weight_indeces[-idx]
             new_hard_negatives.append((self.full_train_loader.dataset.data[data_file_idx], \
                             self.full_train_loader.dataset.labels[data_file_idx]))
+            print(new_hard_negatives[-1])
 
-        # Step 2a) Save the sampled hard negatives
-        sampled_hard_negatives = sorted_weight_indeces[-self.num_new_hard:]
-        self.save_sampled_examples(sampled_hard_negatives, window_scores[sampled_hard_negatives], "Hard-Negatives_Era-" + str(era))
+        # Step 2a) Save the sampled hard negative indeces
+        sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
+        self.save_sampled_examples(sampled_hard_negatives, window_scores[sampled_hard_negatives], "Hard-Negatives_Era-" + str(era) + ".txt")
+        print ("Finished sampling hard examples")
 
         # Step 3) Sample num_new_rand random examples. 
         # These examples are sampled from the remaining examples
         # not sampled as the new hard training examples - 
         # indeces in the range [0 : sorted_weight_indeces.shape[0] - num_new_hard]
         new_rand_negatives = []
-        rand_data_idxs = np.random.choice(np.arange(sorted_weight_indeces.shape[0] - self.num_new_hard), size=self.num_new_rand, replace=False)
+        # Random.choice may be slow?
+        rand_data_idxs = np.random.choice(np.arange(sorted_weight_indeces.shape[0] - num_sample_hard), size=self.num_new_rand, replace=False)
         # Now we want to add these new random datapoints
         for idx in rand_data_idxs:
             data_file_idx = sorted_weight_indeces[idx]
@@ -322,23 +345,22 @@ class Curriculum_Strategy(object):
 
         return new_hard_negatives, new_rand_negatives
 
-    def save_sampled_examples(sampled_data, data_scores, title):
+    def save_sampled_examples(self, sampled_data, data_scores, title):
         """
             Save a record of the data sampled one per line:
             (idx, score, file name)
         """
-        with open(self.train_adversarial_files, 'w') as f:
-            for data, label in adversarial_train_files:
-                f.write('{}, {}\n'.format(data, label))
         # Save a file for the given ERA 
-        file_path = os.path.join(self.sampled_negatives_path, title)
+        file_path = os.path.join(self.sampled_data_path, title)
         with open(file_path, 'w') as f:
+            # Save in reverse order to preserve the difficulty ranking
             for i in range(1, sampled_data.shape[0] + 1):
                 data_file_idx = sampled_data[-i]
+                print (f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}')
                 f.write(f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}\n')
 
 
-    def update_dataset(self, new_hard_negatives, new_rand_negatives, file_title):
+    def update_dataset(self, new_hard_negatives, new_rand_negatives):
         """
             Update the dynamic dataset to have the new adversarial files
         """
@@ -348,13 +370,24 @@ class Curriculum_Strategy(object):
         #
         # Update the hard negatives to include new_hard_negatives
         # while keeping 'self.hard_keep_ratio' of hard negs.
-        
+
+        # Do we need to pass the keep ratio? We have already used this to determine the size of the
+        # new. So the size of the keep could be determined and saved?? This would solve potentially
+        # most of the issues. and then it needs to be only calculated once!!!!!!
+        # We can just compute how many we want to keep
+        # num_total - len(new). 
+        # Cases:
+        #   - num_total = len(new) ==> num_keep = 0 ) itr 1
+        #   - num_new = len(new) ==> num_keep = expected ) iter 2+
+
         # Step 1) Update the random negatives 
+        rand_keep = self.num_rand_negatives - len(new_rand_negatives)
         self.train_model.train_dataloader.dataset.update_neg_examples(new_rand_negatives, \
-                                                 keep_ratio=self.rand_keep_ratio, combine_data=False)
+                                                 num_keep=rand_keep, combine_data=False)
 
         # Step 2) Update the hard negatives
+        hard_keep = self.num_hard_negatives - len(new_hard_negatives)
         self.train_model.train_dataloader.dataset.update_hard_neg_examples(new_hard_negatives, \
-                                                 keep_ratio=self.hard_keep_ratio, combine_data=True)
+                                                 num_keep=hard_keep, combine_data=True)
 
     

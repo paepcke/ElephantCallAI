@@ -19,7 +19,7 @@ class Model_Utils(object):
         """
         combined_path = os.path.join(path, new_dir)
         if not os.path.exists(combined_path):
-                os.makedirs(combined_path)
+            os.makedirs(combined_path)
 
         return combined_path
 
