@@ -1,0 +1,7 @@
+total_power - mean: 1796.3218939620015, variance: 106223.79810515656, minimum: 1556.0, maximum: 4501.0
+gpu_power - mean: 44.37282403262708, variance: 4099.315294491765, minimum: 0.0, maximum: 1771.0
+cpu_power - mean: 242.45091017606686, variance: 28803.673831112294, minimum: 122.0, maximum: 976.0
+gpu_temp - mean: 29.325673928180642, variance: 0.8859289325710311, minimum: 26.0, maximum: 33.5
+cpu_temp - mean: 29.625932557445537, variance: 1.3816840129587136, minimum: 25.5, maximum: 34.5
+ram_util - mean: 0.7562049794013023, variance: 0.011741989621757824, minimum: 0.32315842583249244, maximum: 0.979313824419778
+swap_util - mean: 0.4197447273145567, variance: 0.06509073989169542, minimum: 0.3057517658930373, maximum: 1.0
