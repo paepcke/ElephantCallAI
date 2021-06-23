@@ -59,6 +59,24 @@ parser.add_argument('--generated_path', type=str, default=None,
     5) Run train!
 """
 
+def read_adversarial_files(adversarial_file_path):
+    """
+        Read in the contents of a previously created train and test adversarial file!!
+    """
+    # We should also consider trying using the examples from "BEST_HIERARCH"
+    # Step 1) Read in the training adversarial files
+    adversarial_files = []
+    with open(adversarial_file_path, 'r') as f:
+        files = f.readlines()
+        for file_pair in files:
+            # Split by ', ' to get the data and the label
+            file_pair = file_pair.strip()
+            split_pair = file_pair.split(', ')
+            adversarial_files.append((split_pair[0], split_pair[1]))
+
+
+    return adversarial_files
+
 
 def main():
     args = parser.parse_args()
@@ -81,11 +99,15 @@ def main():
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
                                         normalization=parameters.NORM, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
-    # For curriculum we probably want to actually use the difficult test set, but we
-    # can worry about this later!
+    
+
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
                                         normalization=parameters.NORM, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
+    # For the test dataset, we inject the hard negative adversarial 
+    # examples discovered during the 2 stage model learning process
+    adversarial_files = read_adversarial_files(parameters.ADVERSARIAL_TEST_FILES)
+    test_dataset.add_hard_neg_examples(adversarial_files, combine_data=True)
 
 
     # Step 3) Get the full training dataset to supervise the curriculum model
@@ -139,7 +161,10 @@ def main():
                 scheduler, writer, save_path, early_stop_criteria=parameters.TRAIN_MODEL_SAVE_CRITERIA.lower())
 
     # Step 11) Create and run the curriculum pipeline!
-    curriculum_strategy = Curriculum_Strategy(train_pipeline, dataloaders, save_path)
+    curriculum_strategy = Curriculum_Strategy(train_pipeline, dataloaders, save_path, 
+                                    num_epochs_per_era=parameters.NUM_EPOCHS_PER_ERA, eras=parameters.ERAS,  
+                                    rand_keep_ratio=parameters.RAND_KEEP_RATIO, hard_keep_ratio=parameters.HARD_KEEP_RATIO, 
+                                    hard_vs_rand_ratio=parameters.HARD_VS_RAND_RATIO, )
     model_wts = curriculum_strategy.curriculum_train()
 
     if model_wts:

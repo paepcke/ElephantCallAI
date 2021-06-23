@@ -156,11 +156,19 @@ class Model_Utils(object):
             save_path += "Label-Smooth-" + str(parameters.LABEL_SMOOTH) + "_"
 
         save_path += "Norm-" + parameters.NORM + "_"
+
         save_path += "NegFactor-x" + str(parameters.NEG_SAMPLES) + "_"
-        save_path += "CallRepeats-" + str(parameters.CALL_REPEATS) + "_"
-        # Note should include something potentially if using focal loss
-        save_path += "TestNegFactor-x" + str(parameters.TEST_NEG_SAMPLES) + "_"
-        save_path += "Loss-" + parameters.LOSS + "_"
+        # Let us just exclude these for now
+        if save_prefix != "Curriculum_":
+            save_path += "CallRepeats-" + str(parameters.CALL_REPEATS) + "_"
+            # Note should include something potentially if using focal loss
+            save_path += "TestNegFactor-x" + str(parameters.TEST_NEG_SAMPLES) + "_"
+            save_path += "Loss-" + parameters.LOSS + "_"
+        else: # Add Curriculum specific parameters
+            save_path += "EpochsPer-" + str(parameters.NUM_EPOCHS_PER_ERA) + "_"
+            save_path += "HardVRand-" + str(parameters.HARD_VS_RAND_RATIO) + "_"
+            save_path += "HardKeep-" + str(parameters.HARD_KEEP_RATIO) + "_"
+            save_path += "RandKeep-" + str(parameters.RAND_KEEP_RATIO) + "_"
 
         if parameters.CHUNK_SIZE != 256:
             save_path += "WindowSize-" + str(parameters.CHUNK_SIZE) + "_"

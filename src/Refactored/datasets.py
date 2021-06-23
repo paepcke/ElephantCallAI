@@ -226,13 +226,14 @@ class Subsampled_ElephantDataset(data.Dataset):
         # First we need to incorperate keep ratio
         new_features = []
         new_labels = []
-        if len(new_examples) > 0 and num_keep > 0:
+        # Case where we randomly sample to keep 
+        if num_keep > 0 and num_keep < len(features):
             # Sample the ones we want to keep
             kept_idxs = np.random.choice(np.arange(len(features)), num_keep, replace=False)
 
             new_features = [features[idx] for idx in kept_idxs]
             new_labels = [labels[idx] for idx in kept_idxs] 
-        elif len(new_examples) == 0:
+        elif num_keep == len(features): # Keep them all!
             new_features = features
             new_labels = labels
 
@@ -285,6 +286,13 @@ class Subsampled_ElephantDataset(data.Dataset):
         if combine_data:
             self.combine_data()
 
+    def add_neg_examples(self, neg_examples, combine_data=True):
+        '''
+            Helper function that takes the responsibility of adding new negative examples!
+        '''
+        print("Adding new neg examples")
+        self.update_neg_examples(neg_examples, len(self.neg_features), combine_data=combine_data)
+
     def update_hard_neg_examples(self, hard_neg_examples, num_keep, combine_data=True):
         """
             Unlike before, assume that neg_examples is in the following form:
@@ -303,6 +311,13 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         if combine_data:
             self.combine_data()
+
+    def add_hard_neg_examples(self, neg_examples, combine_data=True):
+        '''
+            Helper function that takes the responsibility of adding new negative examples!
+        '''
+        print("Adding new hard neg examples")
+        self.update_hard_neg_examples(neg_examples, len(self.hard_neg_features), combine_data=combine_data)
 
 
     """

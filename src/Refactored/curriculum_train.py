@@ -113,9 +113,9 @@ class Curriculum_Strategy(object):
     """
     # We should pass in a training class and just try that for now. Maybe it all doesn't make sense but fuck it
     def __init__(self, train_model, dataloaders, save_path, 
-            num_epochs_per_era=3, eras=20, neg_ratio=1, 
+            num_epochs_per_era=3, eras=20,  
             rand_keep_ratio=0.5, hard_keep_ratio=0.25, hard_vs_rand_ratio=0.5,
-            run_type="Simple", difficulty_scoring_method="slices"):
+            difficulty_scoring_method="slices"):
     
         super(Curriculum_Strategy, self).__init__()
         
@@ -257,6 +257,8 @@ class Curriculum_Strategy(object):
             if self.difficulty_scoring_method == "slices":
                 # Compute the number of incorrest slices.
                 batch_scores = self.compute_incorrect_slices(predictions)
+            elif self.difficulty_scoring_method == "uncertainty_weighting":
+                batch_scores = self.compute_uncertainty_weighting_score(predictions)
             
             batch_size = inputs.shape[0]
             # We should set this to be a batch size for the complete loaders!!!
@@ -271,11 +273,42 @@ class Curriculum_Strategy(object):
             @TODO Commments bitch!
         """
         # Number incorrect
-        binary_preds = torch.where(preds > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
+        # TEST THIS!
+        pred_counts = torch.sum(preds > threshold, dim=1).squeeze().cpu().detach().numpy()
+        #binary_preds = torch.where(preds > threshold, torch.tensor(1.0).to(parameters.device), torch.tensor(0.0).to(parameters.device))
         # Compute the number of predictions made in the window
-        pred_counts = torch.sum(binary_preds, dim=1).squeeze().cpu().detach().numpy() # Shape - (batch_size)
+        #pred_counts = torch.sum(binary_preds, dim=1).squeeze().cpu().detach().numpy() # Shape - (batch_size)
         
         return pred_counts
+
+    def compute_uncertainty_weighting_score(self, preds, threshold=0.5):
+        """
+            General Idea:
+            Rather than focus soley on the hardest examples or the ones that
+            we get the most wrong, we actually want to focus on the "middle"
+            difficulty examples and work our way up in difficulty.
+
+            As a proxy for measuring relative difficulty, we look to quantify
+            those examples that are on the current decision boundary (i.e. those
+            that are close to being correctly classified but show quite some
+            uncertainty). To do so we quantify the uncertainty of each slice
+            through the function: f(pred) = (-|0.5 - pred| + pred / 2 + 0.5) / 0.75.
+            This scoring measure captures the relative distance from the decision
+            threshold '0.5', where the highest score is for highly uncertain scores
+            near 0.5 and we assymetrically assign higher scores to
+            predictions above 0.5. The scores range from [0, 1], 
+            where additionally if pred < 0.2 set score to be 0. 
+
+            NOTE: We are only evaluating over negative windows that are expected to
+            have all slices with label 0.
+        """
+        preds = preds.cpu().detach().numpy()
+        scores = (- np.abs(0.5 - preds) + preds / 2. + 0.5) / 0.75
+        # Zero out very low scores with pred <= 0.2 and score <= 0.4.
+        # This will help the mean not get dominated!
+        scores[preds < 0.2] = 0
+        # Take the mean across each window
+        return np.mean(scores, dim=1)
 
     def re_sample_data(self, window_scores, era):
         """
