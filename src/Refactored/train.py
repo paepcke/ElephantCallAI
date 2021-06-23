@@ -73,16 +73,44 @@ class Train_Pipeline(object):
         # Step 6) Save the early stopping criteria
         self.early_stop_criteria = early_stop_criteria
 
+        # Step 7) Set up global epoch tracking and early stopping protocal.
+        # We want this set up globally so that we can train in multiple
+        # stages
+        self.global_epoch = 0
+        # @TODO set up the early stopping class
+        self.setup_stats()
+
+
+    #-----------------------------
+    # setup_stats 
+    #--------------
+
+    def setup_stats(self):
+        """
+            Since we want the training class to globally encapsulate 
+            training process, we want all of the validation / early
+            stopping criteria to be tracked globally across different
+            calls to train
+        """
+        self.best_valid_stats = {
+                                'best_valid_acc': 0.0,
+                                'best_valid_fscore': 0.0,
+                                'best_valid_precision': 0.0,
+                                'best_valid_recall': 0.0,
+                                'best_valid_loss': 0.0,
+                                }
+
+        # Use early stopping module
+        self.early_stopping = EarlyStopping(larger_is_better=True, verbose=True, path=self.save_path)
 
     #-----------------------------
     # run_epoch 
     #--------------
 
-    # Try having this essentially be private!
     def run_epoch(self, dataloader, train=True):
         """
             Run an epoch! Note let us try combining the logic of training
-            and eval epochs with the train flag to change execution!
+            and eval epochs with the train flag to change execution! 
         """
         # Set the model to the corresponding train/test mode
         epoch_name = "Train" if train else "Val"
@@ -128,6 +156,7 @@ class Train_Pipeline(object):
      
 
         # Update the schedular
+        # Need to watch the schedular here because in curriculum things get wonky!
         if train:
             self.scheduler.step()
         
@@ -145,6 +174,8 @@ class Train_Pipeline(object):
         """
         train_start_time = time.time()
 
+        # Let us track this globally now!
+        '''
         best_valid_stats = {
                             'best_valid_acc': 0.0,
                             'best_valid_fscore': 0.0,
@@ -155,17 +186,21 @@ class Train_Pipeline(object):
 
         # Use early stopping module
         early_stopping = EarlyStopping(larger_is_better=True, verbose=True, path=self.save_path)
+        '''
 
         # Include a try catch loop to allow for 'ctrl C' early stopping
         try:
             for epoch in range(num_epochs):
-                print ('Epoch [{}/{}]'.format(epoch + 1, num_epochs))
+                if epoch == self.global_epoch
+                    print ('Epoch [{}/{}]'.format(epoch + 1, num_epochs))
+                else:
+                    print ('Era Epoch [{}/{}] - Global Epoch [{}]'.format(epoch + 1, num_epochs, self.global_epoch + 1))
 
                 # Run a training epoch
                 train_epoch_results = self.run_epoch(self.train_dataloader, train=True)
 
                 ## Write train metrics to tensorboard
-                self.update_writer(train_epoch_results, epoch, lr=self.scheduler.get_lr())
+                self.update_writer(train_epoch_results, lr=self.scheduler.get_lr())
 
                 # Evaluate the model
                 if Model_Utils.is_eval_epoch(epoch):
@@ -173,29 +208,37 @@ class Train_Pipeline(object):
                     val_epoch_results = self.run_epoch(self.test_dataloader, train=False)
 
                     # Write val metrics to tensorboard
-                    self.update_writer(val_epoch_results, epoch)
-                    # Update best evaluation metrics
-                    self.track_best_performance(val_epoch_results, best_valid_stats)
+                    self.update_writer(val_epoch_results)
+                    # Update best evaluation metrics globally!
+                    #self.track_best_performance(val_epoch_results, best_valid_stats)
+                    self.track_best_performance(val_epoch_results)
 
-                    # Check if we should stop early!
-                    early_stopping(best_valid_stats[Train_Pipeline.early_stop_criteria_map[self.early_stop_criteria]], self.model)
-                    if early_stopping.early_stop:
+                    # Check if we should stop early! This need to be updated!
+                    # THis is now a class variable!!!
+                    self.early_stopping(self.best_valid_stats[Train_Pipeline.early_stop_criteria_map[self.early_stop_criteria]], self.model)
+                    if self.early_stopping.early_stop:
                         print("Early stopping")
                         break
 
-                print('Finished Epoch [{}/{}] - Total Time: {}.'.format(epoch + 1, num_epochs, (time.time()-train_start_time)/60))
+                if epoch == self.global_epoch
+                    print('Finished Epoch [{}/{}] - Total Time: {}.'.format(epoch + 1, num_epochs, (time.time()-train_start_time)/60))
+                else:
+                    print ('Finished Era Epoch [{}/{}] - Global Epoch [{}] - Total Time: {}'.format(epoch + 1, num_epochs, 
+                                                                            self.global_epoch + 1,
+                                                                            (time.time()-train_start_time)/60))
+                self.global_epoch += 1
 
         except KeyboardInterrupt:
             print("Early stopping due to keyboard intervention")
 
-        print('Best val Acc: {:4f}'.format(best_valid_stats['best_valid_acc']))
-        print('Best val F-score: {:4f} with Precision: {:4f} and Recall: {:4f}'.format(best_valid_stats['best_valid_fscore'], 
-                                                                    best_valid_stats['best_valid_precision'],
-                                                                    best_valid_stats['best_valid_recall']))
-        print ('Best val Loss: {:6f}'.format(best_valid_stats['best_valid_loss']))
+        print('Best val Acc: {:4f}'.format(self.best_valid_stats['best_valid_acc']))
+        print('Best val F-score: {:4f} with Precision: {:4f} and Recall: {:4f}'.format(self.best_valid_stats['best_valid_fscore'], 
+                                                                    self.best_valid_stats['best_valid_precision'],
+                                                                    self.best_valid_stats['best_valid_recall']))
+        print ('Best val Loss: {:6f}'.format(self.best_valid_stats['best_valid_loss']))
 
         # Return the best model weights stored in the EarlyStopping object
-        return early_stopping.best_model_wts
+        return self.early_stopping.best_model_wts
 
 
     ########################
@@ -241,38 +284,41 @@ class Train_Pipeline(object):
                 f'{name}_epoch_recall': epoch_recall} 
 
 
-    def update_writer(self, stats, epoch, lr=None):
+    def update_writer(self, stats, lr=None):
         """
             Given a dict with keys representing tensorboard fields,
             output to the tensorboard writer the stats!
 
-            @TODO update this
+            Note that we need to pass in the 'global' epoch
+            number in the case that we are training in multiple
+            iterations.
         """
+        # The key right now represents the epoch number!
         for key, value in stats.items():
-            self.writer.add_scalar(key, value, epoch)
+            self.writer.add_scalar(key, value, self.global_epoch)
 
         # Add the learning rate as well if lr is not None
         if lr:
-            self.writer.add_scalar('learning_rate', lr, epoch)
+            self.writer.add_scalar('learning_rate', lr, self.global_epoch)
 
-    def track_best_performance(self, epoch_stats, best_stats):
+    def track_best_performance(self, epoch_stats):
         """
             Helper function to update the best validation statistics base on
             a recent epoch
         """
         # Update the best accuracy
-        if epoch_stats['Val_epoch_acc'] > best_stats['best_valid_acc']:
-            best_stats['best_valid_acc'] = epoch_stats['Val_epoch_acc']
+        if epoch_stats['Val_epoch_acc'] > self.best_valid_stats['best_valid_acc']:
+            self.best_valid_stats['best_valid_acc'] = epoch_stats['Val_epoch_acc']
         
         # Update the best f_score and save corresponding P and R
-        if epoch_stats['Val_epoch_fscore'] > best_stats['best_valid_fscore']:
-            best_stats['best_valid_fscore'] = epoch_stats['Val_epoch_fscore']
-            best_stats['best_valid_precision'] = epoch_stats['Val_epoch_precision']
-            best_stats['best_valid_recall'] = epoch_stats['Val_epoch_recall']
+        if epoch_stats['Val_epoch_fscore'] > self.best_valid_stats['best_valid_fscore']:
+            self.best_valid_stats['best_valid_fscore'] = epoch_stats['Val_epoch_fscore']
+            self.best_valid_stats['best_valid_precision'] = epoch_stats['Val_epoch_precision']
+            self.best_valid_stats['best_valid_recall'] = epoch_stats['Val_epoch_recall']
             
         # Update the best loss function
-        if epoch_stats['Val_epoch_loss'] < best_stats['best_valid_loss']:
-            best_stats['best_valid_loss'] = epoch_stats['Val_epoch_loss'] 
+        if epoch_stats['Val_epoch_loss'] < self.best_valid_stats['best_valid_loss']:
+            self.best_valid_stats['best_valid_loss'] = epoch_stats['Val_epoch_loss'] 
 
         
 
