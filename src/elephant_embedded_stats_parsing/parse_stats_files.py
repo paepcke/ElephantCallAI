@@ -5,6 +5,7 @@ Created on Jun 22, 2021
 @author: paepcke
 '''
 import csv
+import math
 import os
 from pathlib import Path
 
@@ -17,6 +18,8 @@ class EleStatsParser(object):
     
     Prediction accuracy is NOT covered.
     '''
+    # Obviously: change as needed. This local file ref
+    # SHOULD NOT BE HERE! For convenience, it is:
     SEARCH_ROOT = '/Users/paepcke/Project/Wildlife/Elephants/Papers/embedding/Data/ElephantsEmbedded/data-for-paper-v1/power-analysis'
 
     def __init__(self, unittesting=False):
@@ -30,12 +33,13 @@ class EleStatsParser(object):
         
         col_header = [
             'ModelType','WordWidth','BatchSize',
-            'TotalPowerMean','TotalPowerVar','TotalPowerMin','TotalPowerMax',
-            'GPUPowerMean','GPUPowerVar','GPUPowerMin','GPUPowerMax',
-            'CPUPowerMean','CPUPowerVar','CPUPowerMin','CPUPowerMax',
-            'GPUTempMean','GPUTempVar','GPUTempMin','GPUTempMax',
-            'CPUTempMean','CPUTempVar','CPUTempMin','CPUTempMax',
-            'RAMUtilMean','RAMUtilVar','RAMUtilMin','RAMUtilMax']
+            'TotalPowerMean','TotalPowerVar','TotalPowerMin','TotalPowerMax','TotalPowerSD',
+            'GPUPowerMean','GPUPowerVar','GPUPowerMin','GPUPowerMax','GPUPowerSD',
+            'CPUPowerMean','CPUPowerVar','CPUPowerMin','CPUPowerMax','CPUPowerSD',
+            'GPUTempMean','GPUTempVar','GPUTempMin','GPUTempMax','GPUTempSD',
+            'CPUTempMean','CPUTempVar','CPUTempMin','CPUTempMax','CPUTemp',
+            'RAMUtilMean','RAMUtilVar','RAMUtilMin','RAMUtilMax','RAMUtilSD'
+            ]
 
         if unittesting:
             # Unittests must close!
@@ -132,12 +136,12 @@ class EleStatsParser(object):
             to the csv file:
             
               ModelType, WordWidth, BatchSize, 
-              TotalPowerMean,TotalPowerVar,TotalPowerMin,TotalPowerMax,
-              GPUPowerMean,GPUPowerVar,GPUPowerMin,GPUPowerMax, 
-              CPUPowerMean,CPUPowerVar,CPUPowerMin,CPUPowerMax 
-              GPUTempMean,GPUTempVar,GPUTempMin,GPUTempMax,
-              CPUTempMean,CPUTempVar,CPUTempMin,CPUTempMax, 
-              RAMUtilMean,RAMUtilVar,RAMUtilMin,RAMUtilMax
+              TotalPowerMean,TotalPowerVar,TotalPowerMin,TotalPowerMax,TotalPowerSD,
+              GPUPowerMean,GPUPowerVar,GPUPowerMin,GPUPowerMax,GPUPowerSD, 
+              CPUPowerMean,CPUPowerVar,CPUPowerMin,CPUPowerMax,CPUPowerSD,
+              GPUTempMean,GPUTempVar,GPUTempMin,GPUTempMax,GPUTempSD,
+              CPUTempMean,CPUTempVar,CPUTempMin,CPUTempMax,CPUTempSD,
+              RAMUtilMean,RAMUtilVar,RAMUtilMin,RAMUtilMax,RAMUtilSD
               
         the swap_util input line is ignored. 
 
@@ -231,7 +235,10 @@ class EleStatsParser(object):
                 in map(lambda stringlet: stringlet.split(':'), 
                        stat_name_val_stringlets)
                 }
-        
+    
+        # Add the standard deviation:
+        data['SD'] = math.sqrt(data['variance']) 
+
         return data
         
 
