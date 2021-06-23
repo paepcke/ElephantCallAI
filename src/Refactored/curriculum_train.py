@@ -156,7 +156,6 @@ class Curriculum_Strategy(object):
 
         # Step 7) Define the curriculum strategy
         self.difficulty_scoring_method = difficulty_scoring_method
-        self.run_type = run_type
         
    
     """
