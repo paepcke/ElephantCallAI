@@ -192,6 +192,7 @@ class SpectrogramDataset(Dataset):
         @param test_db: in case of testing, a db created by
             the unittest.
         @type test_db: sqlite3.Connection
+<<<<<<< HEAD
         @param debugging: set to True if debugging where not all
             sample snippets are available, such as a purely dev machine.
             Will cause only samples from the first dirs_or_spect_files
@@ -201,6 +202,11 @@ class SpectrogramDataset(Dataset):
 
         self.debugging = debugging
 
+=======
+        '''
+        #***** if snippet_outdir is None, snippets
+        #      go where spectrogram is.
+>>>>>>> master
         self.snippet_outdir = snippet_outdir
         
         if type(dirs_or_spect_files) != list:
@@ -249,6 +255,15 @@ class SpectrogramDataset(Dataset):
                     dirs_or_files_to_do = set(dirs_or_spect_files) - set(processed_dirs)
                 else:
                     dirs_or_files_to_do = set()
+<<<<<<< HEAD
+=======
+        
+                if len(dirs_or_files_to_do) > 0:
+                    # Chop spectrograms:
+                    self.process_spectrograms(dirs_or_files_to_do, recurse=recurse)
+    
+        num_samples_row = next(self.db.execute('''SELECT COUNT(*) AS num_samples from Samples'''))
+>>>>>>> master
         
                 if len(dirs_or_files_to_do) > 0:
                     # Chop spectrograms:

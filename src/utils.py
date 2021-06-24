@@ -45,16 +45,26 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
         save_path += 'Pre-Trained_'
 
     # Add the downsampling sizes and the number of filters as model specific parameters
+<<<<<<< HEAD
     if parameters.MODEL_ID == 26:
         save_path += 'DownSample-['
         compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+=======
+    if parameters.MODEL_ID == 26 or parameters.MODEL_ID == 27:
+        save_path += 'DownSample-['
+        compress_factors = parameters.HYPERPARAMETERS[parameters.MODEL_ID]['compress_factors']
+>>>>>>> master
         for factor in compress_factors:
             save_path += str(factor) + '-'
 
         save_path = save_path[:-1] + ']_'
 
         save_path += 'Filters-['
+<<<<<<< HEAD
         num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+=======
+        num_filters = parameters.HYPERPARAMETERS[parameters.MODEL_ID]['num_filters']
+>>>>>>> master
         for filter in num_filters:
             save_path += str(filter) + '-'
 
@@ -73,6 +83,12 @@ def create_save_path(save_time, save_local=False, save_prefix=None):
     save_path += "TestNegFactor-x" + str(parameters.TEST_NEG_SAMPLES) + "_"
     save_path += "Loss-" + parameters.LOSS + "_"
 
+<<<<<<< HEAD
+=======
+    if parameters.CHUNK_SIZE != 256:
+        save_path += "WindowSize-" + str(parameters.CHUNK_SIZE) + "_"
+
+>>>>>>> master
     if parameters.LOSS.upper() == "FOCAL":
         save_path += "Alpha-" + str(parameters.FOCAL_ALPHA) + "_"
         save_path += "Gamma-" + str(parameters.FOCAL_GAMMA) + "_"
@@ -99,26 +115,60 @@ def hierarchical_model_1_path():
         model_name += 'BAI-Pre-Train_'
 
     # Add the downsampling sizes and the number of filters as model specific parameters
+<<<<<<< HEAD
     if parameters.HIERARCHICAL_MODEL == 26:
         model_name += 'DownSample-['
         compress_factors = parameters.HYPERPARAMETERS[26]['compress_factors']
+=======
+    if parameters.HIERARCHICAL_MODEL == 26 or parameters.HIERARCHICAL_MODEL == 27:
+        model_name += 'DownSample-['
+        compress_factors = parameters.HYPERPARAMETERS[parameters.HIERARCHICAL_MODEL]['compress_factors']
+>>>>>>> master
         for factor in compress_factors:
             model_name += str(factor) + '-'
 
         model_name = model_name[:-1] + ']_'
 
         model_name += 'Filters-['
+<<<<<<< HEAD
         num_filters = parameters.HYPERPARAMETERS[26]['num_filters']
+=======
+        num_filters = parameters.HYPERPARAMETERS[parameters.HIERARCHICAL_MODEL]['num_filters']
+>>>>>>> master
         for filter in num_filters:
             model_name += str(filter) + '-'
 
         model_name = model_name[:-1] + ']_'
 
+<<<<<<< HEAD
     model_name += 'CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
     # Add if we are using shifting windows
     if parameters.HIERARCHICAL_SHIFT_WINDOWS:
         model_name += '_OversizeCalls'
 
+=======
+    # Fix this later, but fow now do this for cross versions!
+    if parameters.HIERARCHICAL_REPEATS_POS != 1 or parameters.HIERARCHICAL_REPEATS_NEG != 1:
+        model_name += "PosRepeats-" + str(parameters.HIERARCHICAL_REPEATS_POS) + "_NegRepeats-" + str(parameters.HIERARCHICAL_REPEATS_NEG)
+    else:
+        model_name += 'CallRepeats-' + str(parameters.HIERARCHICAL_REPEATS).lower()
+
+    # Add if we are using shifting windows # Should get rid of this!
+    if parameters.HIERARCHICAL_SHIFT_WINDOWS:
+        model_name += '_OversizeCalls'
+
+    # For now, if FALSE_POSITIVE_THRESHOLD != 15 include it
+    if parameters.FALSE_POSITIVE_THRESHOLD != 15:
+        model_name += '_FalsePosThreshold-' + str(parameters.FALSE_POSITIVE_THRESHOLD)
+
+    if parameters.HIERARCHICAL_ADD_FP:
+        model_name += "_AddingFPs"
+
+    # Just for now quickly
+    #if parameters.EXTRA_LABEL:
+    #    model_name += '_MULTI-CLASS'
+
+>>>>>>> master
     return model_name
 
 def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=False):
@@ -133,6 +183,12 @@ def create_dataset_path(init_path, neg_samples=1, call_repeats=1, shift_windows=
     if shift_windows:
         init_path += '_OversizeCalls'
 
+<<<<<<< HEAD
+=======
+    if parameters.CHUNK_SIZE != 256:
+        init_path += '_WindowSize-' + str(parameters.CHUNK_SIZE)
+
+>>>>>>> master
     return init_path, include_boundaries
 
 def is_eval_epoch(cur_epoch):
@@ -154,13 +210,42 @@ def num_correct(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
         pred = sig(logits)
+<<<<<<< HEAD
         binary_preds = pred > parameters.THRESHOLD
+=======
+        binary_preds = pred > parameters.THRESHOLD # This should likely be 0
+>>>>>>> master
         # Cast to proper type!
         binary_preds = binary_preds.float()
         num_correct = (binary_preds == labels).sum().item()
 
     return num_correct
 
+<<<<<<< HEAD
+=======
+def multi_class_num_correct(logits, labels):
+    """
+        Treat '2' and '0' as the same for now! May want to profile this later.
+
+        @ Pre-condition: assumes that the labels have already converted 
+        the '2' labels back to the singular '0' value
+    """
+    softmax = nn.Softmax(dim=1)
+    with torch.no_grad():
+        pred = softmax(logits)
+        class_preds = torch.argmax(pred, dim=1)
+
+        # Treat all '2's as 0s
+        two_pred = (class_preds == 2)
+        class_preds[two_pred] = 0
+
+        # Cast to proper type!
+        class_preds = class_preds.float()
+        num_correct = (class_preds == labels).sum().item()
+
+    return num_correct
+
+>>>>>>> master
 def num_non_zero(logits, labels):
     sig = nn.Sigmoid()
     with torch.no_grad():
@@ -224,6 +309,36 @@ def get_precission_recall_values(logits, labels):
 
     return tp, tp_fp, tp_fn
 
+<<<<<<< HEAD
+=======
+def multi_class_precission_recall_values(logits, labels):
+    """
+        Treat '2' and '0' as the same for now! May want to profile this later.
+
+        @ Pre-condition: assumes that the labels have already converted 
+        the '2' labels back to the singular '0' value
+    """
+    softmax = nn.Softmax(dim=1)
+    with torch.no_grad():
+        pred = softmax(logits)
+        class_preds = torch.argmax(pred, dim=1)
+
+        # Treat all '2's as 0s
+        two_pred = (class_preds == 2)
+        class_preds[two_pred] = 0
+
+        # Number predicted
+        tp_fp = torch.sum(class_preds).item()
+        # Number true positives - This works because
+        # we have converted all '2' labels to '0'
+        tp = (class_preds + labels) == 2
+        tp = torch.sum(tp).item()
+        # Number of actual calls
+        tp_fn = torch.sum(labels).item()
+
+    return tp, tp_fp, tp_fn
+
+>>>>>>> master
 
 
 

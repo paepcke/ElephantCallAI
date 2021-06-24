@@ -12,6 +12,7 @@ elephant_dataset/Processed_data/*
 elephant_dataset/Processed_data_new/*
 elephant_dataset/Features_Labels/*
 elephant_dataset/Test/*
+elephant_dataset/Test_Spectrograms/*
 elephant_dataset/Train/*
 elephant_dataset/Processed_data_MFCC/*
 elephant_dataset/Test_Atlas/*
@@ -25,7 +26,15 @@ elephant_dataset/Train_Old_1/*
 elephant_dataset/Test_Old_1/*
 elephant_dataset/Train_Old_2/*
 elephant_dataset/Test_Old_2/*
+elephant_dataset/*
 Predictions/*
+Images/Jupyter_Visualizations/*
+Call_Predictions/*
+Writeups/*.pptx
+Curriculum_profiling/*
+Peter_Scripts/2_Stage_Model/*
+src/Neg_Samples_x4.ipynb
+Peter_Scripts.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -133,3 +142,9 @@ venv.bak/
 .mypy_cache/
 .project
 .pydevproject
+
+# IDE settings
+.idea/**
+
+# Embedded Integration Test Resources
+Integration_Test_Data/**
