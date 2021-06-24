@@ -112,6 +112,10 @@ class Model_Utils(object):
         else:
             save_path += parameters.REMOTE_SAVE_PATH
 
+        if save_prefix == "Curriculum_": 
+            save_path = os.path.join(save_path, "Curriculum") + "/"
+
+
         # Save prefix represents intial tags to add such as
         # 'AdversarialTraining_' or 'Hierarchical_'
         if save_prefix is not None:

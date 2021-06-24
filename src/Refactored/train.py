@@ -191,7 +191,7 @@ class Train_Pipeline(object):
         # Include a try catch loop to allow for 'ctrl C' early stopping
         try:
             for epoch in range(num_epochs):
-                if epoch == self.global_epoch
+                if epoch == self.global_epoch:
                     print ('Epoch [{}/{}]'.format(epoch + 1, num_epochs))
                 else:
                     print ('Era Epoch [{}/{}] - Global Epoch [{}]'.format(epoch + 1, num_epochs, self.global_epoch + 1))
@@ -220,7 +220,7 @@ class Train_Pipeline(object):
                         print("Early stopping")
                         break
 
-                if epoch == self.global_epoch
+                if epoch == self.global_epoch:
                     print('Finished Epoch [{}/{}] - Total Time: {}.'.format(epoch + 1, num_epochs, (time.time()-train_start_time)/60))
                 else:
                     print ('Finished Era Epoch [{}/{}] - Global Epoch [{}] - Total Time: {}'.format(epoch + 1, num_epochs, 

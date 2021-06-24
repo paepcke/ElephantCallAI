@@ -23,6 +23,7 @@ from loss import get_loss
 from train import Train_Pipeline
 from model_utils import Model_Utils
 from datasets import Subsampled_ElephantDataset, Full_ElephantDataset
+from visualizer import visualize
 
 
 """
@@ -157,6 +158,16 @@ class Curriculum_Strategy(object):
         # Step 7) Define the curriculum strategy
         self.difficulty_scoring_method = difficulty_scoring_method
         
+        # Step 8) Create Dummy dataloader that we will use to save current model performances
+        # on the newly sampled hard datapoints. Note we will clear out the pos and neg so these
+        # are just dummy values
+        performance_tracking_dataset = Subsampled_ElephantDataset(self.train_model.train_dataloader.dataset.data_path,
+                                        neg_ratio=1, normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
+        # Clear out the positive samples and negative samples
+        performance_tracking_dataset.update_pos_examples([], num_keep=0)
+        performance_tracking_dataset.update_neg_examples([], num_keep=0)
+        self.performance_tracking_loader = Model_Utils.get_loader(performance_tracking_dataset, parameters.BATCH_SIZE, shuffle=False)
    
     """
         Methods that I think we need
@@ -266,7 +277,6 @@ class Curriculum_Strategy(object):
         return window_difficulty_scores
 
 
-
     def compute_incorrect_slices(self, preds, threshold=0.5):
         """
             @TODO Commments bitch!
@@ -331,6 +341,9 @@ class Curriculum_Strategy(object):
         # Step 1) argsort the scores to order the "most" difficult
         # examples for the current model 
         sorted_weight_indeces = np.argsort(window_scores)
+        # Save also the window scores so that we can visualize this
+        # change over times
+        self.save_era_scores(window_scores, "Negative-Scores_Era-" + str(era))
 
 
         # Step 2) Sample num_new_hard of the "most" difficult examples.
@@ -356,7 +369,8 @@ class Curriculum_Strategy(object):
         # Step 2a) Save the sampled hard negative indeces
         sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
         self.save_sampled_examples(sampled_hard_negatives, window_scores[sampled_hard_negatives], "Hard-Negatives_Era-" + str(era) + ".txt")
-        print ("Finished sampling hard examples")
+        self.save_current_model_performance(new_hard_negatives, "Model-Performance_Hard-Negatives_Era-" + str(era) + ".txt")
+        print ("Finished sampling hard examples and saving current model performance")
 
         # Step 3) Sample num_new_rand random examples. 
         # These examples are sampled from the remaining examples
@@ -376,10 +390,58 @@ class Curriculum_Strategy(object):
 
         return new_hard_negatives, new_rand_negatives
 
+    def save_era_scores(self, scores, title):
+        """
+            Save the score distribution for the era so we can track how the scores
+            evolve over time!
+        """
+        file_path = os.path.join(self.sampled_data_path, title)
+        np.save(file_path, title)
+
+    def save_current_model_performance(self, new_hard_negatives, title):
+        """
+            After sampling a set of new hard negatives, we want to track
+            and save the current models performance over these examples.
+            Basically, we want to run and save the current models' predictions 
+            over these examples!
+        """
+        # Update the global evaluation dataloader by switching out the negatives
+        # for the new sampled hard negatives
+        self.performance_tracking_loader.dataset.update_hard_neg_examples(new_hard_negatives, num_keep=0, combine_data=True)
+        # Run our current model to get predictions
+        current_model_preds = None
+
+        # Put the model in eval mode!!
+        self.train_model.model.eval()
+
+        # Step 2) Evaluate over every example in the full dataset
+        print ("Evaluating on new difficult examples")
+        for idx, batch in enumerate(self.performance_tracking_loader):
+            # Step 2a) Evaluate model on data
+            inputs = batch[0].clone().float()
+            labels = batch[1].clone().float()
+            inputs = inputs.to(parameters.device)
+            labels = labels.to(parameters.device)
+
+            logits = self.train_model.model(inputs).squeeze(-1)
+            predictions = torch.sigmoid(logits)
+
+            # Step 2b) Update and save the model predictions
+            if current_model_preds == None:
+                current_model_preds = np.zeros((len(self.performance_tracking_loader.dataset), predictions.shape[1]))
+
+            batch_size = inputs.shape[0]
+            current_model_preds[idx * parameters.BATCH_SIZE: idx * parameters.BATCH_SIZE + batch_size] = predictions.cpu().detach().numpy()
+
+        # Step 3) Save these predictions so that we can later visualize and better understand everything
+        file_path = os.path.join(self.sampled_data_path, title)
+        np.save(file_path, current_model_preds)
+
+
     def save_sampled_examples(self, sampled_data, data_scores, title):
         """
             Save a record of the data sampled one per line:
-            (idx, score, file name)
+            (idx, score, data_file_name, label_file_name)
         """
         # Save a file for the given ERA 
         file_path = os.path.join(self.sampled_data_path, title)
@@ -387,7 +449,7 @@ class Curriculum_Strategy(object):
             # Save in reverse order to preserve the difficulty ranking
             for i in range(1, sampled_data.shape[0] + 1):
                 data_file_idx = sampled_data[-i]
-                f.write(f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}\n')
+                f.write(f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}, {self.full_train_loader.dataset.labels[data_file_idx]}\n')
 
 
     def update_dataset(self, new_hard_negatives, new_rand_negatives):
@@ -419,5 +481,111 @@ class Curriculum_Strategy(object):
         hard_keep = self.num_hard_negatives - len(new_hard_negatives)
         self.train_model.train_dataloader.dataset.update_hard_neg_examples(new_hard_negatives, \
                                                  num_keep=hard_keep, combine_data=True)
+
+
+# Create a class just for visualizing the results of one Curriculum Strategy
+class Visualize_Curriculum(object):
+    """
+        For now make this just ad-hoc so we can see what is going on
+    """
+    def __init__(self, data_path, predictions_path, model_path):
+        super(Visualize_Curriculum, self).__init__()
+        
+        # Step 1) Read in the data into a list of tuples
+        features, labels, difficulty_scores = self.read_data(data_path)
+
+        # Step 2) Read the matching predictions for the model at the
+        # time the samples were created 
+        model_preds = np.load(predictions_path)
+
+        # Step 3) Load the model 
+        model = torch.load(model_path, map_location=parameters.device)
+        # Set to eval mode
+        model.eval()
+
+        # Step 4) Visualize the hard examples with the saved
+        # predictions as well as the current prediction
+        self.visualize_examples(features, labels, difficulty_scores, model_preds, model)
+
+
+    def read_data(self, data_path):
+        """
+            Read the new sampled hard negatives into:
+
+                [(feature, label, ...), ...]
+        """
+        features = []
+        labels = []
+        difficulty_scores = []
+        with open(data_path, 'r') as f:
+            examples = f.readlines()
+            for example in examples:
+                example = example.strip()
+                split = example.split(', ')
+                features.append(split[2])
+                labels.append(split[3])
+                difficulty_scores.append(split[1])
+
+        return features, labels, difficulty_scores
+
+
+    def visualize_examples(self, features, labels, difficulty_scores, model_preds, model):
+        """
+            Step through example by example and do the following:
+                - Load the spectrogram
+                - Load the labels
+                - Load the save predictions
+                - Generate new predictions based on the current model
+                - Visualize
+        """
+
+        for i in range(len(features)):
+            # Load data
+            spect = np.load(features[i])
+            label = np.load(labels[i])
+            scores = difficulty_scores[i]
+
+            saved_pred = model_preds[i]
+
+            # Run the model over this data example!
+            spect_expand = np.expand_dims(spect, axis=0)
+            # Transform the slice!!!! 
+            spect_expand = 10 * np.log10(spect_expand)
+            spect_expand = (spect_expand - np.mean(spect_expand)) / np.std(spect_expand)
+            spect_expand = torch.from_numpy(spect_expand).float()
+            spect_expand = spect_slice.to(parameters.device)
+
+            outputs = model(spect_expand).view(-1, 1).squeeze()
+            # Apply sigmoid 
+            model_pred = torch.sigmoid(compressed_out).cpu().detach().numpy()
+
+            # Visualize!!
+            visualize(spect, [saved_pred, model_pred], label, title="Score: " + str(scores) + " " + features[i])
+            
+def main():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--data_path', type=str, dest='files', 
+        help='Files that we want to visualize')
+    parser.add_argument('--model_preds', type=str,
+        help='Saved model predictions when selecting files')
+    parser.add_argument('--model_path', type=str, 
+        help='Specifies the model path for the model')
+
+    args = parser.parse_args()
+
+    Visualize_Curriculum(args.data_path, args.model_preds, args.model_path)
+    
+
+
+if __name__ == '__main__':
+    main()
+
+
+
+
+
+
 
     

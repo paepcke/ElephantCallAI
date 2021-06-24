@@ -106,8 +106,10 @@ def main():
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     # For the test dataset, we inject the hard negative adversarial 
     # examples discovered during the 2 stage model learning process
-    adversarial_files = read_adversarial_files(parameters.ADVERSARIAL_TEST_FILES)
-    test_dataset.add_hard_neg_examples(adversarial_files, combine_data=True)
+    # NOTE: For local test do not include this for now
+    if not args.local_files:
+        adversarial_files = read_adversarial_files(parameters.ADVERSARIAL_TEST_FILES)
+        test_dataset.add_hard_neg_examples(adversarial_files, combine_data=True)
 
 
     # Step 3) Get the full training dataset to supervise the curriculum model
