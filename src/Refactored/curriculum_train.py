@@ -197,38 +197,41 @@ class Curriculum_Strategy(object):
         # 1) train for a small number of epochs
         # 2) Evaluate over the full data
         best_model_wts = None
-        for era in range(self.eras):
-            print(f"Curriculum Era: {era + 1}\n")
-            # Step 1) Train the model on the current state of the dataset
-            print ("Training Model")
-            best_model_wts = self.train_model.train(self.num_epochs_per_era)
-            print ("Finished Era Training")
+        try:
+            for era in range(self.eras):
+                print(f"Curriculum Era: {era + 1}\n")
+                # Step 1) Train the model on the current state of the dataset
+                print ("Training Model")
+                best_model_wts = self.train_model.train(self.num_epochs_per_era)
+                print ("Finished Era Training")
 
-            # Step 2) Run the model over the entire dataset
-            # This can be made better but let us just hash her out
-            print ("Evaluating Model Over Full Data")
-            window_difficulty_scores = self.full_data_eval()
+                # Step 2) Run the model over the entire dataset
+                # This can be made better but let us just hash her out
+                print ("Evaluating Model Over Full Data")
+                window_difficulty_scores = self.full_data_eval()
 
-            # Step 3) We need to adjust the dataset!!!!!!!
-            # Get the new hard and random negatives
-            print ("Re-Sampling the data")
-            new_hard_negatives, new_rand_negatives = self.re_sample_data(window_difficulty_scores, era)
+                # Step 3) We need to adjust the dataset!!!!!!!
+                # Get the new hard and random negatives
+                print ("Re-Sampling the data")
+                new_hard_negatives, new_rand_negatives = self.re_sample_data(window_difficulty_scores, era)
 
 
-            # Step 4) Adjust the datasets baby for the next round of
-            # training!
-            print ("Updated the datasets with new examples")
-            self.update_dataset(new_hard_negatives, new_rand_negatives)
+                # Step 4) Adjust the datasets baby for the next round of
+                # training!
+                print ("Updated the datasets with new examples")
+                self.update_dataset(new_hard_negatives, new_rand_negatives)
 
-            # Step 5) Figure out exactly how we want to end???
-            # We obviously need a way to end this? The question is how?
-            # I guess that will be when the result on the test set that is
-            # in the training model doesn't decrease!! Let us just mess around
-            # a bit with it. This may have to come from the training model!
-            # Also we do run over the entire training set, so maybe running
-            # over the entire test set is not a bad idea to track stopping
-            # metrics? Like maybe we should just after an era test over
-            # the full dataset with some modified metrics??
+                # Step 5) Figure out exactly how we want to end???
+                # We obviously need a way to end this? The question is how?
+                # I guess that will be when the result on the test set that is
+                # in the training model doesn't decrease!! Let us just mess around
+                # a bit with it. This may have to come from the training model!
+                # Also we do run over the entire training set, so maybe running
+                # over the entire test set is not a bad idea to track stopping
+                # metrics? Like maybe we should just after an era test over
+                # the full dataset with some modified metrics??
+        except KeyboardInterrupt:
+            print("Early stopping due to keyboard intervention")
 
         # I think that this makes sense?
         return best_model_wts
@@ -369,7 +372,7 @@ class Curriculum_Strategy(object):
         # Step 2a) Save the sampled hard negative indeces
         sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
         self.save_sampled_examples(sampled_hard_negatives, window_scores[sampled_hard_negatives], "Hard-Negatives_Era-" + str(era) + ".txt")
-        self.save_current_model_performance(new_hard_negatives, "Model-Performance_Hard-Negatives_Era-" + str(era) + ".txt")
+        self.save_current_model_performance(new_hard_negatives, "Model-Performance_Hard-Negatives_Era-" + str(era))
         print ("Finished sampling hard examples and saving current model performance")
 
         # Step 3) Sample num_new_rand random examples. 
@@ -488,8 +491,11 @@ class Visualize_Curriculum(object):
     """
         For now make this just ad-hoc so we can see what is going on
     """
-    def __init__(self, data_path, predictions_path, model_path):
+    def __init__(self, base_path, era):
         super(Visualize_Curriculum, self).__init__()
+
+        # Step 1) Generate the different paths
+        data_path, predictions_path, model_path = self.create_paths(base_path, era)
         
         # Step 1) Read in the data into a list of tuples
         features, labels, difficulty_scores = self.read_data(data_path)
@@ -507,6 +513,17 @@ class Visualize_Curriculum(object):
         # predictions as well as the current prediction
         self.visualize_examples(features, labels, difficulty_scores, model_preds, model)
 
+    def create_paths(self, base_path, era):
+        """
+            
+        """
+        sampled_data_folder = os.path.join(base_path, "Sampled_Data")
+
+        data_path = os.path.join(sampled_data_folder, "Hard-Negatives_Era-" + str(era) + ".txt")
+        model_preds = os.path.join(sampled_data_folder, "Model-Performance_Hard-Negatives_Era-" + str(era) + ".npy")
+        model_path = os.path.join(base_path, "model.pt")
+
+        return data_path, model_preds, model_path
 
     def read_data(self, data_path):
         """
@@ -538,7 +555,6 @@ class Visualize_Curriculum(object):
                 - Generate new predictions based on the current model
                 - Visualize
         """
-
         for i in range(len(features)):
             # Load data
             spect = np.load(features[i])
@@ -548,25 +564,30 @@ class Visualize_Curriculum(object):
             saved_pred = model_preds[i]
 
             # Run the model over this data example!
-            spect_expand = np.expand_dims(spect, axis=0)
+            log_spect = 10 * np.log10(spect)
+            spect_expand = np.expand_dims(log_spect, axis=0)
             # Transform the slice!!!! 
-            spect_expand = 10 * np.log10(spect_expand)
             spect_expand = (spect_expand - np.mean(spect_expand)) / np.std(spect_expand)
             spect_expand = torch.from_numpy(spect_expand).float()
-            spect_expand = spect_slice.to(parameters.device)
+            spect_expand = spect_expand.to(parameters.device)
 
             outputs = model(spect_expand).view(-1, 1).squeeze()
             # Apply sigmoid 
-            model_pred = torch.sigmoid(compressed_out).cpu().detach().numpy()
+            model_pred = torch.sigmoid(outputs).cpu().detach().numpy()
 
             # Visualize!!
-            visualize(spect, [saved_pred, model_pred], label, title="Score: " + str(scores) + " " + features[i])
-            
+            visualize(log_spect, [saved_pred, model_pred], label, title="Score: " + str(scores) + " " + features[i])
+   
+
 def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_path', type=str, dest='files', 
+    parser.add_argument('--base_path', type=str,
+        help='The path to the model folder with all the good information!')
+    parser.add_argument('--era', type=int,
+        help='Which era do we want to explore!')
+    parser.add_argument('--data_path', type=str, 
         help='Files that we want to visualize')
     parser.add_argument('--model_preds', type=str,
         help='Saved model predictions when selecting files')
@@ -575,7 +596,7 @@ def main():
 
     args = parser.parse_args()
 
-    Visualize_Curriculum(args.data_path, args.model_preds, args.model_path)
+    Visualize_Curriculum(args.base_path, args.era)
     
 
 

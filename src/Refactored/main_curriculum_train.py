@@ -113,7 +113,8 @@ def main():
 
 
     # Step 3) Get the full training dataset to supervise the curriculum model
-    full_train_dataset = Full_ElephantDataset(train_data_path, normalization=parameters.NORM, 
+    full_train_dataset = Full_ElephantDataset(train_data_path, only_negative=True,
+                                                        normalization=parameters.NORM, 
                                                         log_scale=parameters.SCALE, 
                                                         gaussian_smooth=False, seed=8)
 
