@@ -430,7 +430,7 @@ class Curriculum_Strategy(object):
             predictions = torch.sigmoid(logits)
 
             # Step 2b) Update and save the model predictions
-            if current_model_preds == None:
+            if current_model_preds is None:
                 current_model_preds = np.zeros((len(self.performance_tracking_loader.dataset), predictions.shape[1]))
 
             batch_size = inputs.shape[0]
@@ -587,12 +587,6 @@ def main():
         help='The path to the model folder with all the good information!')
     parser.add_argument('--era', type=int,
         help='Which era do we want to explore!')
-    parser.add_argument('--data_path', type=str, 
-        help='Files that we want to visualize')
-    parser.add_argument('--model_preds', type=str,
-        help='Saved model predictions when selecting files')
-    parser.add_argument('--model_path', type=str, 
-        help='Specifies the model path for the model')
 
     args = parser.parse_args()
 

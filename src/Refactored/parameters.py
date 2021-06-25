@@ -67,7 +67,12 @@ RAND_KEEP_RATIO = 0.5
 HARD_KEEP_RATIO = 0.25
 HARD_VS_RAND_RATIO = 0.5
 
-''' Difficulty Scoring Method for each Window '''
+''' 
+    Difficulty Scoring Method for each Window 
+    Options:
+        - slices
+        - uncertainty_weighting
+'''
 DIFFICULTY_SCORING_METHOD = "slices"
 
 ''' Path of the adversarial test files from the 2-stage learning process'''
