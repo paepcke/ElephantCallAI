@@ -167,7 +167,9 @@ def main():
     curriculum_strategy = Curriculum_Strategy(train_pipeline, dataloaders, save_path, 
                                     num_epochs_per_era=parameters.NUM_EPOCHS_PER_ERA, eras=parameters.ERAS,  
                                     rand_keep_ratio=parameters.RAND_KEEP_RATIO, hard_keep_ratio=parameters.HARD_KEEP_RATIO, 
-                                    hard_vs_rand_ratio=parameters.HARD_VS_RAND_RATIO, )
+                                    hard_vs_rand_ratio=parameters.HARD_VS_RAND_RATIO, 
+                                    hard_increase_factor=parameters.HARD_INCREASE_FACTOR,
+                                    hard_vs_rand_ratio_max=parameters.HARD_VS_RAND_RATIO_MAX)
     model_wts = curriculum_strategy.curriculum_train()
 
     if model_wts:
