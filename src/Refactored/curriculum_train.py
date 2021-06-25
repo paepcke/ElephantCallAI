@@ -247,12 +247,27 @@ class Curriculum_Strategy(object):
                 # Step 5) Update curriculum parameters
                 self.update_curriculum_params()
 
+                # Step 6) Save the current model
+                self.save_current_model(era)
+
         except KeyboardInterrupt:
             print("Early stopping due to keyboard intervention")
 
         # I think that this makes sense?
         return best_model_wts
 
+
+    def save_current_model(self, era):
+        """
+
+        """
+        # Just double check
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
+
+        model_path = os.path.join(self.save_path, "model_era-" + str(era) + ".pt")
+        torch.save(self.train_model.model, model_path)
+        print('Saved current model for era {}'.format(era))
 
     def update_curriculum_params(self):
         """
