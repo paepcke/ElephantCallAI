@@ -170,6 +170,7 @@ class Model_Utils(object):
             save_path += "Loss-" + parameters.LOSS + "_"
         else: # Add Curriculum specific parameters
             save_path += "EpochsPer-" + str(parameters.NUM_EPOCHS_PER_ERA) + "_"
+            save_path += "Method-" + parameters.DIFFICULTY_SCORING_METHOD + "_"
             save_path += "HardVRand-" + str(parameters.HARD_VS_RAND_RATIO) + "_"
             save_path += "HardKeep-" + str(parameters.HARD_KEEP_RATIO) + "_"
             save_path += "RandKeep-" + str(parameters.RAND_KEEP_RATIO) + "_"

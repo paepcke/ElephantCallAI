@@ -321,18 +321,60 @@ def test_generate_labels(wav, labels, spectrogram_info):
     print (np.sum(test_label_1 - test_label_2))
 
 
+def visualize_dataset(data_path, model_path):
+    """
+        Visualize model predictions for the given data path
+    """
+    # Step 1) Read in the file paths
+    features = []
+    labels = []
+    with open(data_path, 'r') as f:
+        files = f.readlines()
+        for file_pair in files:
+            # Split by ', ' to get the data and the label
+            file_pair = file_pair.strip()
+            split_pair = file_pair.split(', ')
+            features.append(split_pair[0])
+            labels.append(split_pair[1])
+
+    # Step 2) Run the model
+    model = torch.load(model_path, map_location=parameters.device)
+    # Set to eval mode
+    model.eval()
+
+    for i in range(len(features)):
+        # Load data
+        spect = np.load(features[i])
+        label = np.load(labels[i])
+
+        # Run the model over this data example!
+        log_spect = 10 * np.log10(spect)
+        spect_expand = np.expand_dims(log_spect, axis=0)
+        # Transform the slice!!!! 
+        spect_expand = (spect_expand - np.mean(spect_expand)) / np.std(spect_expand)
+        spect_expand = torch.from_numpy(spect_expand).float()
+        spect_expand = spect_expand.to(parameters.device)
+
+        outputs = model(spect_expand).view(-1, 1).squeeze()
+        # Apply sigmoid 
+        model_pred = torch.sigmoid(outputs).cpu().detach().numpy()
+
+        # Visualize!!
+        visualize(log_spect, [model_pred], label, title=features[i])
+
+
 def main(args=None):
-    if args == None:
-        args = parser.parse_args()
 
-    wavfile = args.wav
-    labelWav = args.labelWav
-    spectrogram_info = {'NFFT': args.NFFT,
-                        'hop': args.hop, 
-                        'window': args.window}
+    parser = argparse.ArgumentParser()
 
-    visualize_wav(wavfile, labelWav, spectrogram_info)
-    #test_generate_labels(wavfile, labelWav, spectrogram_info)
+    parser.add_argument('--data_path', type=str,
+        help='The path to the model folder with all the good information!')
+    parser.add_argument('--model', type=int,
+        help='Which era do we want to explore!')
+
+    args = parser.parse_args()
+
+    visualize_dataset(args.data_path, args.model)
 
 
 

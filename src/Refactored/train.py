@@ -97,7 +97,7 @@ class Train_Pipeline(object):
                                 'best_valid_fscore': 0.0,
                                 'best_valid_precision': 0.0,
                                 'best_valid_recall': 0.0,
-                                'best_valid_loss': 0.0,
+                                'best_valid_loss': float('inf'),
                                 }
 
         # Use early stopping module
