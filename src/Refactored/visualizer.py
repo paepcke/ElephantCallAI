@@ -10,14 +10,7 @@ from scipy.io import wavfile
 import csv
 from matplotlib import mlab as ml
 import math
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument('wav', help='name of wav file to visualize') # may not want the -
-parser.add_argument('labelWav', help='The label file for the corresponding wav')
-parser.add_argument('--NFFT', type=int, default=4096, help='Window size used for creating spectrograms')
-parser.add_argument('--hop', type=int, default=800, help='Hop size used for creating spectrograms')
-parser.add_argument('--window', type=int, default=22    , help='Deterimes the window size in seconds of the resulting spectrogram')
+import torch
 
 
 def visualize(features, model_predictions, ground_truth, title=None, vert_lines=None, times=None):
@@ -369,7 +362,7 @@ def main(args=None):
 
     parser.add_argument('--data_path', type=str,
         help='The path to the model folder with all the good information!')
-    parser.add_argument('--model', type=int,
+    parser.add_argument('--model', type=str,
         help='Which era do we want to explore!')
 
     args = parser.parse_args()

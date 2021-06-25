@@ -116,6 +116,8 @@ class Curriculum_Strategy(object):
     def __init__(self, train_model, dataloaders, save_path, 
             num_epochs_per_era=3, eras=20,  
             rand_keep_ratio=0.5, hard_keep_ratio=0.25, hard_vs_rand_ratio=0.5,
+            hard_increase_factor=0.0,
+            hard_vs_rand_ratio_max=0.5,
             difficulty_scoring_method="slices"):
     
         super(Curriculum_Strategy, self).__init__()
@@ -155,12 +157,20 @@ class Curriculum_Strategy(object):
         #self.num_keep_rand = int(rand_keep_ratio * self.num_rand_negatives)
         self.num_new_rand = self.num_rand_negatives - int(rand_keep_ratio * self.num_rand_negatives)
 
-        # Step 7) Define the curriculum strategy
+        # Step 7) Save the parameters for growing the hard samples
+        self.hard_keep_ratio = hard_keep_ratio
+        self.rand_keep_ratio = rand_keep_ratio
+        self.hard_increase_factor = hard_increase_factor
+        self.hard_vs_rand_ratio_max = hard_vs_rand_ratio_max
+
+
+        # Step 8) Define the curriculum strategy
         self.difficulty_scoring_method = difficulty_scoring_method
         
-        # Step 8) Create Dummy dataloader that we will use to save current model performances
+        # Step 9) Create Dummy dataloader that we will use to save current model performances
         # on the newly sampled hard datapoints. Note we will clear out the pos and neg so these
         # are just dummy values
+        print ("Creating Dummy Dataset")
         performance_tracking_dataset = Subsampled_ElephantDataset(self.train_model.train_dataloader.dataset.data_path,
                                         neg_ratio=1, normalization=parameters.NORM, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
@@ -202,8 +212,11 @@ class Curriculum_Strategy(object):
                 print(f"Curriculum Era: {era + 1}\n")
                 # Step 1) Train the model on the current state of the dataset
                 print ("Training Model")
-                best_model_wts = self.train_model.train(self.num_epochs_per_era)
+                best_model_wts, early_stop = self.train_model.train(self.num_epochs_per_era)
                 print ("Finished Era Training")
+                if early_stop:
+                    print("Early stopping!!")
+                    break
 
                 # Step 2) Run the model over the entire dataset
                 # This can be made better but let us just hash her out
@@ -221,7 +234,7 @@ class Curriculum_Strategy(object):
                 print ("Updated the datasets with new examples")
                 self.update_dataset(new_hard_negatives, new_rand_negatives)
 
-                # Step 5) Figure out exactly how we want to end???
+                # Step ?) Figure out exactly how we want to end???
                 # We obviously need a way to end this? The question is how?
                 # I guess that will be when the result on the test set that is
                 # in the training model doesn't decrease!! Let us just mess around
@@ -230,11 +243,39 @@ class Curriculum_Strategy(object):
                 # over the entire test set is not a bad idea to track stopping
                 # metrics? Like maybe we should just after an era test over
                 # the full dataset with some modified metrics??
+
+                # Step 5) Update curriculum parameters
+                self.update_curriculum_params()
+
         except KeyboardInterrupt:
             print("Early stopping due to keyboard intervention")
 
         # I think that this makes sense?
         return best_model_wts
+
+
+    def update_curriculum_params(self):
+        """
+
+        """
+        current_hard_vs_rand_ratio = self.num_hard_negatives / self.num_negatives
+        if self.hard_increase_factor > 0 and current_hard_vs_rand_ratio < self.hard_vs_rand_ratio_max: 
+            # Update how many hard negatives we are going to sample
+            self.num_hard_negatives = int(self.num_hard_negatives * self.hard_increase_factor)
+            self.num_new_hard = self.num_hard_negatives - int(self.hard_keep_ratio * self.num_hard_negatives)
+
+            # Update how many rand negatives
+            self.num_rand_negatives = self.num_negatives - self.num_hard_negatives
+            self.num_new_rand = self.num_rand_negatives - int(self.rand_keep_ratio * self.num_rand_negatives)
+
+        print ("++++++++++++++++++++++++++++")
+        print ("New Curriculum Parameters")
+        print ("Total Number of Negatives:", self.num_negatives)
+        print ("Total Number of Hard Negatives:", self.num_hard_negatives)
+        print (f"Total Hard Keep: {self.num_hard_negatives - self.num_new_hard} and Hard Sampled: {self.num_new_hard}")
+        print ("Total Number of Rand Negatives:", self.num_rand_negatives)
+        print (f"Total Rand Keep: {self.num_rand_negatives - self.num_new_rand} and Rand Sampled: {self.num_new_rand}")
+
 
 
     def full_data_eval(self):

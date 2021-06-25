@@ -65,7 +65,9 @@ NUM_EPOCHS_PER_ERA = 3
 ''' Parameters specifying how new data is kept/updated'''
 RAND_KEEP_RATIO = 0.5
 HARD_KEEP_RATIO = 0.25
-HARD_VS_RAND_RATIO = 0.5
+HARD_VS_RAND_RATIO = 0.05
+HARD_INCREASE_FACTOR = 1.5
+HARD_VS_RAND_RATIO_MAX = 0.5 
 
 ''' 
     Difficulty Scoring Method for each Window 
@@ -76,7 +78,7 @@ HARD_VS_RAND_RATIO = 0.5
 DIFFICULTY_SCORING_METHOD = "slices"
 
 ''' Path of the adversarial test files from the 2-stage learning process'''
-ADVERSARIAL_TEST_FILES = "/home/jgs8/CS224S/ElephantCallAI/models/Two-Stage_Model-17_Norm-norm_NegFactor-x2_CallRepeats-1_TestNegFactor-x2_Loss-CE_2021-03-14_01:07:55"
+ADVERSARIAL_TEST_FILES = "/home/jgs8/CS224S/ElephantCallAI/models/Two-Stage_Model-17_Norm-norm_NegFactor-x2_CallRepeats-1_TestNegFactor-x2_Loss-CE_2021-03-14_01:07:55/Adversarial_Neg-Ratio-1_Test.txt"
 
 #######################################
 #### 2-Stage Model Parameters ####

@@ -172,21 +172,7 @@ class Train_Pipeline(object):
 
             @TODO WRITE CODE!!!
         """
-        train_start_time = time.time()
-
-        # Let us track this globally now!
-        '''
-        best_valid_stats = {
-                            'best_valid_acc': 0.0,
-                            'best_valid_fscore': 0.0,
-                            'best_valid_precision': 0.0,
-                            'best_valid_recall': 0.0,
-                            'best_valid_loss': 0.0,
-                            }
-
-        # Use early stopping module
-        early_stopping = EarlyStopping(larger_is_better=True, verbose=True, path=self.save_path)
-        '''
+        train_start_time = time.time()        
 
         # Include a try catch loop to allow for 'ctrl C' early stopping
         try:
@@ -237,8 +223,8 @@ class Train_Pipeline(object):
                                                                     self.best_valid_stats['best_valid_recall']))
         print ('Best val Loss: {:6f}'.format(self.best_valid_stats['best_valid_loss']))
 
-        # Return the best model weights stored in the EarlyStopping object
-        return self.early_stopping.best_model_wts
+        # Return the best model weights stored in the EarlyStopping object and whether we stopped early
+        return self.early_stopping.best_model_wts, self.early_stopping.early_stop
 
 
     ########################
