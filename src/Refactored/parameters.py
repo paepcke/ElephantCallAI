@@ -68,6 +68,7 @@ HARD_KEEP_RATIO = 0.25
 HARD_VS_RAND_RATIO = 0.05
 HARD_INCREASE_FACTOR = 1.5
 HARD_VS_RAND_RATIO_MAX = 0.5 
+HARD_SAMPLE_SIZE_FACTOR = 5
 
 ''' 
     Difficulty Scoring Method for each Window 

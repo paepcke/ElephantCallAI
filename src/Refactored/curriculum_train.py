@@ -118,6 +118,7 @@ class Curriculum_Strategy(object):
             rand_keep_ratio=0.5, hard_keep_ratio=0.25, hard_vs_rand_ratio=0.5,
             hard_increase_factor=0.0,
             hard_vs_rand_ratio_max=0.5,
+            hard_sample_size_factor=5,
             difficulty_scoring_method="slices"):
     
         super(Curriculum_Strategy, self).__init__()
@@ -162,6 +163,7 @@ class Curriculum_Strategy(object):
         self.rand_keep_ratio = rand_keep_ratio
         self.hard_increase_factor = hard_increase_factor
         self.hard_vs_rand_ratio_max = hard_vs_rand_ratio_max
+        self.hard_sample_size_factor = hard_sample_size_factor
 
 
         # Step 8) Define the curriculum strategy
@@ -231,7 +233,7 @@ class Curriculum_Strategy(object):
 
                 # Step 4) Adjust the datasets baby for the next round of
                 # training!
-                print ("Updated the datasets with new examples")
+                print ("Updating the datasets with new examples")
                 self.update_dataset(new_hard_negatives, new_rand_negatives)
 
                 # Step ?) Figure out exactly how we want to end???
@@ -397,12 +399,13 @@ class Curriculum_Strategy(object):
         # num_hard - int(hard_keep_ratio * num_hard)
         # num_hard we should just compute as class variables in the beginning!!!!
 
-        # Step 1) argsort the scores to order the "most" difficult
-        # examples for the current model 
-        sorted_weight_indeces = np.argsort(window_scores)
-        # Save also the window scores so that we can visualize this
+        # Step 1) Save also the window scores so that we can visualize this
         # change over times
         self.save_era_scores(window_scores, "Negative-Scores_Era-" + str(era))
+
+        # argsort the scores to order the "most" difficult
+        # examples for the current model.
+        sorted_weight_indeces = np.argsort(window_scores)
 
 
         # Step 2) Sample num_new_hard of the "most" difficult examples.
@@ -420,13 +423,25 @@ class Curriculum_Strategy(object):
         if era == 0:
             num_sample_hard = self.num_hard_negatives
 
-        for idx in range(1, num_sample_hard + 1):
-            data_file_idx = sorted_weight_indeces[-idx]
+        # Rather than sampling the hardest we will sample randomly from a window
+        # of the top "hard_sample_size_factor * num_sample_hard"
+        num_sample_hard_window = num_sample_hard * self.hard_sample_size_factor
+        print (f"Sampling {num_sample_hard} hard samples from the top {num_sample_hard_window} hard samples")
+        sample_data_pool = sorted_weight_indeces[-num_sample_hard_window: ]
+        print (sample_data_pool.shape)
+        if self.hard_sample_size_factor == 1:
+            hard_sample_idxs = np.arange(sample_data_pool.shape[0])
+        else:
+            hard_sample_idxs = np.random.choice(np.arange(sample_data_pool.shape[0]), size=num_sample_hard, replace=False)
+
+        for idx in hard_sample_idxs:
+            data_file_idx = sample_data_pool[idx]
             new_hard_negatives.append((self.full_train_loader.dataset.data[data_file_idx], \
                             self.full_train_loader.dataset.labels[data_file_idx]))
 
         # Step 2a) Save the sampled hard negative indeces
-        sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
+        #sampled_hard_negatives = sorted_weight_indeces[-num_sample_hard:]
+        sampled_hard_negatives = sample_data_pool[hard_sample_idxs]
         self.save_sampled_examples(sampled_hard_negatives, window_scores[sampled_hard_negatives], "Hard-Negatives_Era-" + str(era) + ".txt")
         self.save_current_model_performance(new_hard_negatives, "Model-Performance_Hard-Negatives_Era-" + str(era))
         print ("Finished sampling hard examples and saving current model performance")
@@ -437,7 +452,7 @@ class Curriculum_Strategy(object):
         # indeces in the range [0 : sorted_weight_indeces.shape[0] - num_new_hard]
         new_rand_negatives = []
         # Random.choice may be slow?
-        rand_data_idxs = np.random.choice(np.arange(sorted_weight_indeces.shape[0] - num_sample_hard), size=self.num_new_rand, replace=False)
+        rand_data_idxs = np.random.choice(np.arange(sorted_weight_indeces.shape[0] - num_sample_hard_window), size=self.num_new_rand, replace=False)
         # Now we want to add these new random datapoints
         for idx in rand_data_idxs:
             data_file_idx = sorted_weight_indeces[idx]
