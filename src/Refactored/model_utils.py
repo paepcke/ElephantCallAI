@@ -174,6 +174,8 @@ class Model_Utils(object):
             save_path += "HardVRand-" + str(parameters.HARD_VS_RAND_RATIO) + "_"
             save_path += "HardKeep-" + str(parameters.HARD_KEEP_RATIO) + "_"
             save_path += "RandKeep-" + str(parameters.RAND_KEEP_RATIO) + "_"
+            save_path += "IncreaseFactor-" + str(parameters.HARD_INCREASE_FACTOR) + "_"
+            save_path += "HardSampleFactor-" + str(parameters.HARD_SAMPLE_SIZE_FACTOR) + "_"
 
         if parameters.CHUNK_SIZE != 256:
             save_path += "WindowSize-" + str(parameters.CHUNK_SIZE) + "_"
