@@ -59,6 +59,12 @@ parser.add_argument('--full_stats', action='store_true',
     help = 'Compute statistics on the full test spectrograms')
 parser.add_argument('--save_calls', action='store_true',
     help = 'Save model predictions to a CSV file')
+parser.add_argument('--window_dataset', action='store_true',
+    help = 'Compute over the window subsampled test set')
+
+# Only for new testing over the subsampled dataset
+parser.add_argument('--window_test', type=str, default="/home/data/elephants/processed_data/Test_nouab/Neg_Samples_x2_Seed_8_CallRepeats_1", 
+    help='Test set used during "training"')
 
 #parser.add_argument('--pred_calls', action='store_true', 
 #    help = 'Generate the predicted (start, end) calls for test spectrograms')
