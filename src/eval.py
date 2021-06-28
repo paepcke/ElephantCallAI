@@ -919,6 +919,64 @@ def precision_recall_curve_pred_threshold(dataset, model_id, pred_path, num_poin
     plt.savefig("../Figures/PR_Curve_" + str(model_id))
 
 
+def eval_window_dataset(model, test_loader, overlap_threshold=0.1):
+    """
+        This is just going to be two steps that we toss into 1. Hopefully this works.
+        Honestly no idea if it will!
+    """
+    results['summary'] = {'true_pos': 0,
+                            'false_pos': 0,
+                            'true_pos_recall': 0,
+                            'false_neg': 0,
+                            'f_score': 0,
+                            'accuracy': 0
+                            }
+
+    print ("Num batches:", len(test_loader))
+    for idx, batch in enumerate(test_loader):
+    
+        # Step 2a) Evaluate model on data
+        inputs = batch[0].clone().float()
+        labels = batch[1].clone().float()
+        inputs = inputs.to(parameters.device)
+        labels = labels.to(parameters.device)
+
+        logits = model(inputs).squeeze(-1)
+        predictions = torch.sigmoid(logits)
+
+        # Now we need to do the proper evaluation!
+        for i in range(preditions.shape[0]):
+            predition = preditions[i]
+
+            # Step 1) Get the elephant calls predicted in the window and the ground truth prediction windows
+            binary_preds, smoothed_predictions = get_binary_predictions(predictions, threshold=pred_threshold, smooth=smooth)
+            predicted_calls, processed_preds = find_elephant_calls(binary_preds, in_seconds=False, min_call_length=parameters.MIN_CALL_LENGTH)
+            print ("Num predicted calls", len(predicted_calls))
+
+            gt_calls, _ = find_elephant_calls(labels, min_call_length=0)
+            print ("Number of ground truth calls", len(gt_calls))
+
+            # Look at precision metrics
+            # Call Prediction True Positives
+            # Call Prediction False Positives
+            true_pos, false_pos = call_prec_recall(predicted_calls, gt_calls, threshold=overlap_threshold, is_truth=False)
+
+            # Look at recall metrics
+            # Call Recall True Positives
+            # Call Recall False Negatives
+            true_pos_recall, false_neg = call_prec_recall(gt_calls, predicted_calls, threshold=overlap_threshold, is_truth=True)
+
+            f_score = get_f_score(binary_preds, labels) # just for the postive class
+            accuracy = calc_accuracy(binary_preds, labels)
+
+            # Update summary stats
+            results['summary']['true_pos'] += len(true_pos)
+            results['summary']['false_pos'] += len(false_pos)
+            results['summary']['true_pos_recall'] += len(true_pos_recall)
+            results['summary']['false_neg'] += len(false_neg)
+
+
+
 
 
 def main(args):
@@ -990,6 +1048,43 @@ def main(args):
             os.mkdir(save_path)
         # Save the predictions
         create_predictions_csv(full_dataset, predictions, save_path)
+
+    elif args.window_dataset:
+        # What we want to do is basically run rather than on the full spectrograms,
+        # just run on the individual windows. 
+        # First we want to load in the test data
+        test_data_path = args.window_test
+
+        test_loader = get_loader_fuzzy(test_data_path, parameters.BATCH_SIZE, random_seed=parameters.DATA_LOADER_SEED, 
+                                        norm=parameters.NORM, scale=parameters.SCALE, include_boundaries=include_boundaries, shuffle=False)
+
+
+        results = eval_window_dataset(model, test_loader)
+
+        # Display the output of results as peter did
+        TP_truth = results['summary']['true_pos_recall']
+        FN = results['summary']['false_neg']
+        TP_test = results['summary']['true_pos']
+        FP = results['summary']['false_pos']
+
+        recall = TP_truth / (TP_truth + FN)
+        precision = 0 if TP_test + FP == 0 else TP_test / (TP_test + FP) # For edge 0 case
+        f1_call = 0 if precision + recall == 0 else 2 * (precision * recall) / (precision + recall)
+
+        print ("++=================++")
+        print ("++ Summary results ++")
+        print ("++=================++")
+        print ("Hyper-Parameters")
+        print ("Using Model with ID:", model_id)
+        print ("Threshold:", parameters.EVAL_THRESHOLD)
+        print ("Minimun Call Length", parameters.MIN_CALL_LENGTH)
+        print ("Window Slide Step", parameters.PREDICTION_SLIDE_LENGTH)
+        print("Call precision:", precision)
+        print("Call recall:", recall)
+        print("f1 score calls:", f1_call)
+        
+        # Now we need to run through and get the predictions for each. 
+        # Why don't we first get all of the predictions!
 
     '''
     assert(len(sys.argv) > 2)
