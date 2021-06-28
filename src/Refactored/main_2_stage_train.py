@@ -219,7 +219,7 @@ class TwoStage_Model(object):
         train_pipeline = Train_Pipeline(train_loaders, model, loss_func, optimizer, 
                 scheduler, writer, save_path, early_stop_criteria=parameters.TRAIN_MODEL_SAVE_CRITERIA.lower())
         
-        model_wts = train_pipeline.train(parameters.NUM_EPOCHS)
+        model_wts, _ = train_pipeline.train(parameters.NUM_EPOCHS)
 
         # Save our model!
         if model_wts:
