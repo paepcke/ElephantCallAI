@@ -51,7 +51,8 @@ CALL_REPEATS = 1
 # and data-augmentation
 LABEL_SMOOTH = 0
 EXCLUDE_MARGINALS = False
-OVERSIZED_WINDOWS = False
+OVERSIZED_WINDOWS = True
+AUGMENT_POSITIVE = True 
 ####################################
 NORM = "norm"
 SCALE = True # Log scale the spectrograms
@@ -165,6 +166,7 @@ LOCAL_TRAIN_FILES = '../../elephant_dataset/Train_chop/'
 LOCAL_TEST_FILES = '../../elephant_dataset/Train_chop/'
 LOCAL_FULL_TRAIN = '../elephant_dataset/Train/Full_24_hrs'
 LOCAL_FULL_TEST =  '../elephant_dataset/Test/Full_24_hrs'
+LOCAL_OVERSIZED_TRAIN_FILES = '../../elephant_dataset/Train_Oversize_Chop'
 
 REMOTE_TRAIN_FILES = '/home/data/elephants/processed_data/Train_Chopped_nouab/'
 REMOTE_TEST_FILES = "/home/data/elephants/processed_data/Test_Chopped_nouab/"

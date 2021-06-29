@@ -29,7 +29,10 @@ class Model_Utils(object):
             Return train and test data paths
         """
         if local_files:
-            train_data_path = parameters.LOCAL_TRAIN_FILES
+            if parameters.OVERSIZED_WINDOWS:
+                train_data_path = parameters.LOCAL_OVERSIZED_TRAIN_FILES
+            else:
+                train_data_path = parameters.LOCAL_TRAIN_FILES
             test_data_path = parameters.LOCAL_TEST_FILES
         else:
             if parameters.DATASET.lower() == "noab":
