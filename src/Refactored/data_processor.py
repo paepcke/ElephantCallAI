@@ -351,6 +351,11 @@ if __name__ == '__main__':
                         help='Flag indicating to exclude elephant calls marked as marginal (i.e. use the MARGINAL_MASK for chopping)'
                         )
 
+    parser.add_argument('--store_oversize', 
+                        type=float,
+                        default=1.0, 
+                        help='Factor used to determine the size of the windows to save. If > 1.0 stores oversized windows') 
+
 
     args = parser.parse_args();
 
@@ -374,10 +379,10 @@ if __name__ == '__main__':
         # If we have just processed the data then just use spect_outdir as input!
         # Remember we need to add in the subdirectory created!??
         if args.process_spects:
-            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=args.window, 
+            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=args.window * args.store_oversize, 
                                 data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         else:
-            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=args.window, 
+            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=args.window * args.store_oversize, 
                             data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         
 
