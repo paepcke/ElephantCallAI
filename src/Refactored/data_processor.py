@@ -379,10 +379,10 @@ if __name__ == '__main__':
         # If we have just processed the data then just use spect_outdir as input!
         # Remember we need to add in the subdirectory created!??
         if args.process_spects:
-            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=args.window * args.store_oversize, 
+            LaunchChopper(args.spect_outdir, args.chopped_outdir, window_size=int(args.window * args.store_oversize), 
                                 data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         else:
-            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=args.window * args.store_oversize, 
+            LaunchChopper(args.spect_data, args.chopped_outdir, window_size=int(args.window * args.store_oversize), 
                             data_path=args.spect_data_path, exclude_marginal=args.exclude_marginal)
         
 
