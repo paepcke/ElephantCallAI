@@ -36,6 +36,9 @@ class Model_Utils(object):
                 if parameters.EXCLUDE_MARGINALS:
                     train_data_path = parameters.REMOTE_MARGINAL_TRAIN_FILES
                     test_data_path = parameters.REMOTE_MARGINAL_TEST_FILES
+                elif parameters.OVERSIZED_WINDOWS:
+                    train_data_path = parameters.REMOTE_OVERSIZED_TRAIN_FILES
+                    test_data_path = parameters.REMOTE_OVERSIZED_TEST_FILES
                 else:
                     train_data_path = parameters.REMOTE_TRAIN_FILES
                     test_data_path = parameters.REMOTE_TEST_FILES

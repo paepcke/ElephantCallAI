@@ -47,9 +47,11 @@ NEG_SAMPLES = 2
 TEST_NEG_SAMPLES = 2
 CALL_REPEATS = 1
 # New methods for smoothing labels and 
-# excluding calls that are marginal!
+# excluding calls that are marginal 
+# and data-augmentation
 LABEL_SMOOTH = 0
 EXCLUDE_MARGINALS = False
+OVERSIZED_WINDOWS = False
 ####################################
 NORM = "norm"
 SCALE = True # Log scale the spectrograms
@@ -168,6 +170,8 @@ REMOTE_TRAIN_FILES = '/home/data/elephants/processed_data/Train_Chopped_nouab/'
 REMOTE_TEST_FILES = "/home/data/elephants/processed_data/Test_Chopped_nouab/"
 REMOTE_MARGINAL_TRAIN_FILES = '/home/data/elephants/processed_data/Train_Marginal_Chopped_nouab/'
 REMOTE_MARGINAL_TEST_FILES = "/home/data/elephants/processed_data/Test_Marginal_Chopped_nouab/"
+REMOTE_OVERSIZED_TRAIN_FILES = "/home/data/elephants/processed_data/Train_Oversized_Chopped_nouab/"
+REMOTE_OVERSIZED_TEST_FILES = "/home/data/elephants/processed_data/Test_Chopped_nouab/"
 
 REMOTE_BAI_TRAIN_FILES = '/home/data/elephants/processed_data/Train_bai/'
 REMOTE_BAI_TEST_FILES = '/home/data/elephants/processed_data/Test_bai/'
