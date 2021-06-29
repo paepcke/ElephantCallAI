@@ -96,14 +96,19 @@ def main():
     train_data_path, test_data_path = Model_Utils.get_dataset_paths(local_files=args.local_files)
 
     # Step 2) Create the subsampled datasets
+    normalization = parameters.NORM
+    # Using pre-train so don't normalize in the dataset
+    if parameters.MODEL_ID == 31:
+        normalization = 'None'
+
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
                                         augment_positive=parameters.AUGMENT_POSITIVE,
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        normalization=normalization, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     
 
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        normalization=normalization, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     # For the test dataset, we inject the hard negative adversarial 
     # examples discovered during the 2 stage model learning process
@@ -115,7 +120,7 @@ def main():
 
     # Step 3) Get the full training dataset to supervise the curriculum model
     full_train_dataset = Full_ElephantDataset(train_data_path, only_negative=True,
-                                                        normalization=parameters.NORM, 
+                                                        normalization=normalization, 
                                                         log_scale=parameters.SCALE, 
                                                         gaussian_smooth=False, seed=8)
 

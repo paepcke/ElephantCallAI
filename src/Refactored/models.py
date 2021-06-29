@@ -7,6 +7,7 @@ from tensorboardX import SummaryWriter
 import os
 import torch.nn.functional as F
 import torchvision.models as models
+import torchvision.transforms as transforms
 import pdb
 
 # Local file imports
@@ -87,6 +88,8 @@ def get_model(model_id):
         return Model29(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
     elif model_id == 30:
         return Model30(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
+    elif model_id == 31:
+        return Model31(parameters.INPUT_SIZE, parameters.OUTPUT_SIZE, parameters.LOSS, parameters.FOCAL_WEIGHT_INIT)
 
 """
 Basically what Brendan was doing
@@ -1670,4 +1673,45 @@ class Model30(nn.Module):
         """
         out = self.model(inputs)
         return out
+
+"""
+ResNet-18 pretrained!
+"""
+class Model31(nn.Module):
+    def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
+        super(Model31, self).__init__()
+
+        self.input_size = input_size
+
+        self.mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=float, device=parameters.device)[None, :, None, None]
+        self.std = torch.as_tensor([0.229, 0.224, 0.225], dtype=float, device=parameters.device)[None, :, None, None]
+
+        #self.transform = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+        #                         std=[0.229, 0.224, 0.225], inplace=True)
+
+        self.model = models.resnet18()
+        self.model.fc = nn.Sequential(
+           nn.Linear(512, 128),
+           nn.ReLU(inplace=True),
+           nn.Linear(128, 256)) # This is hard coded to the size of the training windows
+
+        if loss.lower() == "focal":
+            print("USING FOCAL LOSS INITIALIZATION")
+            print ("Init:", -np.log10((1 - weight_init) / weight_init))
+            # Initialize the final bias layer so that initially we predict
+            # everything very negative --> sig(neg) << 0.5. Thus we inflate
+            # the weighting for all pos. samples.
+            self.model.fc[2].bias.data.fill_(-np.log10((1 - weight_init) / weight_init))
+
+
+    def forward(self, inputs):
+        inputs = inputs.unsqueeze(1)
+        inputs = inputs.repeat(1, 3, 1, 1)
+        
+        # Now we have to normalize using the res-net normalization
+        inputs.sub_(self.mean).div_(self.std)
+        
+        out = self.model(inputs)
+        return out
+
 
