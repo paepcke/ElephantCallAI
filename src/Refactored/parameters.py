@@ -33,7 +33,7 @@ PREDICTION_SLIDE_LENGTH = 128
 #### Model_0 / Solo Model ####
 ##############################
 ''' 28 = window size 512 '''
-MODEL_ID = 17
+MODEL_ID = 31
 PRE_TRAIN = False
 
 ################################
@@ -68,10 +68,10 @@ NUM_EPOCHS_PER_ERA = 3
 ''' Parameters specifying how new data is kept/updated'''
 RAND_KEEP_RATIO = 0.5
 HARD_KEEP_RATIO = 0.25
-HARD_VS_RAND_RATIO = 0.05
-HARD_INCREASE_FACTOR = 1.25
+HARD_VS_RAND_RATIO = 0.025
+HARD_INCREASE_FACTOR = 1.1
 HARD_VS_RAND_RATIO_MAX = 0.5 
-HARD_SAMPLE_SIZE_FACTOR = 5
+HARD_SAMPLE_SIZE_FACTOR = 1
 
 ''' 
     Difficulty Scoring Method for each Window 
@@ -379,6 +379,12 @@ HYPERPARAMETERS = {
         'l2_reg': 1e-5,
         },
 30: {
+        'lr': 1e-3,
+        'lr_decay_step': 4, 
+        'lr_decay': 0.95,
+        'l2_reg': 1e-5,
+        },
+31: {
         'lr': 1e-3,
         'lr_decay_step': 4, 
         'lr_decay': 0.95,
