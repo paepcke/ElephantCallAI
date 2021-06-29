@@ -603,8 +603,6 @@ class Subsampled_ElephantDataset(data.Dataset):
             extra_size = window.shape[0] - self.window_size
             start_slice = torch.randint(0, extra_size, (1,))[0].item()
             end_slice = start_slice + self.window_size
-
-        print (f"Getting slice [{start_slice}, {end_slice}], is neg {'neg' in file_name}")
         
         return window[start_slice: end_slice], label[start_slice: end_slice]
 
@@ -645,13 +643,14 @@ class Full_ElephantDataset(data.Dataset):
         as in the 2-stage model and Curriculum setting!
     """
     def __init__(self, data_path, only_negative=False, normalization="norm", log_scale=True, transform=None, 
-            shift_windows=False, gaussian_smooth=0, seed=8):
+            shift_windows=False, window_size=256, gaussian_smooth=0, seed=8):
 
         # Should look into this with Vrinda about how we want to deal with data augmentation transforms!
         self.user_transforms = transform
         self.normalization = normalization
         self.log_scale = log_scale 
         self.shift_windows = shift_windows
+        self.window_size = window_size
         # Apply gaussian smoothing to the labels
         self.gaussian_smooth = gaussian_smooth
 
@@ -707,6 +706,10 @@ class Full_ElephantDataset(data.Dataset):
         feature = np.load(self.data[index])
         label = np.load(self.labels[index])
 
+        # Check to see if the window is oversized and we need to sub-sample from it
+        if feature.shape[0] > self.window_size:
+            feature, label = self.sample_oversized_window(feature, label, self.data[index])
+
         feature = self.apply_data_transforms(feature)
         label = self.apply_label_transforms(label)
 
@@ -718,6 +721,16 @@ class Full_ElephantDataset(data.Dataset):
         label = torch.from_numpy(label).float()
 
         return feature, label, (self.data[index], self.labels[index]) # Include the data files!
+
+    def sample_oversized_window(self, window, label, file_name):
+        """
+        """
+        # Always look at the centers for this step
+        extra_size = window.shape[0] - self.window_size
+        start_slice = extra_size // 2
+        end_slice = start_slice + self.window_size
+        
+        return window[start_slice: end_slice], label[start_slice: end_slice]
 
     def apply_label_transforms(self, label):
         # Gaussian smooth the labels!
