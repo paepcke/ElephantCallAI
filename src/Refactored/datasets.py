@@ -43,7 +43,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
     """
     def __init__(self, data_path, neg_ratio=1, neg_features=None, 
-                normalization="norm", window_size=256,
+                normalization="norm", window_size=256, augment_positive=False,
                 log_scale=True, gaussian_smooth=0, transform=None, 
                 shift_windows=False, seed=8):
         """
@@ -63,6 +63,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.neg_ratio = neg_ratio
         self.data_path = data_path
         self.window_size = window_size
+        self.augment_positive = augment_positive
         # Apply gaussian smoothing to the labels
         self.gaussian_smooth = gaussian_smooth
 
@@ -571,7 +572,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         # Check to see if the window is oversized and we need to sub-sample from it
         if feature.shape[0] > self.window_size:
-            feature, label = self.sample_oversized_window(feature, label)
+            feature, label = self.sample_oversized_window(feature, label, self.data[index])
 
         # This we need to update more!
         feature = self.apply_data_transforms(feature)
@@ -589,12 +590,21 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         return feature, label, (self.data[index], self.labels[index]) # Include the data files!
 
-    def sample_oversized_window(self, window, label):
+    def sample_oversized_window(self, window, label, file_name):
         """
         """
-        extra_size = window.shape[0] - self.window_size
-        start_slice = torch.randint(0, extra_size, (1,))[0].item()
-        end_slice = start_slice + self.window_size
+        # Only shift / augment the positive examples.
+        # Thus for the negatives
+        if self.augment_positive and 'neg' in file_name:
+            extra_size = window.shape[0] - self.window_size
+            start_slice = extra_size // 2
+            end_slice = start_slice + self.window_size
+        else: 
+            extra_size = window.shape[0] - self.window_size
+            start_slice = torch.randint(0, extra_size, (1,))[0].item()
+            end_slice = start_slice + self.window_size
+
+        print (f"Getting slice [{start_slice}, {end_slice}], is neg {'neg' in file_name}")
         
         return window[start_slice: end_slice], label[start_slice: end_slice]
 

@@ -97,6 +97,7 @@ def main():
 
     # Step 2) Create the subsampled datasets
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
+                                        augment_positive=parameters.AUGMENT_POSITIVE,
                                         normalization=parameters.NORM, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     
