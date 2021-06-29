@@ -43,8 +43,7 @@ class Subsampled_ElephantDataset(data.Dataset):
 
     """
     def __init__(self, data_path, neg_ratio=1, neg_features=None, 
-                #seperate_hard_samples=False, 
-                normalization="norm", 
+                normalization="norm", window_size=256,
                 log_scale=True, gaussian_smooth=0, transform=None, 
                 shift_windows=False, seed=8):
         """
@@ -63,6 +62,7 @@ class Subsampled_ElephantDataset(data.Dataset):
         self.shift_windows = shift_windows
         self.neg_ratio = neg_ratio
         self.data_path = data_path
+        self.window_size = window_size
         # Apply gaussian smoothing to the labels
         self.gaussian_smooth = gaussian_smooth
 
@@ -569,6 +569,10 @@ class Subsampled_ElephantDataset(data.Dataset):
         feature = np.load(self.data[index])
         label = np.load(self.labels[index])
 
+        # Check to see if the window is oversized and we need to sub-sample from it
+        if feature.shape[0] > self.window_size:
+            feature, label = self.sample_oversized_window(feature, label)
+
         # This we need to update more!
         feature = self.apply_data_transforms(feature)
         label = self.apply_label_transforms(label)
@@ -578,12 +582,22 @@ class Subsampled_ElephantDataset(data.Dataset):
 
         # Honestly may be worth pre-process this
         feature = torch.from_numpy(feature).float() 
-        # DO FOR NOW 
+        # DO FOR NOW!
         if feature.shape[0] == 77:
             feature = feature.T
         label = torch.from_numpy(label).float()
 
         return feature, label, (self.data[index], self.labels[index]) # Include the data files!
+
+    def sample_oversized_window(self, window, label):
+        """
+        """
+        extra_size = window.shape[0] - self.window_size
+        start_slice = torch.randint(0, extra_size, (1,))[0].item()
+        end_slice = start_slice + self.window_size
+        
+        return window[start_slice: end_slice], label[start_slice: end_slice]
+
 
     def apply_label_transforms(self, label):
         # Gaussian smooth the labels!

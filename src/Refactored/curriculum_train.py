@@ -430,7 +430,8 @@ class Curriculum_Strategy(object):
         sample_data_pool = sorted_weight_indeces[-num_sample_hard_window: ]
         print (sample_data_pool.shape)
         if self.hard_sample_size_factor == 1:
-            hard_sample_idxs = np.arange(sample_data_pool.shape[0])
+            # Sample the indeces in reverse order to keep the hardest at the top!
+            hard_sample_idxs = np.arange(sample_data_pool.shape[0])[:: -1]
         else:
             hard_sample_idxs = np.random.choice(np.arange(sample_data_pool.shape[0]), size=num_sample_hard, replace=False)
 
@@ -515,15 +516,17 @@ class Curriculum_Strategy(object):
     def save_sampled_examples(self, sampled_data, data_scores, title):
         """
             Save a record of the data sampled one per line:
-            (idx, score, data_file_name, label_file_name)
+            (idx, score, data_file_name, label_file_name). 
+            NOTE: The examples are ordered in ascending difficulty
         """
         # Save a file for the given ERA 
         file_path = os.path.join(self.sampled_data_path, title)
         with open(file_path, 'w') as f:
             # Save in reverse order to preserve the difficulty ranking
-            for i in range(1, sampled_data.shape[0] + 1):
-                data_file_idx = sampled_data[-i]
-                f.write(f'{sampled_data[-i]}, {data_scores[-i]}, {self.full_train_loader.dataset.data[data_file_idx]}, {self.full_train_loader.dataset.labels[data_file_idx]}\n')
+            for i in range(sampled_data.shape[0]):
+            #for i in range(1, sampled_data.shape[0] + 1):
+                data_file_idx = sampled_data[i]
+                f.write(f'{sampled_data[i]}, {data_scores[i]}, {self.full_train_loader.dataset.data[data_file_idx]}, {self.full_train_loader.dataset.labels[data_file_idx]}\n')
 
 
     def update_dataset(self, new_hard_negatives, new_rand_negatives):
