@@ -62,8 +62,8 @@ CHUNK_SIZE = 256
 #######################################
 #### Curriculum Model Parameters ####
 #######################################
-ERAS = 20
-NUM_EPOCHS_PER_ERA = 3
+ERAS = 50
+NUM_EPOCHS_PER_ERA = 4
 
 ''' Parameters specifying how new data is kept/updated'''
 RAND_KEEP_RATIO = 0.5

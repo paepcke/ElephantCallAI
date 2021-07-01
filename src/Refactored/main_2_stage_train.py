@@ -446,22 +446,27 @@ def main():
     # create both the train/test datasets and the full datasets
     train_data_path, test_data_path = Model_Utils.get_dataset_paths(local_files=args.local_files)
 
-    # Step 2) Get the initial subsampled train/test datasets
+    # Step 2) Create the subsampled datasets
+    normalization = parameters.NORM
+    # Using pre-train so don't normalize in the dataset
+    if parameters.MODEL_ID == 31:
+        normalization = 'None'
+
     train_dataset = Subsampled_ElephantDataset(train_data_path, neg_ratio=parameters.NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        normalization=normalization, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
-                                        normalization=parameters.NORM, log_scale=parameters.SCALE, 
+                                        normalization=normalization, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
 
     # Step 3) Get the complete datasets for adversarial discovery
     # Because the full dataset is just used for adversarial discovery where
     # we want to just know if the window is a negative window, we do not need 
     # to smooth the labels
-    full_train_dataset = Full_ElephantDataset(train_data_path, normalization=parameters.NORM, 
+    full_train_dataset = Full_ElephantDataset(train_data_path, normalization=normalization, 
                                                         log_scale=parameters.SCALE, 
                                                         gaussian_smooth=False, seed=8)
-    full_test_dataset = Full_ElephantDataset(test_data_path, normalization=parameters.NORM, 
+    full_test_dataset = Full_ElephantDataset(test_data_path, normalization=normalization, 
                                                         log_scale=parameters.SCALE, 
                                                         gaussian_smooth=False, seed=8)
 

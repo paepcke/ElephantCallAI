@@ -1675,7 +1675,7 @@ class Model30(nn.Module):
         return out
 
 """
-ResNet-18 pretrained!
+ResNet-18 pretrained!!
 """
 class Model31(nn.Module):
     def __init__(self, input_size, output_size, loss="CE", weight_init=0.01):
@@ -1689,7 +1689,7 @@ class Model31(nn.Module):
         #self.transform = transforms.Normalize(mean=[0.485, 0.456, 0.406],
         #                         std=[0.229, 0.224, 0.225], inplace=True)
 
-        self.model = models.resnet18()
+        self.model = models.resnet18(pretrained=True)
         self.model.fc = nn.Sequential(
            nn.Linear(512, 128),
            nn.ReLU(inplace=True),

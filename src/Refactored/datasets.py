@@ -409,8 +409,8 @@ class Subsampled_ElephantDataset(data.Dataset):
             # Add the example
             pos_examples.append((feature_path, label_path))
 
-        # Call class function to add examples
-        self.add_pos_examples(pos_examples)
+        # Call class function to add examples and make sure to keep all the current ones
+        self.update_pos_examples(pos_examples, len(self.pos_features), combine_data=True)
 
 
     def add_pos_examples(self, pos_examples, combine_data=True):
