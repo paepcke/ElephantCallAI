@@ -105,6 +105,12 @@ def main():
                                         augment_positive=parameters.AUGMENT_POSITIVE,
                                         normalization=normalization, log_scale=parameters.SCALE, 
                                         gaussian_smooth=parameters.LABEL_SMOOTH, seed=8)
+
+    # Step 1b) 
+    # This is where we would want to add the generated positves!!
+    if args.use_generated:
+        train_dataset.add_positive_examples_from_dir(args.generated_path)
+        train_dataset.undersample_negative_features_to_balance()
     
 
     test_dataset = Subsampled_ElephantDataset(test_data_path, neg_ratio=parameters.TEST_NEG_SAMPLES, 
