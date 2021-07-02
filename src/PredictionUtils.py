@@ -174,11 +174,14 @@ def forward_inference_on_batch(
                                      second_stage_interest_queue)
 
         relevant_predictions += outputs.cpu().detach().numpy()
-        relevant_overlap_counts += 1
 
         # now we restore the segment of the input data
         reshaped_input_batch *= stds
         reshaped_input_batch += means
+
+        del outputs
+        del raw_outputs
+        del reshaped_input_batch_var
 
 
 def consolidate_inference_output(
