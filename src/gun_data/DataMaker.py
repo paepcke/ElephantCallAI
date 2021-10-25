@@ -16,10 +16,12 @@ PNNGUNS_REGEX = "pnnnGuns\.\d+\.\w+\.(\d+\.\d+\.\d+)\.\w+\.wav"
 BACKGROUND_FILENAME_PREFIX = "bgAudio"
 TRAIN_MEAN_FILENAME = "train_mean.npy"
 TRAIN_STD_FILENAME = "train_std.npy"
+TRAIN_MAXMIN_FILENAME = "train_maxmin.npy"
 FILENAME_REGEX = ".*_(\d+)\.npy"  # input data to the model will be of this form
 
 # These variables are for quick iteration on this script. You should override them with command-line arguments.
 REMOTE_PATH_PREFIX = "/home/deschwa2/gun_data"
+LOCAL_PATH_PREFIX = "/Users/schwartzd/dev/research/gunshot_data_1/TrainingClips"
 
 ECOGUNS_WAV_PATH = REMOTE_PATH_PREFIX + "/ecoguns"
 ECOGUNS_GUIDE_PATH = REMOTE_PATH_PREFIX + "/Guns_Training_ecoGuns_SST_mac.txt"
@@ -29,6 +31,12 @@ RAW_BG_WAV_PATH = REMOTE_PATH_PREFIX + "/rawBgNoise"
 
 # if a positive example is at least this many seconds longer than the target clip length, don't use it.
 POS_TOO_LONG_TOLERANCE = 0.5
+
+# maximum number of samples from a background wav file if tiny dataset mode is on
+TINY_DATASET_MAX_CHOPS = 50
+
+BG_SHUFFLE_SEED = 42  # TODO: make this configurable through CLI?
+VAL_TEST_BG_DAYS = 3  # TODO: make this configurable through CLI?
 
 """
 This is a script and a collection of related utilities that takes in a variety of weakly-labeled gunshot clips and
@@ -221,7 +229,9 @@ def write_genuine_pos_clips(data_df: pd.DataFrame, out_dir: str, ecoguns_dir: st
         example_num += 1
 
 
-def chop_wav(wav_path: str, out_dir: str, created_filename_prefix: str, interval_len_s: float, overlap_fraction: float = 0.):
+def chop_wav(wav_path: str, out_dir: str, created_filename_prefix: str,
+             interval_len_s: float, overlap_fraction: float = 0.,
+             max_chops: Optional[int] = None):
     arr = read_wav(wav_path, force_sample_rate=8000)
     samples_per_interval = int(interval_len_s * 8000)
     if len(arr) < samples_per_interval:
@@ -232,6 +242,10 @@ def chop_wav(wav_path: str, out_dir: str, created_filename_prefix: str, interval
         print(f"Skipping overlap in chopping {wav_path}, it cannot be chopped as finely as requested")
         non_overlapping_samples = samples_per_interval
     intervals_in_arr = 1 + (len(arr) - samples_per_interval)//non_overlapping_samples
+
+    # to shrink the dataset for testing, 'max_chops' can be specified:
+    if max_chops is not None:
+        intervals_in_arr = min(intervals_in_arr, max_chops)
 
     for i in tqdm(range(intervals_in_arr), delay=2.5):
         left_idx = i*non_overlapping_samples
@@ -303,7 +317,7 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
         scenario_distributions = compute_scenario_distributions(scenario_map, scenarios)
 
     for i in tqdm(range(num_samples)):
-        bg_idx = i % len(bg_list)
+        bg_idx = i % len(bg_list)  # possible to reuse background snippets this way
 
         bg = np.load(bg_dir + "/" + bg_list[bg_idx])
 
@@ -328,6 +342,14 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
             pos_len = len(pos)
 
             if pos_len >= bg_len:
+                """
+                Note: I'm literally always superimposing positive noise over background noise INSTEAD of zero-padding
+                the end of a short positive sequence for some reason. zero-padding BEFORE transform might be noisy,
+                consider transforming to an fxt' spectrogram where t' < the standard t the model accepts and inserting
+                zeros in the (t-t') columns after t'.
+                
+                I'm also *cutting off* positive data from training examples when the samples are too long
+                """
                 # for now, do not cut off any of the positive data unless pos_len > bg_len
                 pos = pos[:bg_len]
                 pos_len = pos.shape[0]
@@ -356,6 +378,60 @@ def gen_mixed_data(bg_dir: str, positive_dir: str, out_dir: str, num_samples: in
         stft = stft.astype(np.float32)
         np.save(out_filename, stft)
 
+
+def gen_true_pos_data(positive_dir: str, out_dir: str, max_interval_len_s: float,
+                      spec_extractor: SpectrogramExtractor, sample_rate: float = 8000,
+                      transform: Optional[Callable[[np.ndarray], np.ndarray]] = None) -> int:
+    """
+
+    :param positive_dir: path to directory storing positive audio snippets
+    :param out_dir: path to target output directory
+    :param max_interval_len_s: max duration of positive clip
+    :param sample_rate: audio sample rate in Hz
+    :param spec_extractor: SpectrogramExtractor object
+    :param transform: a callable to manipulate the output of the spectrogram
+    :return: the number of too-long samples that were discarded
+    """
+
+    pos_list_raw = os.listdir(positive_dir)
+
+    pos_list = []
+    pos_labels = []
+    for filename in pos_list_raw:
+        m = re.match(FILENAME_REGEX, filename)
+        if m is not None:
+            label = int(m.group(1))
+            pos_list.append(filename)
+            pos_labels.append(label)
+
+    random.shuffle(pos_list)
+
+    genuine_pos_list, _ = separate_pos_list_raw(pos_list, pos_labels)
+
+    num_examples_too_long = 0
+
+    for i, tup in tqdm(enumerate(genuine_pos_list)):
+        filename, label = tup
+
+        example_audio = np.load(f"{positive_dir}/{filename}")
+
+        if example_audio.shape[0] > max_interval_len_s*sample_rate:
+            # filter pos examples that are too long out
+            num_examples_too_long += 1
+            continue
+
+        out_filename = out_dir + f"/generatedExample{i}_{str(label)}.npy"
+
+        stft = spec_extractor.extract_spectrogram(example_audio)
+
+        if transform is not None:
+            stft = transform(stft)
+
+        # convert to float32, stft computation returns float64 by default
+        stft = stft.astype(np.float32)
+        np.save(out_filename, stft)
+
+    return num_examples_too_long
 
 def compute_scenario_distributions(scenario_map: Dict[str, List[Tuple[str, int]]], scenarios: List[str]) -> Dict[str, np.ndarray]:
     """
@@ -473,9 +549,10 @@ def split_scenarios(args) -> Dict[str, Optional[Dict[str, List[Tuple[str, int]]]
     return split_map
 
 
-def prepare_freq_mean_std(args):
+def prepare_summary_info(args):
     """
-    Computes training set mean and std (for each frequency band).
+    Computes training set mean, std (for each frequency band).
+    Also computes element-wise max among examples.
     Stores these npy arrays as files in the ".../datasets" directory.
     """
     datasets_path = f"{args.path_prefix}/{args.output_dir}/datasets"
@@ -483,12 +560,16 @@ def prepare_freq_mean_std(args):
     train_files = os.listdir(train_path)
     first_example = np.load(train_path + "/" + train_files[0])
     mean = np.mean(first_example, axis=0).reshape(1, -1)
+    max_elem = np.max(first_example)
+    min_elem = np.min(first_example)
 
     print("Computing training set mean...")
     for filename in tqdm(train_files[1:]):
         filepath = train_path + "/" + filename
         example = np.load(filepath)
         mean += np.mean(example, axis=0).reshape(1, -1)
+        max_elem = max(max_elem, np.max(example))
+        min_elem = min(min_elem, np.min(example))
 
     mean /= len(train_files)
     var = np.mean(np.power(first_example - mean, 2), axis=0).reshape(1, -1)
@@ -504,6 +585,11 @@ def prepare_freq_mean_std(args):
 
     np.save(f"{datasets_path}/{TRAIN_MEAN_FILENAME}", mean)
     np.save(f"{datasets_path}/{TRAIN_STD_FILENAME}", std)
+
+    maxminarr = np.zeros((2,))
+    maxminarr[0] = max_elem
+    maxminarr[1] = min_elem
+    np.save(f"{datasets_path}/{TRAIN_MAXMIN_FILENAME}", maxminarr)
 
 
 def write_synthetic_pos_clips(args, train_out_dir: str, val_out_dir: str):
@@ -550,6 +636,9 @@ def write_synthetic_pos_clips(args, train_out_dir: str, val_out_dir: str):
     # TODO: volume augmentation (here or on-the-fly during gen_mixed_data?)
 
 
+def permute_bgnames(bg_filenames: List[str]):
+    # This function gives a deterministic, pseudo-random permutation of bg filenames.
+    random.Random(BG_SHUFFLE_SEED).shuffle(bg_filenames)
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -576,6 +665,12 @@ def get_args():
     parser.add_argument('--output-dir', type=str, default="processed",
                         help="the name of the directory that output data should be stored in. Look for the directories"
                              " 'train', 'val', and 'test'.")
+
+    parser.add_argument('--make-tiny-dataset-for-testing', action='store_true',
+                        help="Specify this flag to generate a very small number of samples only suitable for testing this script or dataloader logic")
+    parser.add_argument('--true-pos-only', action='store_true',
+                        help="specify this to create a dataset consisting only of true positive examples.")
+
     parser.add_argument('--bg-overlap-frac', type=float, default=0.,
                         help="fraction of sample overlap between adjacent background audio snippets. Defaults to no overlap.")
     parser.add_argument('--scenario-overlap-frac', type=float, default=0.25,
@@ -635,11 +730,7 @@ def assert_args_valid(args):
     assert_fraction(args.synthetic_positive_prob)
 
 
-if __name__ == "__main__":
-    args = get_args()
-
-    assert_args_valid(args)
-
+def create_dirs_if_necessary(args):
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/pos_train")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/pos_val")
@@ -650,28 +741,35 @@ if __name__ == "__main__":
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/datasets/val")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/datasets/test")
 
+
+if __name__ == "__main__":
+    args = get_args()
+
+    assert_args_valid(args)
+
+    create_dirs_if_necessary(args)
+
     if args.clear_dirs_first:
         print("Clearing existing data at the target location...")
         # TODO: suppress ugly output from these calls?
 
         # positive outputs
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/pos_train/*.npy")
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/pos_val/*.npy")
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/pos_test/*.npy")
+        os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/pos_train")
+        os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/pos_val")
+        os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/pos_test")
 
         # background chops
         bg_snip_dirs = os.listdir(f"{args.path_prefix}/{args.output_dir}/bg_snips")
         for bg_snip_dir in bg_snip_dirs:
-            os.system(f"rm {args.path_prefix}/{args.output_dir}/bg_snips/{bg_snip_dir}/*.npy")
+            os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/bg_snips/{bg_snip_dir}")
 
         # scenarios
         os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/scenario_snips")
 
         # datasets
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/train/*.npy")
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/val/*.npy")
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/test/*.npy")
-        os.system(f"rm {args.path_prefix}/{args.output_dir}/datasets/*.npy")
+        os.system(f"rm -rf {args.path_prefix}/{args.output_dir}/datasets")
+
+    create_dirs_if_necessary(args)
 
     train_df, val_df, test_df = get_positive_clips(args)
 
@@ -685,28 +783,41 @@ if __name__ == "__main__":
 
     # for now, only use one background noise wav file per dataset
     bg_filenames = os.listdir(args.raw_bg_wav_path)
+    permute_bgnames(bg_filenames)
 
-    # chop background files
-    for filename in bg_filenames[:3]:
-        # assume all bg files end with '.wav'
-        file_id = filename[:-4]
-        bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{file_id}"
-        make_dir_if_not_exists(bg_snip_dir)
-        print(f"Chopping {filename} into {args.seconds_per_example}-second intervals...")
-        chop_wav(f"{args.raw_bg_wav_path}/{filename}", bg_snip_dir, BACKGROUND_FILENAME_PREFIX,
-                 args.seconds_per_example, args.bg_overlap_frac)
+    # chop background files if using background files
+    if not args.true_pos_only:
+        print(f"Found {len(bg_filenames)} background WAV files in {args.raw_bg_wav_path}")
+        for i, filename in enumerate(bg_filenames):
+            if i < VAL_TEST_BG_DAYS:
+                setname = "test"
+            elif i < 2*VAL_TEST_BG_DAYS:
+                setname = "val"
+            else:
+                setname = "train"
+            # assume all bg files end with '.wav'
+            file_id = filename[:-4]
+            bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{setname}"
+            make_dir_if_not_exists(bg_snip_dir)
+            print(f"Chopping {filename} into {args.seconds_per_example}-second intervals...")
+            chop_wav(f"{args.raw_bg_wav_path}/{filename}", bg_snip_dir, BACKGROUND_FILENAME_PREFIX + f"_{file_id}",
+                     args.seconds_per_example, args.bg_overlap_frac,
+                     max_chops=(TINY_DATASET_MAX_CHOPS if args.make_tiny_dataset_for_testing else None))
 
-    print("Chopping scenario wav files...")
-    chop_scenarios(args)
-    scenario_split = split_scenarios(args)
+    # chop scenarios if using scenarios
+    if not args.true_pos_only:
+        print("Chopping scenario wav files...")
+        chop_scenarios(args)
+        scenario_split = split_scenarios(args)
 
     transform = lambda stft: 10*np.log10(stft)
     spec_ex = SpectrogramExtractor(nfft=args.nfft, hop=args.hop, max_freq=args.max_freq,
                                    sampling_freq=args.sampling_freq, pad_to=args.nfft)
 
-    for bg_filename, setname in zip(bg_filenames[:3], ["train", "val", "test"]):
-        bg_file_id = bg_filename[:-4]
-        bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{bg_file_id}"
+    num_examples_too_long = 0
+
+    for setname in ["train", "val", "test"]:
+        bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{setname}"
 
         if setname == "train":
             n_samples = args.num_train_samples
@@ -717,9 +828,19 @@ if __name__ == "__main__":
             n_samples = args.num_test_samples
 
         print(f"Generating {setname} dataset...")
-        gen_mixed_data(bg_snip_dir, f"{args.path_prefix}/{args.output_dir}/pos_{setname}",
-                       f"{args.path_prefix}/{args.output_dir}/datasets/{setname}", n_samples,
-                       args.frac_noguns, spec_ex, transform, scenario_split[setname], args.scenario_prob,
-                       args.synthetic_positive_prob)
+        if not args.true_pos_only:
+            gen_mixed_data(bg_snip_dir, f"{args.path_prefix}/{args.output_dir}/pos_{setname}",
+                           f"{args.path_prefix}/{args.output_dir}/datasets/{setname}", n_samples,
+                           args.frac_noguns, spec_ex, transform, scenario_split[setname], args.scenario_prob,
+                           args.synthetic_positive_prob)
+        else:
+            # only create positive examples
+            num_examples_too_long += gen_true_pos_data(f"{args.path_prefix}/{args.output_dir}/pos_{setname}",
+                                                       f"{args.path_prefix}/{args.output_dir}/datasets/{setname}",
+                                                       args.seconds_per_example, spec_ex, transform=transform)
 
-    prepare_freq_mean_std(args)
+    if args.true_pos_only:
+        print(f"{num_examples_too_long} positive audio samples were discarded "
+              f"because they exceeded {args.seconds_per_example} seconds in length.")
+
+    prepare_summary_info(args)

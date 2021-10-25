@@ -16,10 +16,14 @@ def get_loader(data_dir,
                batch_size,
                augmentor: Optional[DataAugmentor] = None,
                preprocess_normalization: bool = True,
+               max_time_len: Optional[int] = None,
                random_seed=8,
                shuffle=True,
                num_workers=16,
-               pin_memory=False):
+               pin_memory=False,
+               # specifying the following parameter as 'true' will cause this function to return a tuple of (dataloader, dataset)
+               return_dataset_too=False,
+               override_mean_std_dir: Optional[str] = None):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -27,7 +31,7 @@ def get_loader(data_dir,
     print("DataLoader Seed:", parameters.DATA_LOADER_SEED)
     set_seed(parameters.DATA_LOADER_SEED)
 
-    dataset = GunshotDataset(data_dir, augmentor, preprocess_normalization)
+    dataset = GunshotDataset(data_dir, augmentor, preprocess_normalization, max_time_len=max_time_len, override_mean_std_dir=override_mean_std_dir)
 
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -43,7 +47,9 @@ def get_loader(data_dir,
                                               shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory,
                                               worker_init_fn=_init_fn)
 
-    return data_loader
+    if not return_dataset_too:
+        return data_loader
+    return (data_loader, dataset)
 
 
 def get_model(input_size, dropout_p=0.) -> nn.Module:

@@ -11,6 +11,7 @@ from gun_data.DataMaker import CLASS_LABELS
 from gun_data.utils import PerformanceMetrics
 
 
+# trainer object for a *discriminative* gunshot model
 class GunshotTrainer:
     train_loader: DataLoader
     val_loader: DataLoader
@@ -34,9 +35,10 @@ class GunshotTrainer:
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.training_settings.initial_lr,
                                      weight_decay=self.training_settings.weight_decay)
 
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.5)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.training_settings.lr_step_size,
+                                                       gamma=self.training_settings.lr_decay_factor)
 
-        loss_func = nn.CrossEntropyLoss()
+        loss_func = nn.CrossEntropyLoss()  # TODO: consider using focal loss as well
 
         best_val_loss = float("inf")
         best_val_metrics = None
@@ -113,7 +115,6 @@ class GunshotTrainer:
         # end of training
         print(f"Training complete! Best validation metrics are   {self.val_metrics_as_string(best_val_metrics)}")
         return self.model
-
 
     def log_val_metrics(self, log_index: int) -> Dict[str, float]:
         num_examples = 0
