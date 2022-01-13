@@ -13,17 +13,24 @@ class GunshotDataset(Dataset):
     data_dir: str
     files: List[Tuple[str, int]]
     augmentor: Optional[DataAugmentor]
+
+    """
+    when False, compresses non-rapidfire and rapidfire categories into a single 'gunshot' category with index = 1
+    """
+    use_rapidfire_category: bool
     mean: Optional[np.ndarray]
     std: Optional[np.ndarray]
     preprocess_normalization: bool
     # TODO: cache file contents here to avoid constantly reloading from disk? Does torch optimize this?
 
-    def __init__(self, data_dir: str, augmentor: Optional[DataAugmentor] = None, preprocess_normalization: bool = True,
-                 max_time_len: Optional[int] = None, override_mean_std_dir: Optional[str] = None):
+    def __init__(self, data_dir: str, augmentor: Optional[DataAugmentor] = None,
+                 preprocess_normalization: bool = True, max_time_len: Optional[int] = None,
+                 override_mean_std_dir: Optional[str] = None, use_rapidfire_category: bool = False):
         self.data_dir = data_dir
         self.augmentor = augmentor
         filename_list = os.listdir(data_dir)
         self.files = []
+        self.use_rapidfire_category = use_rapidfire_category
         for fname in filename_list:
             label = self._get_label_from_filename(fname)
             if label is not None:
@@ -42,7 +49,10 @@ class GunshotDataset(Dataset):
                 maxmin = np.load(f"{mean_std_dir}/{TRAIN_MAXMIN_FILENAME}")
                 """
                 a (2,)-shaped np array where the first element is the max of all amplitudes in the training set
-                and the second element is the min
+                and the second element is the min.
+                
+                maxmin is only useful in the generative setting, it can be effectively ignored for discriminative
+                models.
                 """
                 self.maxmin = maxmin
             else:
@@ -86,7 +96,10 @@ class GunshotDataset(Dataset):
         if m is None:
             # exclude this file from the dataset
             return None
-        return int(m.group(1))
+        index = int(m.group(1))
+        if not self.use_rapidfire_category:
+            return 1 if index >= 1 else 0
+        return index
 
     def unnormalize(self, spec: torch.Tensor) -> np.ndarray:
         """

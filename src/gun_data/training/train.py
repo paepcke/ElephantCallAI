@@ -1,6 +1,7 @@
 import argparse
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import os
 
 from gun_data.DataAugmentor import DataAugmentor
 from gun_data.models.UnivariateGaussianHead import UnivariateGaussianHead
@@ -23,6 +24,8 @@ def get_args():
     parser.add_argument('--batch-size', type=int, help="batch size to use during training and validation", default=16)
     parser.add_argument('--max-epochs', type=int, help="maximum number of epochs to train for", default=5)
     parser.add_argument('--dropout', type=float, help="dropout probability to use", default=0.)
+    parser.add_argument('--use-rapidfire-category', action="store_true",
+                        help="Specify this to treat rapid-fire and non-rapid-fire shots as separate categories for prediction")
     parser.add_argument('--generative', action='store_true',
                         help="specify this to train a generative (likelihood-based) model")
 
@@ -69,10 +72,12 @@ if __name__ == "__main__":
 
     train_loader = get_loader(args.train_data_dir, args.batch_size, augmentor,
                                              num_workers=args.num_dataloader_workers, max_time_len=95,
-                                             override_mean_std_dir=args.dataset_mean_std_dir)
+                                             override_mean_std_dir=args.dataset_mean_std_dir,
+                                             use_rapidfire_category=args.use_rapidfire_category)
     val_loader, val_dataset = get_loader(args.val_data_dir, args.batch_size,
                                          num_workers=args.num_dataloader_workers, max_time_len=95,
-                                         return_dataset_too=True, override_mean_std_dir=args.dataset_mean_std_dir)
+                                         return_dataset_too=True, override_mean_std_dir=args.dataset_mean_std_dir,
+                                         use_rapidfire_category=args.use_rapidfire_category)
     tbx_writer = SummaryWriter(log_dir=args.tbx_log_dir)
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -92,7 +97,10 @@ if __name__ == "__main__":
             positional_encoding = SinusoidalPositionalEncoding(94, 500)
             model = AutoregressiveHeadModel(head, 94, 5, 6, args.dropout, positional_encoding=positional_encoding)
         else:
-            model = get_model((95, 525), args.dropout)
+            model = get_model((95, 525), args.dropout, 3 if args.use_rapidfire_category else 2)
+
+    if not os.path.exists(args.model_out_dir):
+        os.mkdir(args.model_out_dir)
 
     if args.generative:
         gunshot_trainer = GenerativeGunshotTrainer(train_loader, val_loader, tbx_writer, model, train_settings)

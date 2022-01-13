@@ -38,6 +38,7 @@ class GunshotTrainer:
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.training_settings.lr_step_size,
                                                        gamma=self.training_settings.lr_decay_factor)
 
+        # TODO: use BCEWithLogitsLoss in 2-class case
         loss_func = nn.CrossEntropyLoss()  # TODO: consider using focal loss as well
 
         best_val_loss = float("inf")
@@ -152,6 +153,8 @@ class GunshotTrainer:
         val_metrics["val/loss"] = cumu_loss/num_examples
         self.tbx_writer.add_scalar("val/all_class_acc", all_class_acc, log_index)
         val_metrics["val/all_class_acc"] = all_class_acc
+
+        # TODO: change these metrics so that in the 2-class setting they're far simpler (acc, precision, recall, f1 for gunshots)
 
         for label, classname in CLASS_LABELS.items():
             metric_prefix = f"val/{classname}"

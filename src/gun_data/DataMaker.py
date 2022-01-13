@@ -36,7 +36,6 @@ POS_TOO_LONG_TOLERANCE = 0.5
 TINY_DATASET_MAX_CHOPS = 50
 
 BG_SHUFFLE_SEED = 42  # TODO: make this configurable through CLI?
-VAL_TEST_BG_DAYS = 3  # TODO: make this configurable through CLI?
 
 """
 This is a script and a collection of related utilities that takes in a variety of weakly-labeled gunshot clips and
@@ -54,6 +53,7 @@ This script has a feature called "scenarios". "scenarios" are wav files from a c
 (e.g., 'thunderstorm'). Snippets from scenarios can be overlaid onto generated training examples.
 
 The directory structure of 'scenarios' should look as follows with the categories 'highway' and 'thunderstorm':
+
 scenarios
 ├── highway
 │   └── ...
@@ -61,6 +61,23 @@ scenarios
     ├── storm1.wav
     └── storm2.wav
     
+The script also has a feature called "synthetic positive data". Out-of-domain gunshot audio (read: gunshot audio with a
+background soundscape that isn't the African jungle) can be used to augment your datasets! Synthetic WAV files are
+always treated as gunshots and never appear in a test set. The proportion of out-of-domain positives that are included
+in your dataset can be controlled with a command-line argument.
+
+The directory structure of 'synthetic' should look as follows with collections 'foo' (rapidfire shots) and 
+'bar' (non-rapidfire shots):
+
+synthetic
+├── foo_rapidfire
+│   └── ...
+└── bar_nonrapid
+    ├── shots1.wav
+    └── storm2.wav
+    
+Any number of collections can be used to help organize synthetic data
+
 
 Label guide:
 0 is no gunshot
@@ -640,6 +657,29 @@ def permute_bgnames(bg_filenames: List[str]):
     # This function gives a deterministic, pseudo-random permutation of bg filenames.
     random.Random(BG_SHUFFLE_SEED).shuffle(bg_filenames)
 
+
+def get_split_sizes(args, num_bg_wavs: int) -> Tuple[int, int]:
+    """
+    Computes allocation of background wav files to test, val, and (implicitly) train datasets.
+
+    :param args: command-line args
+    :param num_bg_wavs: total number of background wav files constituting the dataset
+    :return: a tuple (num_test_wavs, num_val_wavs) containing the number of wav files to be allocated
+        to the test and val sets, respectively. Each of these has a minimum of 1, and the remaining wav files
+        (at least 1) are to be used in the training set.
+    """
+    frac_test = 1.0 - args.frac_train - args.frac_val
+
+    num_test_wavs = int(max(1, frac_test * num_bg_wavs))  # round numbers of wavs down
+    num_val_wavs = int(max(1, args.frac_val * num_bg_wavs))
+
+    # make sure there is at least 1 wav file for the training set
+    num_test_wavs = min(num_bg_wavs - 2, num_test_wavs)
+    num_val_wavs = min(num_bg_wavs - num_test_wavs - 1, num_val_wavs)
+
+    return num_test_wavs, num_val_wavs
+
+
 def get_args():
     parser = argparse.ArgumentParser()
 
@@ -668,6 +708,9 @@ def get_args():
 
     parser.add_argument('--make-tiny-dataset-for-testing', action='store_true',
                         help="Specify this flag to generate a very small number of samples only suitable for testing this script or dataloader logic")
+    parser.add_argument('--max-bg-wavs', type=int,
+                        help="maximum number of background wav files to use. Specifying this can greatly limit the size of the generated dataset and the "
+                             "duration required to assemble it.")
     parser.add_argument('--true-pos-only', action='store_true',
                         help="specify this to create a dataset consisting only of true positive examples.")
 
@@ -715,7 +758,7 @@ def assert_args_valid(args):
     if not os.path.exists(args.path_prefix):
         raise ValueError(f"{args.path_prefix} not found in filesystem. Use a different path prefix?")
 
-    if len(os.listdir(args.raw_bg_wav_path)) < 3:
+    if len(os.listdir(args.raw_bg_wav_path)) < 3 or (args.max_bg_wavs is not None and args.max_bg_wavs < 3):
         raise ValueError("Need at least 3 separate clips of background noise.")
 
     assert_fraction(args.frac_train)
@@ -773,6 +816,7 @@ if __name__ == "__main__":
 
     train_df, val_df, test_df = get_positive_clips(args)
 
+    # aggregate positive examples and store them in a single place as intermediates for spectrogram generation
     print("Extracting genuine positive examples...")
     write_genuine_pos_clips(train_df, f"{args.path_prefix}/{args.output_dir}/pos_train", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
     write_genuine_pos_clips(val_df, f"{args.path_prefix}/{args.output_dir}/pos_val", args.ecoguns_wav_path, args.pnnn_guns_wav_path)
@@ -783,15 +827,22 @@ if __name__ == "__main__":
 
     # for now, only use one background noise wav file per dataset
     bg_filenames = os.listdir(args.raw_bg_wav_path)
+    if args.max_bg_wavs is not None:
+        # limit the number of background files under consideration if it was specified in the command line args
+        bg_filenames = bg_filenames[:args.max_bg_wavs]
+
+    # a way to make different reproducible random dataset splits for potential use in k-fold cross validation
     permute_bgnames(bg_filenames)
 
-    # chop background files if using background files
+    # if using background files, chop background files up into short snippets and store them as intermediates for
+    # computing spectrogram outputs
     if not args.true_pos_only:
-        print(f"Found {len(bg_filenames)} background WAV files in {args.raw_bg_wav_path}")
+        print(f"Using {len(bg_filenames)} background WAV files in {args.raw_bg_wav_path}")
+        test_bg_wavs, val_bg_wavs = get_split_sizes(args, len(bg_filenames))
         for i, filename in enumerate(bg_filenames):
-            if i < VAL_TEST_BG_DAYS:
+            if i < test_bg_wavs:
                 setname = "test"
-            elif i < 2*VAL_TEST_BG_DAYS:
+            elif i < (test_bg_wavs + val_bg_wavs):
                 setname = "val"
             else:
                 setname = "train"
@@ -816,6 +867,7 @@ if __name__ == "__main__":
 
     num_examples_too_long = 0
 
+    # Generate spectrogram outputs and store them for use by dataloaders
     for setname in ["train", "val", "test"]:
         bg_snip_dir = f"{args.path_prefix}/{args.output_dir}/bg_snips/{setname}"
 
@@ -843,4 +895,6 @@ if __name__ == "__main__":
         print(f"{num_examples_too_long} positive audio samples were discarded "
               f"because they exceeded {args.seconds_per_example} seconds in length.")
 
+    # compute the training set's mean, std, max, and min values to allow normalization of data to zero mean
+    # and unit variance for a model
     prepare_summary_info(args)
