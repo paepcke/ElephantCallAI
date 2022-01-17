@@ -88,6 +88,10 @@ class GunshotDataset(Dataset):
                 """
                 data_as_tensor = torch.nn.functional.pad(data_as_tensor, (0, 0, 0, self.max_time_len - cur_time_len))
 
+        # need an (N, 1) tensor of labels in two-class setting:
+        if not self.use_rapidfire_category:
+            label = torch.FloatTensor([label])
+
         # return a simple tuple of data, label, and time length of data
         return (data_as_tensor, label, cur_time_len)
 

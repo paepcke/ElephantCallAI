@@ -18,15 +18,20 @@ class TrainedGunshotModel(nn.Module):
         self.register_buffer("training_set_mean", torch.from_numpy(mean))
         self.register_buffer("training_set_std", torch.from_numpy(std))
         self.sub_model = sub_model
-        # TODO: do we have to register this?
         self.sub_model.eval()
 
     def forward(self, x):
         x_normed = x - self.training_set_mean
         x_normed = x_normed/self.training_set_std
         logits = self.sub_model.forward(x_normed)
-        return torch.nn.functional.softmax(logits, dim=-1)
+        if logits.shape[-1] > 1:
+            return torch.nn.functional.softmax(logits, dim=-1)
+        else:
+            return torch.sigmoid(logits)
 
     def predict(self, x):
         probs = self.forward(x)
-        return torch.argmax(probs, dim=-1)
+        if probs.shape[-1] > 1:
+            return torch.argmax(probs, dim=-1)
+        else:
+            return torch.round(probs)

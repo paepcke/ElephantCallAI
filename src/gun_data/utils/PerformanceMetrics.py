@@ -21,8 +21,8 @@ def confusion_matrix(predictions: np.ndarray, labels: np.ndarray):
 def precision(predictions: np.ndarray, labels: np.ndarray, target_class_label: int):
     bin_preds, bin_labels = binarize_for_target_label(predictions, labels, target_class_label)
 
-    true_pos = np.sum(np.where(bin_preds + bin_labels == 2, 1, 0))
-    false_pos = np.sum(np.where(bin_preds > bin_labels, 1, 0))
+    true_pos = num_true_positives(bin_preds, bin_labels)
+    false_pos = num_false_positives(bin_preds, bin_labels)
 
     return true_pos/(true_pos + false_pos)
 
@@ -30,8 +30,8 @@ def precision(predictions: np.ndarray, labels: np.ndarray, target_class_label: i
 def recall(predictions: np.ndarray, labels: np.ndarray, target_class_label: int):
     bin_preds, bin_labels = binarize_for_target_label(predictions, labels, target_class_label)
 
-    true_pos = np.sum(np.where(bin_preds + bin_labels == 2, 1, 0))
-    false_neg = np.sum(np.where(bin_preds < bin_labels, 1, 0))
+    true_pos = num_true_positives(bin_preds, bin_labels)
+    false_neg = num_false_negatives(bin_preds, bin_labels)
 
     return true_pos/(true_pos + false_neg)
 
@@ -45,6 +45,42 @@ def class_accuracy(predictions: np.ndarray, labels: np.ndarray, target_class_lab
 
 def all_class_accuracy(predictions: np.ndarray, labels: np.ndarray):
     return np.mean(np.where(predictions == labels, 1, 0))
+
+
+def num_true_positives(bin_predictions: np.ndarray, bin_labels: np.ndarray):
+    """
+    Returns number of true positives
+
+    :param bin_predictions: binarized predictions (category 1 for positive or category 0 for negative)
+    :param bin_labels: binarized labels (category 1 for positive or category 0 for negative)
+    :return: the number of true positive predictions made
+    """
+
+    return np.sum(np.where(bin_predictions + bin_labels == 2, 1, 0))
+
+
+def num_false_positives(bin_predictions: np.ndarray, bin_labels: np.ndarray):
+    """
+    Returns number of false positives
+
+    :param bin_predictions: binarized predictions (category 1 for positive or category 0 for negative)
+    :param bin_labels: binarized labels (category 1 for positive or category 0 for negative)
+    :return: the number of false positive predictions made
+    """
+
+    return np.sum(np.where(bin_predictions > bin_labels, 1, 0))
+
+
+def num_false_negatives(bin_predictions: np.ndarray, bin_labels: np.ndarray):
+    """
+    Returns number of false negatives
+
+    :param bin_predictions: binarized predictions (category 1 for positive or category 0 for negative)
+    :param bin_labels: binarized labels (category 1 for positive or category 0 for negative)
+    :return: the number of false negative predictions made
+    """
+
+    return np.sum(np.where(bin_predictions < bin_labels, 1, 0))
 
 
 def binarize_for_target_label(predictions: np.ndarray, labels: np.ndarray, target_class_label: int) -> Tuple[np.ndarray, np.ndarray]:

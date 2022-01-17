@@ -17,6 +17,9 @@ def get_args():
     parser.add_argument('--batch-size', type=int, help="batch size to use", default=16)
     parser.add_argument('--model-weights', type=str, help="path to file containing model weights (directly from training)")
 
+    parser.add_argument('--use-rapidfire-category', action="store_true",
+                        help="Specify this to treat rapid-fire and non-rapid-fire shots as separate categories for prediction")
+
     return parser.parse_args()
 
 
@@ -44,12 +47,10 @@ if __name__ == "__main__":
         data = data.to(device)
         labels = labels.to(device)
 
-        probs = test_model.forward(data)
+        preds = test_model.predict(data)
 
-        preds = np.argmax(probs.detach().cpu().numpy(), axis=-1)
-
-        all_predictions[cumu_examples:(cumu_examples + len(labels))] = preds
-        all_labels[cumu_examples:(cumu_examples + len(labels))] = labels.detach().cpu().numpy()
+        all_predictions[cumu_examples:(cumu_examples + len(labels))] = np.squeeze(preds.detach().cpu().numpy())
+        all_labels[cumu_examples:(cumu_examples + len(labels))] = np.squeeze(labels.detach().cpu().numpy())
 
         examples = len(labels)
         cumu_examples += examples
@@ -58,14 +59,26 @@ if __name__ == "__main__":
     print(f"{test_acc}% accuracy on the test set.")
     total_examples = len(all_labels)
 
-    for label, classname in CLASS_LABELS.items():
-        class_acc = PerformanceMetrics.class_accuracy(all_predictions, all_labels, label)
-        precision = PerformanceMetrics.precision(all_predictions, all_labels, label)
-        recall = PerformanceMetrics.recall(all_predictions, all_labels, label)
-        f1 = 2*precision*recall/(precision + recall)
-        num_examples = np.sum(np.where(all_labels == label, 1, 0))
-        print(f"class stats for '{classname}' ({num_examples}/{total_examples} examples): " +
-              f"accuracy - {class_acc}, precision - {precision}, recall - {recall}, F1 - {f1}")
+    if args.use_rapidfire_category:
+        for label, classname in CLASS_LABELS.items():
+            class_acc = PerformanceMetrics.class_accuracy(all_predictions, all_labels, label)
+            precision = PerformanceMetrics.precision(all_predictions, all_labels, label)
+            recall = PerformanceMetrics.recall(all_predictions, all_labels, label)
+            f1 = 2*precision*recall/(precision + recall)
+            num_examples = np.sum(np.where(all_labels == label, 1, 0))
+            print(f"class stats for '{classname}' ({num_examples}/{total_examples} examples): " +
+                  f"accuracy - {class_acc}, precision - {precision}, recall - {recall}, F1 - {f1}")
 
-    print("Confusion matrix [no gunshot, non-rapidfire, rapidfire]:")
+        print("Confusion matrix [no gunshot, non-rapidfire, rapidfire]:")
+    else:
+        # use target class label of 1 for gunshots
+        precision = PerformanceMetrics.precision(all_predictions, all_labels, 1)
+        recall = PerformanceMetrics.recall(all_predictions, all_labels, 1)
+        f1 = 2*precision*recall/(precision + recall)
+        num_gunshot_examples = np.sum(np.where(all_labels == 1, 1, 0))
+        print(f"{num_gunshot_examples} of {total_examples} were gunshots.\n"
+              f"precision - {precision}\n"
+              f"recall - {recall}\n"
+              f"F1 score - {f1}\n")
+        print("Confusion matrix [no gunshot, gunshot]:")
     print(PerformanceMetrics.confusion_matrix(all_predictions, all_labels))

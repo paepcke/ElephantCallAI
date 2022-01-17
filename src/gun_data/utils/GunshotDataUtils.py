@@ -70,9 +70,17 @@ def get_model(input_size, dropout_p=0., num_classes: int = 2) -> nn.Module:
 
 
 def compute_acc(labels: np.ndarray, logits: np.ndarray):
-    predictions = np.argmax(logits, axis=1)
+    if logits.shape[1] == 1:
+        # two-class setting
+        predictions = np.round(sigmoid(logits))
+    else:
+        predictions = np.argmax(logits, axis=1)
     agreement = np.where(labels == predictions, 1, 0)
     return np.mean(agreement) * 100
+
+
+def sigmoid(x: np.ndarray):
+    return 1/(1 + np.exp(-1*x))
 
 
 
