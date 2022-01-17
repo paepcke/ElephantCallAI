@@ -11,6 +11,7 @@ from gun_data.DataMaker import CLASS_LABELS
 from gun_data.utils import PerformanceMetrics
 
 
+# trainer object for a *discriminative* gunshot model
 class GunshotTrainer:
     train_loader: DataLoader
     val_loader: DataLoader
@@ -34,9 +35,11 @@ class GunshotTrainer:
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.training_settings.initial_lr,
                                      weight_decay=self.training_settings.weight_decay)
 
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.5)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.training_settings.lr_step_size,
+                                                       gamma=self.training_settings.lr_decay_factor)
 
-        loss_func = nn.CrossEntropyLoss()
+        # TODO: use BCEWithLogitsLoss in 2-class case
+        loss_func = nn.CrossEntropyLoss()  # TODO: consider using focal loss as well
 
         best_val_loss = float("inf")
         best_val_metrics = None
@@ -114,7 +117,6 @@ class GunshotTrainer:
         print(f"Training complete! Best validation metrics are   {self.val_metrics_as_string(best_val_metrics)}")
         return self.model
 
-
     def log_val_metrics(self, log_index: int) -> Dict[str, float]:
         num_examples = 0
         loss_func = nn.CrossEntropyLoss()
@@ -151,6 +153,8 @@ class GunshotTrainer:
         val_metrics["val/loss"] = cumu_loss/num_examples
         self.tbx_writer.add_scalar("val/all_class_acc", all_class_acc, log_index)
         val_metrics["val/all_class_acc"] = all_class_acc
+
+        # TODO: change these metrics so that in the 2-class setting they're far simpler (acc, precision, recall, f1 for gunshots)
 
         for label, classname in CLASS_LABELS.items():
             metric_prefix = f"val/{classname}"

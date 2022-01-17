@@ -25,7 +25,7 @@ if __name__ == "__main__":
         if file.endswith(".wav") or file.endswith(".mp3"):
             # correct for spaces in filename:
             file = file.replace(" ", "\\ ")
-            os.system(f"sox {args.wav_dir}/{file} -c 1 -r 8000 {args.wav_dir}/temp.wav trim 0 {args.max_secs}")
+            os.system(f"sox {args.wav_dir}/{file} -c 1 -r 8000 -b 16 {args.wav_dir}/temp.wav trim 0 {args.max_secs}")
             os.system(f"rm {args.wav_dir}/{file}")
             file = file[:-4] + ".wav"
             os.system(f"mv {args.wav_dir}/temp.wav {args.wav_dir}/{file}")

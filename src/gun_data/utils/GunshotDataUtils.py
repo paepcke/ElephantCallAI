@@ -16,10 +16,15 @@ def get_loader(data_dir,
                batch_size,
                augmentor: Optional[DataAugmentor] = None,
                preprocess_normalization: bool = True,
+               max_time_len: Optional[int] = None,
                random_seed=8,
                shuffle=True,
                num_workers=16,
-               pin_memory=False):
+               pin_memory=False,
+               # specifying the following parameter as 'true' will cause this function to return a tuple of (dataloader, dataset)
+               return_dataset_too=False,
+               override_mean_std_dir: Optional[str] = None,
+               use_rapidfire_category: bool = False):
     """
     Utility function for loading and returning train and valid
     multi-process iterators.
@@ -27,7 +32,8 @@ def get_loader(data_dir,
     print("DataLoader Seed:", parameters.DATA_LOADER_SEED)
     set_seed(parameters.DATA_LOADER_SEED)
 
-    dataset = GunshotDataset(data_dir, augmentor, preprocess_normalization)
+    dataset = GunshotDataset(data_dir, augmentor, preprocess_normalization, max_time_len=max_time_len, override_mean_std_dir=override_mean_std_dir,
+                             use_rapidfire_category=use_rapidfire_category)
 
     print('Size of dataset at {} is {} samples'.format(data_dir, len(dataset)))
 
@@ -43,19 +49,23 @@ def get_loader(data_dir,
                                               shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory,
                                               worker_init_fn=_init_fn)
 
-    return data_loader
+    if not return_dataset_too:
+        return data_loader
+    return (data_loader, dataset)
 
 
-def get_model(input_size, dropout_p=0.) -> nn.Module:
+def get_model(input_size, dropout_p=0., num_classes: int = 2) -> nn.Module:
     """
     This function is temporary, just to test out the end-to-end workflow here
     """
+    num_logits = 1 if num_classes == 2 else num_classes
+
     model = Model17(input_size, 2340)  # the '2340' is ignored, as this parameter is not used
     model.model.fc = nn.Sequential(
            nn.Dropout(dropout_p),
            nn.Linear(512, 128),
            nn.ReLU(inplace=True),
-           nn.Linear(128, 3))  # This is hard coded to the size of the training windows
+           nn.Linear(128, num_logits))
     return model
 
 

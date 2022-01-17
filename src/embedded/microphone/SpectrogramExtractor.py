@@ -23,6 +23,14 @@ class SpectrogramExtractor:
         self.pad_to = pad_to
 
     def extract_spectrogram(self, time_amplitudes: np.ndarray) -> np.ndarray:
+        """
+        returns a matrix where each row corresponds to a time step and each column corresonds to a frequency;
+        longer inputs result in a matrix with more rows.
+
+        :param time_amplitudes: a signal in the time domain
+        :return: a spectrogram matrix of size (TxF), where T is the number of time slices and F is the number of frequencies
+        """
+
         [spectrum, freqs, t] = ml.specgram(time_amplitudes,
                                            NFFT=self.nfft, Fs=self.sampling_freq,
                                            noverlap=(self.nfft - self.hop), window=ml.window_hanning,
