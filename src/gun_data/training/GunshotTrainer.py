@@ -291,7 +291,7 @@ class GunshotTrainer:
 
         f1 = 2 * precision * recall / (precision + recall)
         self.tbx_writer.add_scalar(f"{metric_prefix}/f1_score", f1, log_index)
-        val_metrics[f"{metric_prefix}/f1_score"] = recall
+        val_metrics[f"{metric_prefix}/f1_score"] = f1
 
     def val_metrics_as_string(self, val_metrics: Dict[str, float]) -> str:
         # sort keys to enforce same order across different invocations
