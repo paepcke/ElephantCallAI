@@ -774,6 +774,8 @@ def assert_args_valid(args):
 
 
 def create_dirs_if_necessary(args):
+    # TODO: refactor this script so that the output directory is not necessarily under 'path prefix',
+    # this causes organizational problems
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/pos_train")
     make_dir_if_not_exists(f"{args.path_prefix}/{args.output_dir}/pos_val")
@@ -791,6 +793,8 @@ if __name__ == "__main__":
     assert_args_valid(args)
 
     create_dirs_if_necessary(args)
+
+    # TODO: dump args into a file that will live near the output dataset so there's no ambiguity in how the dataset was created
 
     if args.clear_dirs_first:
         print("Clearing existing data at the target location...")
