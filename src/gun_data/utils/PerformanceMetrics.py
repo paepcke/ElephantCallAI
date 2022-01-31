@@ -1,5 +1,7 @@
 from typing import Tuple
 import numpy as np
+import sklearn.metrics
+from matplotlib import pyplot as plt
 
 
 def confusion_matrix(predictions: np.ndarray, labels: np.ndarray):
@@ -96,3 +98,21 @@ def binarize_for_target_label(predictions: np.ndarray, labels: np.ndarray, targe
     binarized_labels = np.where(labels == target_class_label, 1, 0)
 
     return binarized_predictions, binarized_labels
+
+
+def pr_curve(labels: np.ndarray, probabilities: np.ndarray, savepath: str):
+    """
+    Saves an image of a precision-recall curve to a file.
+    """
+    precision, recall, thresholds = sklearn.metrics.precision_recall_curve(labels, probabilities)
+
+    thresholds = np.concatenate([np.array([0]), thresholds], axis=0)  # prepend '0' for 'recall == 1' point
+
+    plt.figure()
+    plt.plot(recall, thresholds, '-r')
+    plt.plot(recall, precision, '-b')
+    plt.title("Precision-Recall Curve")
+    plt.xlabel("Recall")
+    plt.ylabel("Precision (Blue) / Threshold Value (Red)")
+
+    plt.savefig(savepath)
