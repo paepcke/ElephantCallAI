@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 
 
 # defaults
-FREQ_BINS = 77
+FREQ_BINS = 77  # TODO: need to allow configuration of this to work with gunshot model
 NUM_SAMPLES_IN_TIME_WINDOW = 256
 BUFFER_SIZE_MB = 512  # This is configurable, it's how much dedicated storage space we want for our spectrogram buffer
 
