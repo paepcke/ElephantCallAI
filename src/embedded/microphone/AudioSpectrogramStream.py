@@ -1,14 +1,16 @@
 from threading import Thread
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 import numpy as np
 import sys
 
 from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
 from embedded.microphone.AudioBuffer import AudioBuffer
+from embedded.microphone.AudioBufferMetadata import AudioBufferMetadata
 from embedded.microphone.SpectrogramExtractor import SpectrogramExtractor
 from embedded.SynchronizationUtils import yield_to_thread_scheduler
+from embedded.ModelingConstants import GUNSHOT_MODEL_TIME_STEPS, GUNSHOT_OVERLAP_FRAC
 
 GIVE_UP_THRESHOLD_FOR_AUDIO_BUF = 100
 GIVE_UP_THRESHOLD_FOR_DATA_COORDINATOR = 200
@@ -32,13 +34,29 @@ class AudioSpectrogramStream(Closeable):
     closed: bool
 
     def __init__(self, audio_buffer: AudioBuffer, spect_extractor: SpectrogramExtractor,
+                 shot_detect_func: Optional[Callable[[np.ndarray], None]] = None,
                  n_overlaps_per_chunk: int = DEFAULT_N_OVERLAPS_PER_CHUNK, timeout: bool = False):
+        """
+        :param audio_buffer: An AudioBuffer object asynchronously populated with raw audio data from a microphone
+        :param spect_extractor: This object encapsulates the chosen STFT parameters
+        :param shot_detect_func: An optional function used to synchronously run gunshot detection at certain points
+            when new data is read out from the audio buffer. It's called after appending data to the DataCoordinator.
+            WARNING: It's recommended to only use this for debugging purposes in its current state, as it can
+            slow down the stream processing pipeline considerably.
+        :param n_overlaps_per_chunk: dictates the number of overlapping spectrogram windows (of the size taken by
+            the elephant rumble detection model) that should be incorporated into a single STFT operation.
+        :param timeout: Set this to 'True' only for debugging purposes. Times out the stream thread after
+            a sustained period of inactivity. Useful in debugging potential race conditions or deadlocks.
+        """
         super().__init__()
         self.closed = False
         self.audio_buf = audio_buffer
         self.spectrogram_extractor = spect_extractor
+        self.shot_detect_func = shot_detect_func
         self.n_overlaps_per_chunk = n_overlaps_per_chunk
         self.timeout = timeout
+        self.prev_gunshot_start_idx = 0
+        self.prev_gunshot_detect_idx = 0
 
     def start(self, data_coordinator: DataCoordinator):
         # 'daemon' threads are killed when the parent process dies
@@ -140,6 +158,13 @@ class AudioSpectrogramStream(Closeable):
                 else:
                     cur_interval_dist_remaining = self.audio_buf.rows_allocated
 
+                if cur_interval_dist_remaining >= nfft + (GUNSHOT_MODEL_TIME_STEPS - 1) * hop:
+                    if self.shot_detect_func is not None:
+                        # perform gunshot detection
+                        metadata_snapshot = AudioBufferMetadata(self.audio_buf)
+                        self.sample_and_detect_shots(nfft + (GUNSHOT_MODEL_TIME_STEPS - 1) * hop,
+                                                     metadata_snapshot)
+
                 if cur_interval_dist_remaining >= nfft + (self.n_overlaps_per_chunk - 1) * hop:
                     # read the max
                     n_windows_to_free = self.n_overlaps_per_chunk
@@ -158,3 +183,38 @@ class AudioSpectrogramStream(Closeable):
         data, _ = self.audio_buf.get_unprocessed_data(n_rows_to_read)
         self.audio_buf.free_rows(n_windows_to_free*hop)
         return data, new_timestamp
+
+    def sample_and_detect_shots(self, n_rows_to_read: int, metadata_snapshot: AudioBufferMetadata):
+        nfft = self.spectrogram_extractor.nfft
+        hop = self.spectrogram_extractor.hop
+
+        n_rows_for_model = nfft + (GUNSHOT_MODEL_TIME_STEPS - 1) * hop
+
+        """
+        Essentially, this step duplicates a block of the most recent data in the pipeline for the alternate
+        purpose of gunshot detection. A refactor that makes this unnecessary could yield efficiency improvements,
+        but it may be fairly complex.
+        """
+        unprocessed_audio_data, data_start_idx = self.audio_buf.get_unprocessed_data(n_rows_to_read,
+                                                                                     force_copy=True,
+                                                                                     metadata_snapshot=metadata_snapshot)
+        if self.prev_gunshot_start_idx != data_start_idx:
+            self.prev_gunshot_detect_idx = 0
+            # run model
+            self.shot_detect_func(unprocessed_audio_data[:n_rows_for_model])
+            self.prev_gunshot_start_idx = data_start_idx
+        else:
+            # can configure overlap here to reduce number of gunshot model runs
+            gunshot_detect_idx = self.prev_gunshot_detect_idx +\
+                                 int(n_rows_for_model * (1 - GUNSHOT_OVERLAP_FRAC))
+            if (n_rows_to_read - gunshot_detect_idx) < n_rows_for_model:
+                # not enough fresh samples to run the gunshot model
+                return
+            else:
+                # run gunshot model
+                self.shot_detect_func(unprocessed_audio_data[gunshot_detect_idx:(gunshot_detect_idx + n_rows_for_model)])
+            self.prev_gunshot_detect_idx = gunshot_detect_idx
+
+
+
+

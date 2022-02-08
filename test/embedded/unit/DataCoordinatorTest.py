@@ -7,14 +7,14 @@ from typing import List
 
 from embedded.DataCoordinator import DataCoordinator
 from embedded.TransitionState import TransitionState
-from embedded.SpectrogramBuffer import DEFAULT_TIME_DELTA_PER_TIME_STEP, FREQ_BINS
+from embedded.SpectrogramBuffer import DEFAULT_TIME_DELTA_PER_TIME_STEP
 from embedded.predictors.ConstPredictor import ConstPredictor
+from embedded.ModelingConstants import ELEPHANT_MODEL_FREQ_BINS
 
 
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 TEST_LOCK_TIMEOUT_SECONDS = 0.2
-
 
 class DataCoordinatorTest(unittest.TestCase):
     """Unit tests for the DataCoordinator class."""
@@ -25,7 +25,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=1, jump=1)
         now = datetime.now(timezone.utc)
-        data = np.zeros((12, FREQ_BINS))
+        data = np.zeros((12, ELEPHANT_MODEL_FREQ_BINS))
         ones_predictor = ConstPredictor(1)
         zeros_predictor = ConstPredictor(-1)
 
@@ -62,7 +62,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_dont_predict_without_another_timestamp_if_not_leaving_min_appendable_time_steps(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
-        data = np.zeros((6, FREQ_BINS))
+        data = np.zeros((6, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -74,7 +74,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_can_predict_without_another_timestamp_if_leaving_min_appendable_time_steps_with_overlap_allowance(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
-        data = np.zeros((8, FREQ_BINS))
+        data = np.zeros((8, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -87,7 +87,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_time_window_must_be_a_multiple_of_overlap_allowance(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
-        data = np.zeros((8, FREQ_BINS))
+        data = np.zeros((8, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -102,7 +102,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_time_window_must_be_a_multiple_of_min_appendable_if_no_overlap_allowance(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3)
-        data = np.zeros((9, FREQ_BINS))
+        data = np.zeros((9, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -117,7 +117,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_can_make_fewer_predictions_than_requested_to_allow_future_predictions(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=6, jump=3)
-        data = np.zeros((12, FREQ_BINS))
+        data = np.zeros((12, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -129,7 +129,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_predict_entire_outstanding_data_if_another_timestamp_exists(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
-        data = np.zeros((12, FREQ_BINS))
+        data = np.zeros((12, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
 
@@ -144,7 +144,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_predict_subset_of_outstanding_data_if_another_timestamp_exists(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=2, jump=1)
-        data = np.zeros((12, FREQ_BINS))
+        data = np.zeros((12, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
         now = datetime.now(timezone.utc)
 
@@ -166,7 +166,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_cant_predict_less_than_min_appendable_time_steps(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=3, jump=1)
-        data = np.zeros((8, FREQ_BINS))
+        data = np.zeros((8, ELEPHANT_MODEL_FREQ_BINS))
         predictor = ConstPredictor(1)
 
         coordinator.write(data)
@@ -181,7 +181,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_prediction_lock_allows_entry_when_appropriate_without_discontinuity(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
-        data = np.zeros((6, FREQ_BINS))
+        data = np.zeros((6, ELEPHANT_MODEL_FREQ_BINS))
 
         coordinator.write(data)
 
@@ -192,7 +192,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
     def test_prediction_lock_disallows_entry_when_appropriate_without_discontinuity(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4, jump=2)
-        data = np.zeros((4, FREQ_BINS))
+        data = np.zeros((4, ELEPHANT_MODEL_FREQ_BINS))
 
         coordinator.write(data)
 
@@ -204,7 +204,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_prediction_lock_allows_entry_when_appropriate_with_discontinuity(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
                                       jump=2)
-        data = np.zeros((10, FREQ_BINS))
+        data = np.zeros((10, ELEPHANT_MODEL_FREQ_BINS))
         now = datetime.now(timezone.utc)
 
         coordinator.write(data)
@@ -219,7 +219,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_prediction_lock_disallows_entry_when_appropriate_when_not_enough_available_space(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
                                       min_free_space_for_input=8, jump=2)
-        data = np.zeros((10, FREQ_BINS))
+        data = np.zeros((10, ELEPHANT_MODEL_FREQ_BINS))
 
         coordinator.write(data)
 
@@ -231,7 +231,7 @@ class DataCoordinatorTest(unittest.TestCase):
     def test_prediction_lock_allows_entry_when_appropriate_when_enough_available_space(self):
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH, override_buffer_size=16, min_appendable_time_steps=4,
                                       jump=2)
-        data = np.zeros((10, FREQ_BINS))
+        data = np.zeros((10, ELEPHANT_MODEL_FREQ_BINS))
 
         coordinator.write(data)
 
@@ -312,7 +312,7 @@ class DataCoordinatorTest(unittest.TestCase):
 
         coordinator = DataCoordinator(PREDICTION_INTERVALS_OUTPUT_PATH, BLACKOUT_INTERVALS_OUTPUT_PATH,
                                       override_buffer_size=16, min_appendable_time_steps=1)
-        data = np.zeros((3, FREQ_BINS))
+        data = np.zeros((3, ELEPHANT_MODEL_FREQ_BINS))
 
         now = datetime.now(timezone.utc)
         time1 = now + 46 * DEFAULT_TIME_DELTA_PER_TIME_STEP

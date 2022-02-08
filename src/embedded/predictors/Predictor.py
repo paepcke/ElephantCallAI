@@ -1,8 +1,10 @@
 import numpy as np
 from typing import Tuple
 
+from embedded.Closeable import Closeable
 
-class Predictor:
+
+class Predictor(Closeable):
     """An abstract base class for making predictions based on spectrograms"""
 
     def make_predictions(self, spectrogram_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -13,3 +15,7 @@ class Predictor:
         :return: a tuple of predictions, overlap_counts
         """
         raise NotImplementedError()
+
+    def close(self):
+        pass
+

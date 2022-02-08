@@ -115,6 +115,10 @@ If you plan to leave `Listen.py` running for a long time, you may want to set a 
 these .pkl files. Use `--captured-disk-usage-limit <NUMBER OF GIGABYTES>` to accomplish this (runs will only track 
 their own disk usage, even if adding files to a directory that already has .pkl files in it, so be mindful).
 
+## Gunshot Detection Model and LED Configuration
+
+TODO: Write this section of README
+
 ## Contributing
 
 Unit tests are available in `test/embedded/unit`. Integration tests (requiring a model and data of various forms,

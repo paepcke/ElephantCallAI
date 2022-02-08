@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 
 # defaults
+from embedded.microphone.AudioBufferMetadata import AudioBufferMetadata
+
 NUM_SAMPLES_IN_TIME_WINDOW = 4096
 BUFFER_SIZE_MB = 4  # This is configurable, it's how much dedicated storage space we want for our audio buffer
 
@@ -26,7 +28,7 @@ class AudioBuffer:
     it. These do not have to be the same thread.
     """
 
-    buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
+    buffer: np.ndarray  # A 1D array of amplitudes in temporal order
 
     # an index into the first dimension of the buffer indicating the data between 'processed' and this has not been evaluated by the model
     # the data at this time row may only be unprocessed if the entire buffer is full.
@@ -143,12 +145,17 @@ class AudioBuffer:
         self.update_output_lock()
 
     # data should always be accessed from the *return value* of this method
-    def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None) -> Tuple[np.ndarray, int]:
+    def get_unprocessed_data(self, time_steps: int, target: Optional[np.ndarray] = None,
+                             force_copy: Optional[bool] = False,
+                             # pass 'metadata_snapshot' to use a pre-obtained snapshot and avoid locking
+                             metadata_snapshot: Optional[AudioBufferMetadata] = None) -> Tuple[np.ndarray, int]:
         """Read unprocessed data from the buffer. This method does not free any data."""
-        with self.metadata_mutex:
-            metadata_snapshot = AudioBufferMetadata(self)
+        if metadata_snapshot is None:
+            with self.metadata_mutex:
+                metadata_snapshot = AudioBufferMetadata(self)
         data_start_idx = metadata_snapshot.allocated_begin
-        data, new_begin_idx = self.consume_data(time_steps, target=target, force_copy=False)
+        data, new_begin_idx = self.consume_data(time_steps, target=target,
+                                                force_copy=force_copy, metadata_snapshot=metadata_snapshot)
         return data, data_start_idx
 
     # update 'rows_allocated' and 'allocated_begin' BEFORE calling this method
@@ -182,11 +189,14 @@ class AudioBuffer:
         return (right_idx - left_idx) % self.buffer.shape[0]
 
     def consume_data(self, time_steps: int, target: Optional[np.ndarray] = None,
-                     force_copy: Optional[bool] = False) -> Tuple[np.ndarray, int]:
+                     force_copy: Optional[bool] = False,
+                     # pass 'metadata_snapshot' to use a pre-obtained snapshot and avoid locking
+                     metadata_snapshot: Optional[AudioBufferMetadata] = None) -> Tuple[np.ndarray, int]:
         """copy data from the buffer into the target if necessary, otherwise, return a view.
         returns (read data, new value for starting index of read-from chunk)"""
-        with self.metadata_mutex:
-            metadata_snapshot = AudioBufferMetadata(self)
+        if metadata_snapshot is None:
+            with self.metadata_mutex:
+                metadata_snapshot = AudioBufferMetadata(self)
         begin_idx = metadata_snapshot.allocated_begin
         available_time_steps = metadata_snapshot.rows_allocated
         if time_steps > available_time_steps:
@@ -245,14 +255,3 @@ class AudioBuffer:
                 self.allocated_begin = 0
                 self.rows_allocated = 0
                 self.timestamp_deque.clear()
-
-
-class AudioBufferMetadata:
-    unprocessed_end: int
-    allocated_begin: int
-    rows_allocated: int
-
-    def __init__(self, buffer):
-        self.unprocessed_end = buffer.unprocessed_end
-        self.allocated_begin = buffer.allocated_begin
-        self.rows_allocated = buffer.rows_allocated

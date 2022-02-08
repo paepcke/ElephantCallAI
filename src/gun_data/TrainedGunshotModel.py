@@ -30,6 +30,10 @@ class TrainedGunshotModel(nn.Module):
             return torch.sigmoid(logits)
 
     def predict(self, x):
+        """
+        For the binary case, uses a fixed threshold of 0.5. Use the 'forward()'
+        method to use a different threshold.
+        """
         probs = self.forward(x)
         if probs.shape[-1] > 1:
             return torch.argmax(probs, dim=-1)
