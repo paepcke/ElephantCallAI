@@ -1,5 +1,7 @@
 import argparse
 
+from embedded.ModelingConstants import GUNSHOT_MODEL_MAX_FREQ_SPEC_ARG
+
 
 def get_embedded_listening_args():
     """Command-line arguments for Listen.py are configured here"""
@@ -69,6 +71,38 @@ def get_embedded_listening_args():
                         help="Frequencies above this are omitted from generated spectrograms. " +
                         "This should match the setting used to train the model.")
 
+    # TODO: add buffer freq elements arg
+
+    # auxiliary gunshot model arguments
+    parser.add_argument('--gunshot-model-path', type=str,
+                        help="Path to a gunshot model to use. Gunshot detection behavior will be disabled if this is" +
+                            " not provided. Gunshot detections will run asynchronously unless '--led-mode'" +
+                            " is specified.")
+    parser.add_argument('--gunshot-detection-log-path', type=str, default="/tmp/gunshot_detection_log.txt",
+                        help="Path to the file that the gunshot predictor will populate with information when it runs."
+                             " Not used in LED mode.")
+    parser.add_argument('--led-mode', action='store_true',
+                        help="Specify this to illuminate an LED attached to the Jetson board a few seconds after" +
+                             " gunshots are detected. This mode is only intended for debugging and may be too" +
+                             " resource-intensive to use in practice.")
+    parser.add_argument('--led-pin', type=int, default=7,
+                        help="GPIO pin on the Jetson that the positive end of your LED is connected to." +
+                             " See the README for more details.")
+
     # TODO: add arguments that allow variation in model input shape?
 
     return parser.parse_args()
+
+
+def check_args(args):
+    """
+    Checks for errors in argument specification and raises exceptions if necessary
+    """
+
+    if args.gunshot_model_path is None and args.led_mode:
+        raise ValueError("You must specify a '--gunshot-model-path' to use LED mode")
+
+    if args.gunshot_model_path is not None:
+        if args.max_freq != GUNSHOT_MODEL_MAX_FREQ_SPEC_ARG:
+            raise ValueError("--max-freq must be 1024 if using current gunshot models."
+                         " This warning may be removed for new gunshot models.")

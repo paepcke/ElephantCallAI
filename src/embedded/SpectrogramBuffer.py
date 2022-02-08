@@ -1,18 +1,15 @@
 from typing import Optional, Tuple, Deque
 from threading import Lock
-
 import numpy as np
 from collections import deque
 from datetime import datetime, timezone, timedelta
 
+from embedded.ModelingConstants import ELEPHANT_MODEL_FREQ_BINS
 
 # defaults
-FREQ_BINS = 77  # TODO: need to allow configuration of this to work with gunshot model
 NUM_SAMPLES_IN_TIME_WINDOW = 256
-BUFFER_SIZE_MB = 512  # This is configurable, it's how much dedicated storage space we want for our spectrogram buffer
-
+BUFFER_SIZE_MB = 512  # This can be configured, it's how much dedicated storage space we want for our spectrogram buffer
 BYTES_PER_ELEMENT = 8  # We're using float64
-BUFFER_SIZE_IN_TIME_STEPS = BUFFER_SIZE_MB * 1024 * 1024 // (FREQ_BINS * BYTES_PER_ELEMENT)
 
 # It won't make sense to run the model on spectrogram data with fewer than this number of time steps.
 # This means that appending fewer than this number of contiguous time steps is disallowed.
@@ -28,6 +25,8 @@ class SpectrogramBuffer:
     No more than one thread should concurrently make predictions or consume unprocessed data.
     No more than one thread should concurrently consume data for post-processing or free space."""
     buffer: np.ndarray  # The first dimension is time steps, the second is frequency bins
+
+    num_freq_bins: int  # The number of frequency bins of spectrograms stored in this buffer
 
     # an index into the first dimension of the buffer indicating the data between 'processed' and this has not been evaluated by the model
     # the data at this time row may only be unprocessed if the entire buffer is full.
@@ -68,9 +67,14 @@ class SpectrogramBuffer:
     timestamp_mutex: Lock
 
     def __init__(self, override_buffer_size: Optional[int] = None, min_appendable_time_steps: Optional[int] = None,
-                 time_delta_per_time_step: Optional[float] = None):
-        buf_size = BUFFER_SIZE_IN_TIME_STEPS if override_buffer_size is None else override_buffer_size
-        self.buffer = np.zeros((buf_size, FREQ_BINS))
+                 time_delta_per_time_step: Optional[float] = None,
+                 num_freq_bins: Optional[int] = ELEPHANT_MODEL_FREQ_BINS):
+        if override_buffer_size is not None:
+            buf_size = override_buffer_size
+        else:
+            buf_size = BUFFER_SIZE_MB * 1024 * 1024 // (num_freq_bins * BYTES_PER_ELEMENT)
+        self.num_freq_bins = num_freq_bins
+        self.buffer = np.zeros((buf_size, num_freq_bins))
         self.unprocessed_end = 0
         self.pending_post_processing_end = 0
         self.allocated_begin = 0
@@ -330,7 +334,7 @@ class SpectrogramBuffer:
                 raise ValueError("No data to read")
         if metadata_snapshot.pending_post_processing_end + time_steps > self.buffer.shape[0]:
             if target is None:
-                target = np.zeros((time_steps, FREQ_BINS))
+                target = np.zeros((time_steps, self.num_freq_bins))
             first_len = self.buffer.shape[0] - begin_idx
             target[0:first_len, :] = self.buffer[begin_idx:(begin_idx + first_len), :]
             second_len = time_steps - first_len
@@ -341,7 +345,7 @@ class SpectrogramBuffer:
             view = self.buffer[begin_idx:(begin_idx + time_steps), :]
             if force_copy:
                 if target is None:
-                    target = np.zeros((time_steps, FREQ_BINS))
+                    target = np.zeros((time_steps, self.num_freq_bins))
                 target[:, :] = view[:, :]
                 view = target
             new_starting_idx = begin_idx + time_steps

@@ -114,3 +114,10 @@ if __name__ == "__main__":
     if generate_pr_curve:
         print(f"Generating image of PR curve and saving to {pr_curve_savepath}...")
         PerformanceMetrics.pr_curve(all_labels, all_probs, pr_curve_savepath)
+
+    # TODO: consider adding an arg to allow user to specify the name of this file, remove hacky code reuse of 'dir_containing_model'
+    dir_containing_model = os.path.dirname(args.model_weights)
+    if len(dir_containing_model) == 0:
+        # model weights are in the current directory
+        dir_containing_model = "."
+    torch.save(test_model, f"{dir_containing_model}/model_and_preprocessing.pt")

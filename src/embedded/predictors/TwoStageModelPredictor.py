@@ -3,16 +3,18 @@ from typing import Tuple
 import torch
 from torch import nn
 
-from PredictionUtils import get_batched_predictions_and_overlap_counts, get_batched_predictions_and_overlap_counts_for_two_stage_model
+from PredictionUtils import get_batched_predictions_and_overlap_counts_for_two_stage_model
 from embedded.SpectrogramBuffer import NUM_SAMPLES_IN_TIME_WINDOW
+from embedded.predictors.Predictor import Predictor
 from embedded.FileUtils import assert_is_directory, assert_path_exists
+from embedded.ModelingConstants import ELEPHANT_MODEL_FREQ_BINS
 
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # middle threshold is always 0.5
-class TwoStageModelPredictor:
+class TwoStageModelPredictor(Predictor):
     """
     A model consisting of two PyTorch models applied in sequence. The second model's output is used depending on the
     first model's output for the same data.
@@ -25,7 +27,9 @@ class TwoStageModelPredictor:
     half_precision: bool
 
     def __init__(self, path_to_2stage_dir: str, batch_size: int = 4,
-                 jump: int = NUM_SAMPLES_IN_TIME_WINDOW // 4, half_precision: bool = False):
+                 jump: int = NUM_SAMPLES_IN_TIME_WINDOW // 4, half_precision: bool = False,
+                 max_freq_idx: int = ELEPHANT_MODEL_FREQ_BINS):
+        super().__init__()
         assert_is_directory(path_to_2stage_dir,
                             "A two-stage model must be specified with a directory containing each stage's model")
         first_model_path = path_to_2stage_dir + "/first_stage.pt"
@@ -45,6 +49,7 @@ class TwoStageModelPredictor:
         if self.half_precision:
             self.first_stage_model = self.first_stage_model.half()
             self.second_stage_model = self.second_stage_model.half()
+        self.max_freq_idx = max_freq_idx
 
     def make_predictions(self, spectrogram_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -53,6 +58,7 @@ class TwoStageModelPredictor:
         :param spectrogram_data: input to a model to make predictions
         :return: a tuple of predictions, overlap_counts
         """
+        spectrogram_data = spectrogram_data[:, :self.max_freq_idx]
         return get_batched_predictions_and_overlap_counts_for_two_stage_model(
             spectrogram_data, self.first_stage_model, self.second_stage_model, self.jump,
             n_samples_in_time_window=NUM_SAMPLES_IN_TIME_WINDOW,

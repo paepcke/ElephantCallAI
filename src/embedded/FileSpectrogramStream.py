@@ -6,6 +6,7 @@ import sys
 
 from embedded.Closeable import Closeable
 from embedded.DataCoordinator import DataCoordinator
+from embedded.ModelingConstants import GUNSHOT_MODEL_FREQ_BINS
 
 
 CHUNK_SIZE = 256*8
@@ -26,7 +27,8 @@ class FileSpectrogramStream(Closeable):
     drop_data: bool
     closed: bool
 
-    def __init__(self, path_to_spectrogram_file: str, max_time_steps: Optional[int] = None, drop_data: bool = True):
+    def __init__(self, path_to_spectrogram_file: str, max_time_steps: Optional[int] = None,
+                 drop_data: bool = True, expand_spectrograms: bool = False):
         super().__init__()
         self.closed = False
         self.spectrogram_data = np.load(path_to_spectrogram_file)
@@ -34,6 +36,7 @@ class FileSpectrogramStream(Closeable):
             self.spectrogram_data = self.spectrogram_data.T
         self.max_time_steps = max_time_steps
         self.drop_data = drop_data
+        self.expand_spectrograms = expand_spectrograms
 
     def start(self, data_coordinator: DataCoordinator):
         # 'daemon' threads are killed when the parent process dies
@@ -84,6 +87,14 @@ class FileSpectrogramStream(Closeable):
         :param spectrogram_data: the spectrogram data to be transformed
         :return: transformed spectrogram data
         """
+        if self.expand_spectrograms:
+            """
+            If we need spectrograms with more frequency bins than those in our file have,
+            we can perform this step as a workaround
+            """
+            bigger_data = np.zeros((spectrogram_data.shape[0], GUNSHOT_MODEL_FREQ_BINS))
+            bigger_data[:, :spectrogram_data.shape[1]] = spectrogram_data
+            spectrogram_data = bigger_data
         return 10*np.log10(spectrogram_data)
 
     def close(self):

@@ -12,6 +12,7 @@ from embedded.SpectrogramBuffer import SpectrogramBuffer, NUM_SAMPLES_IN_TIME_WI
 from embedded.PredictionBuffer import PredictionBuffer
 from embedded.TransitionState import TransitionState, non_detected_transition_state
 from embedded.predictors import Predictor
+from embedded.ModelingConstants import ELEPHANT_MODEL_FREQ_BINS
 
 PREDICTION_THRESHOLD = 0.5
 BYTES_PER_GIGABYTE = 1024*1024*1024
@@ -92,6 +93,8 @@ class DataCoordinator(Closeable):
                  # some incoming data. This creates a time discontinuity for which we cannot make predictions.
                  # This parameter specifies a path to a txt file where those intervals of 'blackout' are recorded.
                  blackout_interval_output_path: str,
+                 # the number of frequency bins that spectrograms in the buffer should have
+                 num_freq_bins: int = ELEPHANT_MODEL_FREQ_BINS,
                  # The number of seconds a single time step of a spectrogram frame represents
                  # (the length of the non-overlapping segments of each time window used in the STFT)
                  time_delta_per_time_step: Optional[float] = None,
@@ -141,7 +144,8 @@ class DataCoordinator(Closeable):
         self.prediction_interval_recorder = IntervalRecorder(prediction_interval_output_path)
         self.spectrogram_buffer = SpectrogramBuffer(override_buffer_size=override_buffer_size,
                                                     min_appendable_time_steps=min_appendable_time_steps,
-                                                    time_delta_per_time_step=time_delta_per_time_step)
+                                                    time_delta_per_time_step=time_delta_per_time_step,
+                                                    num_freq_bins=num_freq_bins)
         self.prediction_buffer = PredictionBuffer(self.spectrogram_buffer.buffer.shape[0])
         self.prediction_transition_state = non_detected_transition_state()
         self.prediction_threshold = prediction_threshold
@@ -215,6 +219,53 @@ class DataCoordinator(Closeable):
             blackout_end = timestamp
             self.blackout_interval_recorder.write_interval((blackout_start, blackout_end))
 
+    def read_recent_contiguous_block(self, block_size: int):
+        """
+        Returns a view of the most recent n-step block of unprocessed spectral data if there is not
+            a discontinuity in it. Else, returns None. In rare cases this can pessimistically
+            fail due to a lack of very precise synchronization; this will have to be tolerated
+            by the caller because this method is understood to be non-critical.
+        :return:
+        """
+        # check for discontinuity
+        with self.spectrogram_buffer.timestamp_mutex:
+            if len(self.spectrogram_buffer.unprocessed_timestamp_deque) == 0:
+                most_recent_timestamp_pre_snapshot = None
+            else:
+                most_recent_timestamp_pre_snapshot = self.spectrogram_buffer.unprocessed_timestamp_deque[-1]
+
+        metadata_snapshot = self.spectrogram_buffer.get_metadata_snapshot()
+        if metadata_snapshot.rows_unprocessed < block_size:
+            # We can't process enough data yet
+            return None
+
+        most_recent_row = metadata_snapshot.unprocessed_end
+        if self.spectrogram_buffer.circular_distance(most_recent_row, metadata_snapshot.pending_post_processing_end) < block_size:
+            # not enough unprocessed data to read
+            return None
+
+        """
+        Check for discontinuity again, hoping the continuity-tracking state
+        has not changed since our first discontinuity check.
+        
+        Discontinuities are expected to be rare, so this logic is simplified at the expense of being
+        overly permissive about what constitutes an unacceptable discontinuity case.
+        """
+        with self.spectrogram_buffer.timestamp_mutex:
+            if len(self.spectrogram_buffer.unprocessed_timestamp_deque) == 0:
+                most_recent_timestamp_post_snapshot = None
+            else:
+                most_recent_timestamp_post_snapshot = self.spectrogram_buffer.unprocessed_timestamp_deque[-1]
+
+        if most_recent_timestamp_post_snapshot != most_recent_timestamp_pre_snapshot:
+            # there may have been a discontinuity recently, so the data shouldn't be read
+            return None
+
+        if most_recent_timestamp_post_snapshot is None or (self.spectrogram_buffer.circular_distance(most_recent_row, most_recent_timestamp_post_snapshot[0]) >= block_size):
+            # the data can be read!
+            return self.spectrogram_buffer.get_unprocessed_data(time_steps=block_size, mark_for_postprocessing=False)
+
+        return None
 
     # returns number of rows for which a prediction has been made, useful for backoff logic
     def make_predictions(self, predictor: Predictor, time_window: int) -> int:
@@ -243,8 +294,11 @@ class DataCoordinator(Closeable):
             if time_window == 0:
                 return 0
 
-        # if 'enough' data would be left for one time seq window, allow it. Else, if NO data from this time seq would be left (there is a follow-up timestamp), allow it.
-        # else, disallow it.
+        """
+        If 'enough' data would be left for one time seq window, allow it.
+        Else, if NO data from this time seq would be left (there is a follow-up timestamp), allow it.
+        Else, disallow it.
+        """
         found_follow_up_timestamp: bool
         with self.spectrogram_buffer.timestamp_mutex:
             unprocessed_timestamp_deque = self.spectrogram_buffer.unprocessed_timestamp_deque

@@ -10,6 +10,7 @@ from embedded.predictors import SingleStageModelPredictor, TwoStageModelPredicto
 SPECTROGRAM_NPY_FILE = "../../../Integration_Test_Data/spectrograms/nn10b_20180604_spec.npy"
 SINGLE_STAGE_MODEL_PATH = "../../../Integration_Test_Data/models/remote_model.pt"
 TWO_STAGE_MODEL_PATH = "../../../Integration_Test_Data/models/2stage"
+GUNSHOT_MODEL_PATH = "../../../Integration_Test_Data/models/gunshot_model.pt"
 PREDICTION_INTERVALS_OUTPUT_PATH = "/tmp/prediction_intervals.txt"
 BLACKOUT_INTERVALS_OUTPUT_PATH = "/tmp/blackout_intervals.txt"
 PREDS_SAVE_PATH = "/tmp/preds.npy"
