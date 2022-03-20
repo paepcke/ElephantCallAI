@@ -83,7 +83,8 @@ To start listening to the default microphone, run `python3 Listen.py` (this file
 Important: Before trying to run this, make sure the `PYTHONPATH` environment variable contains the `src` directory.
 `$ export PYTHONPATH=<path to this repo>/src` will accomplish this.
 
-You must pass a path to your PyTorch model (a `.pt` file) through the `--model-path` argument.
+You must pass a path to your PyTorch model through the `--model-path` argument, see the
+[Model Constraints section](#model-constraints) for details about the structure of this input.
 
 ## Output
 
@@ -115,9 +116,34 @@ If you plan to leave `Listen.py` running for a long time, you may want to set a 
 these .pkl files. Use `--captured-disk-usage-limit <NUMBER OF GIGABYTES>` to accomplish this (runs will only track 
 their own disk usage, even if adding files to a directory that already has .pkl files in it, so be mindful).
 
-## Gunshot Detection Model and LED Configuration
+## Gunshot Detection Model
 
-TODO: Write this section of README
+There is also a gunshot detection model that can be run alongside the elephant model. Running `Listen.py` this way
+is completely optional and it can be done by specifying the path to the gunshot model via the command-line argument
+`--gunshot-model-path` in addition to other arguments. Gunshot-only detection is not implemented at this time.
+
+Currently, gunshot models take 95x525 spectrograms as input, with 95 time steps and 525 frequency bins.
+
+There are two gunshot detection modes; the default is called Asychronous Mode and will be used if a gunshot model is
+specified without the additional `--led-mode` argument.
+
+### Asynchronous Mode
+Asynchronous Mode is the more efficient of the two, but the gunshot detection will be deferred for a (potentially 
+minutes-long) period of time after the microphone reads the audio to analyze.
+
+The behavior on a positive gunshot detection is to log a timestamp (corresponding to the detection time, not the 
+microphone-reading time) of the event. With a relatively simple code change, this behavior can be altered; see
+`GunshotPredictorDecorator.py` to do so. The file can be specified by the `--gunshot-detection-log-path` argument,
+but `/tmp/gunshot_detection_log.txt` will be used as the default if this is not provided.
+
+### LED Debug Mode
+Alternatively, if the `--led-mode` argument is specified alongside a gunshot model path, `Listen.py` will run in LED
+Debug Mode. This mode will attempt to illuminate an LED attached to the Jetson board when a shot is detected. It
+requires some moderately expensive duplicated processing, so it's recommended to only use LED Debug Mode for debugging
+purposes. See JetsonSetup.md for detailed LED configuration instructions.
+
+LED Debug mode is not perfectly synchronous, so some latency (up to about 25 seconds) is expected between receiving
+audio and running the gunshot model on that audio.
 
 ## Contributing
 

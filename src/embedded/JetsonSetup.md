@@ -36,6 +36,8 @@ Execute the following commands:
 
 12. `$ pip3 install tensorboardX`
 
+13. `$ sudo pip3 install Jetson.GPIO`
+
 At this point, your Jetson should be completely equipped to run `Listen.py` (outside of plugging in the USB microphone).
 If you are setting up multiple Jetson units for this, consider duplicating the data on the SD card of the Jetson
 you used for this process and writing it to an SD card for each Jetson you are setting up. This may save a lot of time.
@@ -56,3 +58,20 @@ Copy `test.wav`, the newly-created file, over to a machine with a speaker and pl
 The Jetson image should come with the `tegrastats` utility installed. You can run it, log the output to a
 file, and then pass that file as an argument to `analysis/AnalyzeTegraStats.py` to produce some summary information.
 This is not a required part of the installation.
+
+
+### LED Debug Mode for Gunshot Detection
+
+LED debug mode requires some physical configuration. You will need:
+1. A resistor. I used a 220-Ohm resistor but an approximate match will work.
+2. An LED.
+3. Some way to connect one end of the resistor to one end of the LED; electrical tape wrapped around
+entangled connecting wires can work.
+4. Some way to connect the free ends of these wires to the GPIO pins on the Jetson board; see
+https://automaticaddison.com/how-to-blink-an-led-using-nvidia-jetson-nano/ for an example of such a connection. I used
+a pair of shorting blocks (one on each pin). The positive end of this small LED-resistor circuit should be connected
+to a numbered pin (the default in `Listen.py` is 7, so any other pin must be specified via the command-line argument
+`--led-pin`) and the negative end should be connected to a ground pin (labeled "GND" on the board).
+
+When `Listen.py` is run in LED Debug Mode, pay attention to the console output. During startup, the program will
+blink your LED several times. You can use this to verify that everything is connected properly.
